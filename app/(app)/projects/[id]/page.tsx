@@ -59,16 +59,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         .eq('project_id', id),
     ])
 
-    const stageOrder = ['Feasibility','Design','Procure','Build & Install','Test & Commission','Energise & Handover']
-    const activeStages = (clientStageRows ?? [])
-      .filter((s: any) => s.status === 'In Progress' || s.status === 'On Hold')
-      .map((s: any) => s.stage)
-      .sort((a: string, b: string) => stageOrder.indexOf(a) - stageOrder.indexOf(b))
+    // Pass all stage statuses so client view can show complete (green tick) + active (coloured)
+    const clientStageStatuses: Record<string, string> = {}
+    for (const s of clientStageRows ?? []) {
+      clientStageStatuses[(s as any).stage] = (s as any).status
+    }
 
     return (
       <ClientProjectView
         project={{ id, name: project.name, client: project.client, location: project.location, stage: project.stage, capacity_mw: project.capacity_mw }}
-        activeStages={activeStages}
+        stageStatuses={clientStageStatuses}
         documents={docs ?? []}
         tests={(tests ?? []) as any}
         comments={comments ?? []}

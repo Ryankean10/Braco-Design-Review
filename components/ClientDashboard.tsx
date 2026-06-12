@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { CheckCircle2, Clock, AlertCircle, MessageSquare, FileText, FlaskConical } from 'lucide-react'
 import type { ClientComment } from '@/components/ClientCommentThread'
 
+const STAGE_ORDER = ['Feasibility','Design','Procure','Build & Install','Test & Commission','Energise & Handover']
+
 type Stage = string
 
 interface ProjectSummary {
@@ -12,7 +14,7 @@ interface ProjectSummary {
   client: string
   location: string
   stage: Stage
-  activeStages: string[]
+  stageStatuses: Record<string, string>
   capacity_mw: number | null
   docCount: number
   testPassCount: number
@@ -85,13 +87,31 @@ export default function ClientDashboard({ profile, projects }: Props) {
                   <h2 className="text-base font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</h2>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.location}{p.capacity_mw ? ` · ${p.capacity_mw} MW` : ''}</p>
                 </div>
-                <div className="flex flex-wrap gap-1.5 justify-end flex-shrink-0">
-                  {(p.activeStages.length > 0 ? p.activeStages : [p.stage]).map((s: string) => (
-                    <span key={s} className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: `${STAGE_COLORS[s] ?? '#94a3b8'}20`, color: STAGE_COLORS[s] ?? '#94a3b8' }}>
-                      {s}
+                <div className="flex flex-wrap gap-1.5 justify-end flex-shrink-0 max-w-[200px]">
+                  {STAGE_ORDER.map(s => {
+                    const status = p.stageStatuses[s] ?? 'Not Started'
+                    const isComplete = status === 'Complete'
+                    const isActive   = status === 'In Progress' || status === 'On Hold'
+                    if (!isComplete && !isActive) return null
+                    const col = STAGE_COLORS[s] ?? '#94a3b8'
+                    return (
+                      <span key={s} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          background: isComplete ? 'rgba(74,222,128,0.15)' : `${col}20`,
+                          color:      isComplete ? '#4ade80'               : col,
+                          border:     `1px solid ${isComplete ? 'rgba(74,222,128,0.4)' : `${col}50`}`,
+                        }}>
+                        {isComplete && <CheckCircle2 size={9} />}
+                        {s}
+                      </span>
+                    )
+                  })}
+                  {Object.keys(p.stageStatuses).length === 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+                      {p.stage}
                     </span>
-                  ))}
+                  )}
                 </div>
               </div>
 

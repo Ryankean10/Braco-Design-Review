@@ -39,7 +39,7 @@ export default function LoginPage() {
               B
             </div>
             <span className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Braco Design Review
+              Safe T Projects
             </span>
           </div>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sign in to your account</p>

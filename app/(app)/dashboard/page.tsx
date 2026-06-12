@@ -53,22 +53,16 @@ export default async function DashboardPage() {
       supabase.from('project_stages').select('project_id, stage, status').in('project_id', projectIds),
     ])
 
-    // Active stages per project (In Progress or On Hold), ordered
-    const stageOrder = ['Feasibility','Design','Procure','Build & Install','Test & Commission','Energise & Handover']
-    const activeStagesMap: Record<string, string[]> = {}
+    // Build stage status map per project
+    const stageStatusMap: Record<string, Record<string, string>> = {}
     for (const s of stageRows ?? []) {
-      if (s.status === 'In Progress' || s.status === 'On Hold') {
-        if (!activeStagesMap[s.project_id]) activeStagesMap[s.project_id] = []
-        activeStagesMap[s.project_id].push(s.stage)
-      }
-    }
-    for (const pid of Object.keys(activeStagesMap)) {
-      activeStagesMap[pid].sort((a, b) => stageOrder.indexOf(a) - stageOrder.indexOf(b))
+      if (!stageStatusMap[s.project_id]) stageStatusMap[s.project_id] = {}
+      stageStatusMap[s.project_id][s.stage] = s.status
     }
 
     const enriched = (projects ?? []).map((p: any) => ({
       ...p,
-      activeStages:           activeStagesMap[p.id] ?? [],
+      stageStatuses:          stageStatusMap[p.id] ?? {},
       docCount:               (docs ?? []).filter((d: any) => d.project_id === p.id).length,
       testPassCount:          (tests ?? []).filter((t: any) => t.project_id === p.id && t.status === 'Pass').length,
       testTotalCount:         (tests ?? []).filter((t: any) => t.project_id === p.id).length,

@@ -34,7 +34,7 @@ interface ClientDoc {
 
 interface Props {
   project: { id: string; name: string; client: string; location: string; stage: Stage; capacity_mw: number | null }
-  activeStages: string[]
+  stageStatuses: Record<string, string>
   documents: ClientDoc[]
   tests: TestRecord[]
   comments: ClientComment[]
@@ -50,12 +50,10 @@ const STAGE_COLORS: Record<string, string> = {
   'Energise & Handover': '#4ade80',
 }
 
-export default function ClientProjectView({ project, activeStages, documents, tests, comments: initComments, userId }: Props) {
+export default function ClientProjectView({ project, stageStatuses, documents, tests, comments: initComments, userId }: Props) {
   const [comments, setComments] = useState<ClientComment[]>(initComments)
   const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'tests'>('overview')
   const supabase = createClient()
-
-  const displayStages = activeStages.length > 0 ? activeStages : [project.stage]
 
   async function downloadDoc(doc: ClientDoc) {
     const { data } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 120)
@@ -90,20 +88,23 @@ export default function ClientProjectView({ project, activeStages, documents, te
 
       {/* Stage progress */}
       <div className="rounded-xl border p-5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Active Stages</p>
+        <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Project Stages</p>
         <div className="flex flex-wrap gap-2">
           {STAGES.map(s => {
-            const isActive = displayStages.includes(s)
+            const status = stageStatuses[s] ?? 'Not Started'
+            const isComplete = status === 'Complete'
+            const isActive   = status === 'In Progress' || status === 'On Hold'
             const col = STAGE_COLORS[s] ?? '#94a3b8'
             return (
               <div key={s} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
                 style={{
-                  background: isActive ? `${col}20` : 'var(--bg-elevated)',
-                  color: isActive ? col : 'var(--text-muted)',
-                  border: `1px solid ${isActive ? `${col}50` : 'var(--border)'}`,
-                  opacity: isActive ? 1 : 0.5,
+                  background:  isComplete ? 'rgba(74,222,128,0.15)' : isActive ? `${col}20` : 'var(--bg-elevated)',
+                  color:       isComplete ? '#4ade80'               : isActive ? col        : 'var(--text-muted)',
+                  border:      `1px solid ${isComplete ? 'rgba(74,222,128,0.4)' : isActive ? `${col}50` : 'var(--border)'}`,
+                  opacity:     isComplete || isActive ? 1 : 0.45,
                 }}>
-                {isActive && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: col }} />}
+                {isComplete && <CheckCircle2 size={11} className="flex-shrink-0" />}
+                {isActive   && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: col }} />}
                 {s}
               </div>
             )

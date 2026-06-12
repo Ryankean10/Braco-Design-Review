@@ -40,9 +40,9 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-            Braco Design
+            Safe T Projects
           </p>
-          <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>Review Platform</p>
+          <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>BESS Project Platform</p>
         </div>
       </div>
 
