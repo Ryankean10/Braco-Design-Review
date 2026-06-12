@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'engineer'
+export type Role = 'admin' | 'project_manager' | 'engineer' | 'operative' | 'client'
 
 export type Stage =
   | 'Feasibility'
