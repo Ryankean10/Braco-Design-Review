@@ -89,7 +89,7 @@ export default function ReviewsPanel({
   const [runError, setRunError] = useState<string | null>(null)
   const [expandedLenses, setExpandedLenses] = useState<Set<string>>(new Set(['er_compliance']))
   const [filterStatus, setFilterStatus] = useState<'all' | 'Pending' | 'Approved' | 'Rejected'>('all')
-  const [activeRunId, setActiveRunId] = useState<string | null>(runs[0]?.id ?? null)
+  const [activeRunId, setActiveRunId] = useState<string>('all')
   const [reviewingId, setReviewingId] = useState<string | null>(null)
   const [reviewingAction, setReviewingAction] = useState<'Approved' | 'Rejected' | null>(null)
   const [reviewNote, setReviewNote] = useState('')
@@ -182,8 +182,10 @@ export default function ReviewsPanel({
   }
 
   // Filter findings to active run
+  // Default: show ALL findings across all runs (Pending findings never hidden)
+  // Run filter only applies when explicitly selected (not the default "all" state)
   const visibleFindings = findings
-    .filter(f => activeRunId ? f.run_id === activeRunId : true)
+    .filter(f => activeRunId !== 'all' ? f.run_id === activeRunId : true)
     .filter(f => filterStatus === 'all' || f.status === filterStatus)
 
   const pendingCount = visibleFindings.filter(f => f.status === 'Pending').length
@@ -317,7 +319,18 @@ export default function ReviewsPanel({
               <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
                 <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Review History</p>
               </div>
-              <div className="divide-y max-h-48 overflow-y-auto" style={{ borderColor: 'var(--border)' }}>
+              <div className="divide-y max-h-52 overflow-y-auto" style={{ borderColor: 'var(--border)' }}>
+                {/* All runs option */}
+                <button onClick={() => setActiveRunId('all')}
+                  className="w-full text-left px-4 py-2.5 hover:opacity-80"
+                  style={{ background: activeRunId === 'all' ? 'rgba(108,114,245,0.1)' : 'transparent' }}>
+                  <p className="text-xs font-medium" style={{ color: activeRunId === 'all' ? 'var(--accent)' : 'var(--text-primary)' }}>
+                    All runs (combined)
+                  </p>
+                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {findings.length} finding{findings.length !== 1 ? 's' : ''} · {findings.filter(f => f.status === 'Pending').length} pending sign-off
+                  </p>
+                </button>
                 {runs.map(run => (
                   <button key={run.id} onClick={() => setActiveRunId(run.id)}
                     className="w-full text-left px-4 py-2.5 hover:opacity-80"
