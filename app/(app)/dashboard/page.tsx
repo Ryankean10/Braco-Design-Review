@@ -2,15 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { FolderOpen, Plus, MessageSquare } from 'lucide-react'
-import type { Stage } from '@/lib/types'
 import ClientDashboard from '@/components/ClientDashboard'
+import { STAGE_ORDER } from '@/lib/stageDefaults'
+import type { StageName } from '@/lib/stageDefaults'
 
-const STAGE_ORDER: Stage[] = [
-  'Feasibility', 'Design', 'Procure', 'Build & Install', 'Test & Commission', 'Energise & Handover'
-]
-
-function stageColour(stage: Stage) {
-  const map: Record<Stage, string> = {
+function stageColour(stage: StageName) {
+  const map: Record<StageName, string> = {
     'Feasibility':         '#4b5563',
     'Design':              '#2563eb',
     'Procure':             '#7c3aed',
@@ -57,18 +54,29 @@ export default async function DashboardPage() {
   }
 
   // ── Internal dashboard ─────────────────────────────────────────────────────
-  const [{ data: projects }, { data: openComments }] = await Promise.all([
+  const [{ data: projects }, { data: allProjectStages }, { data: openComments }] = await Promise.all([
     supabase.from('projects').select('*').order('updated_at', { ascending: false }),
-    // Show open client comments to all except operative
+    supabase.from('project_stages').select('project_id, stage, status, checklist'),
     role !== 'operative'
       ? supabase.from('client_comments').select('id, project_id, subject_label, created_at, status').eq('status', 'Open').order('created_at', { ascending: false })
       : Promise.resolve({ data: [] }),
   ])
 
+  // Count projects with each stage "In Progress"
   const byStage = STAGE_ORDER.map(stage => ({
     stage,
-    count: projects?.filter(p => p.stage === stage).length ?? 0,
+    inProgress: (allProjectStages ?? []).filter(s => s.stage === stage && s.status === 'In Progress').length,
+    complete:   (allProjectStages ?? []).filter(s => s.stage === stage && s.status === 'Complete').length,
   }))
+
+  // Build active stage labels per project (for project list)
+  const activeStagesMap: Record<string, string[]> = {}
+  for (const s of allProjectStages ?? []) {
+    if (s.status === 'In Progress' || s.status === 'On Hold') {
+      if (!activeStagesMap[s.project_id]) activeStagesMap[s.project_id] = []
+      activeStagesMap[s.project_id].push(s.stage)
+    }
+  }
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8">
@@ -116,13 +124,19 @@ export default async function DashboardPage() {
       )}
 
       {/* Stage summary */}
-      <div className="grid grid-cols-3 gap-4">
-        {byStage.map(({ stage, count }) => (
-          <div key={stage} className="rounded-xl p-4 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-            <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{stage}</p>
-            <p className="text-3xl font-bold" style={{ color: stageColour(stage) }}>{count}</p>
-          </div>
-        ))}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Active stages across all projects</p>
+        <div className="grid grid-cols-3 gap-3">
+          {byStage.map(({ stage, inProgress, complete }) => (
+            <div key={stage} className="rounded-xl p-4 border" style={{ background: 'var(--bg-surface)', borderColor: inProgress > 0 ? `${stageColour(stage)}55` : 'var(--border)' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: inProgress > 0 ? stageColour(stage) : 'var(--text-muted)' }}>{stage}</p>
+              <p className="text-3xl font-bold mb-1" style={{ color: inProgress > 0 ? stageColour(stage) : 'var(--text-muted)' }}>{inProgress}</p>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                in progress{complete > 0 ? ` · ${complete} complete` : ''}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Recent projects */}
@@ -141,18 +155,31 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {projects.slice(0, 8).map(project => (
-              <Link key={project.id} href={`/projects/${project.id}`}
-                className="flex items-center justify-between px-6 py-3.5 hover:opacity-80 transition-opacity">
-                <div>
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{project.name}</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    {project.client} — {project.location}{project.capacity_mw ? ` · ${project.capacity_mw} MW` : ''}
-                  </p>
-                </div>
-                <span className="chip-stage text-xs px-2 py-0.5 rounded-full font-medium">{project.stage}</span>
-              </Link>
-            ))}
+            {projects.slice(0, 8).map(project => {
+              const active = activeStagesMap[project.id] ?? []
+              return (
+                <Link key={project.id} href={`/projects/${project.id}`}
+                  className="flex items-center justify-between px-6 py-3.5 hover:opacity-80 transition-opacity gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{project.name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {project.client} — {project.location}{project.capacity_mw ? ` · ${project.capacity_mw} MW` : ''}
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                    {active.length > 0
+                      ? active.map(s => (
+                          <span key={s} className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap"
+                            style={{ background: `${stageColour(s as StageName)}22`, color: stageColour(s as StageName), border: `1px solid ${stageColour(s as StageName)}55` }}>
+                            {s}
+                          </span>
+                        ))
+                      : <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>No active stages</span>
+                    }
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         )}
       </div>
