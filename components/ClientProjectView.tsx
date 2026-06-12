@@ -34,18 +34,28 @@ interface ClientDoc {
 
 interface Props {
   project: { id: string; name: string; client: string; location: string; stage: Stage; capacity_mw: number | null }
+  activeStages: string[]
   documents: ClientDoc[]
   tests: TestRecord[]
   comments: ClientComment[]
   userId: string
 }
 
-export default function ClientProjectView({ project, documents, tests, comments: initComments, userId }: Props) {
+const STAGE_COLORS: Record<string, string> = {
+  'Feasibility':         '#94a3b8',
+  'Design':              '#60a5fa',
+  'Procure':             '#c084fc',
+  'Build & Install':     '#fb923c',
+  'Test & Commission':   '#facc15',
+  'Energise & Handover': '#4ade80',
+}
+
+export default function ClientProjectView({ project, activeStages, documents, tests, comments: initComments, userId }: Props) {
   const [comments, setComments] = useState<ClientComment[]>(initComments)
   const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'tests'>('overview')
   const supabase = createClient()
 
-  const stageIdx = STAGES.indexOf(project.stage)
+  const displayStages = activeStages.length > 0 ? activeStages : [project.stage]
 
   async function downloadDoc(doc: ClientDoc) {
     const { data } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 120)
@@ -80,42 +90,24 @@ export default function ClientProjectView({ project, documents, tests, comments:
 
       {/* Stage progress */}
       <div className="rounded-xl border p-5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <p className="text-xs font-semibold mb-4 uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Project Stage</p>
-        <div className="relative flex items-center">
-          {/* Track line */}
-          <div className="absolute left-0 right-0 h-1 rounded-full" style={{ background: 'var(--border)', top: '50%', transform: 'translateY(-50%)', zIndex: 0 }} />
-          <div
-            className="absolute left-0 h-1 rounded-full transition-all duration-700"
-            style={{
-              background: 'linear-gradient(90deg, var(--accent), #a855f7)',
-              width: stageIdx === 0 ? '0%' : `${(stageIdx / (STAGES.length - 1)) * 100}%`,
-              top: '50%', transform: 'translateY(-50%)', zIndex: 1,
-            }}
-          />
-          <div className="relative flex justify-between w-full" style={{ zIndex: 2 }}>
-            {STAGES.map((s, i) => {
-              const done    = i < stageIdx
-              const current = i === stageIdx
-              return (
-                <div key={s} className="flex flex-col items-center gap-1.5" style={{ flex: '0 0 auto' }}>
-                  <div
-                    className="w-4 h-4 rounded-full border-2 flex items-center justify-center"
-                    style={{
-                      background: done ? 'var(--accent)' : current ? 'var(--bg-elevated)' : 'var(--bg-base)',
-                      borderColor: done || current ? 'var(--accent)' : 'var(--border)',
-                    }}
-                  >
-                    {done && <CheckCircle2 size={10} color="white" />}
-                    {current && <div className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />}
-                  </div>
-                  <p className="text-[9px] text-center max-w-[56px] leading-tight"
-                    style={{ color: current ? 'var(--accent)' : done ? 'var(--text-secondary)' : 'var(--text-muted)', fontWeight: current ? 600 : 400 }}>
-                    {s}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
+        <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Active Stages</p>
+        <div className="flex flex-wrap gap-2">
+          {STAGES.map(s => {
+            const isActive = displayStages.includes(s)
+            const col = STAGE_COLORS[s] ?? '#94a3b8'
+            return (
+              <div key={s} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+                style={{
+                  background: isActive ? `${col}20` : 'var(--bg-elevated)',
+                  color: isActive ? col : 'var(--text-muted)',
+                  border: `1px solid ${isActive ? `${col}50` : 'var(--border)'}`,
+                  opacity: isActive ? 1 : 0.5,
+                }}>
+                {isActive && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: col }} />}
+                {s}
+              </div>
+            )
+          })}
         </div>
       </div>
 

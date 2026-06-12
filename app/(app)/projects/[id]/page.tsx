@@ -38,7 +38,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .single()
     if (!assignment) notFound()
 
-    const [{ data: docs }, { data: tests }, { data: comments }] = await Promise.all([
+    const [{ data: docs }, { data: tests }, { data: comments }, { data: clientStageRows }] = await Promise.all([
       supabase.from('documents')
         .select('id, doc_no, title, rev, type, storage_path, file_name, client_review_note')
         .eq('project_id', id)
@@ -54,11 +54,21 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         .eq('project_id', id)
         .eq('created_by', user.id)
         .order('created_at', { ascending: false }),
+      supabase.from('project_stages')
+        .select('stage, status')
+        .eq('project_id', id),
     ])
+
+    const stageOrder = ['Feasibility','Design','Procure','Build & Install','Test & Commission','Energise & Handover']
+    const activeStages = (clientStageRows ?? [])
+      .filter((s: any) => s.status === 'In Progress' || s.status === 'On Hold')
+      .map((s: any) => s.stage)
+      .sort((a: string, b: string) => stageOrder.indexOf(a) - stageOrder.indexOf(b))
 
     return (
       <ClientProjectView
         project={{ id, name: project.name, client: project.client, location: project.location, stage: project.stage, capacity_mw: project.capacity_mw }}
+        activeStages={activeStages}
         documents={docs ?? []}
         tests={(tests ?? []) as any}
         comments={comments ?? []}
