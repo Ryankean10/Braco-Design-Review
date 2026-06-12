@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Upload, Download, FileText, ChevronUp, History, FileSpreadsheet } from 'lucide-react'
+import { Upload, Download, FileText, ChevronUp, History, FileSpreadsheet, Paperclip } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import DocumentImport from '@/components/DocumentImport'
+import DocumentBulkAttach from '@/components/DocumentBulkAttach'
 import type { Document, DocType, Stage } from '@/lib/types'
 
 const DOC_TYPES: DocType[] = ['Drawing', 'Specification', 'Report', 'Schedule', 'Certificate', 'Other']
@@ -27,6 +28,7 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
   const [documents, setDocuments] = useState<Document[]>(initialDocuments)
   const [showUpload, setShowUpload] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [showBulkAttach, setShowBulkAttach] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [expandedRevs, setExpandedRevs] = useState<Set<string>>(new Set())
@@ -123,7 +125,15 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
         </p>
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowImport(!showImport); setShowUpload(false) }}
+            onClick={() => { setShowBulkAttach(!showBulkAttach); setShowImport(false); setShowUpload(false) }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+          >
+            <Paperclip size={14} />
+            Attach files
+          </button>
+          <button
+            onClick={() => { setShowImport(!showImport); setShowBulkAttach(false); setShowUpload(false) }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
             style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
           >
@@ -140,6 +150,16 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
           </button>
         </div>
       </div>
+
+      {/* Bulk attach */}
+      {showBulkAttach && (
+        <DocumentBulkAttach
+          projectId={projectId}
+          documents={documents}
+          onDone={() => { setShowBulkAttach(false); window.location.reload() }}
+          onClose={() => setShowBulkAttach(false)}
+        />
+      )}
 
       {/* CSV Import */}
       {showImport && (
