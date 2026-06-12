@@ -228,7 +228,7 @@ export default function LessonsLearnedTable({ initial, isAdmin }: Props) {
           <option value="">All severities</option>
           {SEVERITIES.map(s => <option key={s}>{s}</option>)}
         </select>
-        {isAdmin && !adding && (
+        {!adding && (
           <button onClick={() => setAdding(true)}
             className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium text-white"
             style={{ background: 'var(--accent)' }}>
