@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -254,6 +254,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <Zap size={20} style={{ color: '#f472b6' }} />
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Clash Detection</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Physical & compliance clashes across all design documents</p>
+        </Link>
+        <Link href={`/projects/${id}/decision-log`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+          <BookMarked size={20} style={{ color: '#34d399' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Decision Log</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Full audit trail of all findings, decisions and actions</p>
         </Link>
       </div>
 

@@ -7,6 +7,14 @@ export const maxDuration = 120
 
 type Lens = 'er_compliance' | 'standards' | 'constructability' | 'procurement' | 'clash'
 
+const LENSES_LABELS: Record<Lens, string> = {
+  er_compliance:    "ER Compliance",
+  standards:        "Standards",
+  constructability: "Constructability",
+  procurement:      "Procurement Linkage",
+  clash:            "Clash Detection",
+}
+
 interface FindingRaw {
   severity: string
   title: string
@@ -340,14 +348,33 @@ Return ONLY valid JSON:
     }))
 
   if (rows.length) {
-    const { error: insertErr } = await supabase.from('design_findings').insert(rows)
+    const { data: inserted, error: insertErr } = await supabase
+      .from('design_findings')
+      .insert(rows)
+      .select('id, lens, severity, title')
     if (insertErr) {
       await supabase.from('design_review_runs').update({ status: 'failed', error: insertErr.message }).eq('id', runId)
       return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
+
+    // Auto-log every finding as "Raised" in the decision log
+    if (inserted?.length) {
+      const logRows = inserted.map((f: any) => ({
+        finding_id: f.id,
+        project_id: projectId,
+        run_id: runId,
+        lens: f.lens,
+        finding_title: f.title,
+        severity: f.severity,
+        action: 'Raised',
+        comment: `Raised by AI review (${LENSES_LABELS[lens as Lens] ?? lens})`,
+        actioned_by: user.id,
+      }))
+      await supabase.from('design_decision_log').insert(logRows)
+    }
   }
 
-  // Mark run complete (caller updates status after all lenses finish)
+  // Mark run complete
   await supabase.from('design_review_runs').update({ status: 'complete' }).eq('id', runId)
 
   return NextResponse.json({ runId, findingCount: rows.length })

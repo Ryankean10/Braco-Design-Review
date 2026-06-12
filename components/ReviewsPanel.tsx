@@ -51,6 +51,7 @@ interface Finding {
   document_refs: string[]
   procurement_item_id: string | null
   status: 'Pending' | 'Approved' | 'Rejected'
+  decision_type: string | null
   reviewed_at: string | null
   review_notes: string | null
   reviewer_name: string | null
@@ -90,7 +91,10 @@ export default function ReviewsPanel({
   const [filterStatus, setFilterStatus] = useState<'all' | 'Pending' | 'Approved' | 'Rejected'>('all')
   const [activeRunId, setActiveRunId] = useState<string | null>(runs[0]?.id ?? null)
   const [reviewingId, setReviewingId] = useState<string | null>(null)
+  const [reviewingAction, setReviewingAction] = useState<'Approved' | 'Rejected' | null>(null)
   const [reviewNote, setReviewNote] = useState('')
+  const [reviewDecisionType, setReviewDecisionType] = useState('')
+  const [reviewError, setReviewError] = useState<string | null>(null)
 
   function toggleDoc(id: string) {
     setSelectedDocs(prev => prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id])
@@ -155,18 +159,26 @@ export default function ReviewsPanel({
   }
 
   async function reviewFinding(findingId: string, status: 'Approved' | 'Rejected') {
-    const note = reviewNote.trim()
-    const res = await fetch(`/api/projects/${projectId}/findings`, {
+    setReviewError(null)
+    if (!reviewDecisionType) { setReviewError('Please select a decision type.'); return }
+    if (!reviewNote.trim()) { setReviewError('A comment is required — describe what will be done or why the finding is being rejected.'); return }
+
+    const res: Response = await fetch(`/api/projects/${projectId}/findings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: findingId, status, review_notes: note || null }),
+      body: JSON.stringify({ id: findingId, status, decision_type: reviewDecisionType, comment: reviewNote.trim() }),
     })
-    if (!res.ok) return
+    const data: { ok?: boolean; error?: string } = await res.json()
+    if (!res.ok) { setReviewError(data.error ?? 'Failed to save decision'); return }
+
     setFindings(prev => prev.map(f =>
-      f.id === findingId ? { ...f, status, review_notes: note || null } : f
+      f.id === findingId ? { ...f, status, review_notes: reviewNote.trim() } : f
     ))
     setReviewingId(null)
+    setReviewingAction(null)
     setReviewNote('')
+    setReviewDecisionType('')
+    setReviewError(null)
   }
 
   // Filter findings to active run
@@ -185,10 +197,15 @@ export default function ReviewsPanel({
         <Link href={`/projects/${projectId}`} className="p-1.5 rounded-lg hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
           <ArrowLeft size={16} />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>AI Design Reviews</h1>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{projectName}</p>
         </div>
+        <Link href={`/projects/${projectId}/decision-log`}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-80"
+          style={{ background: 'var(--bg-elevated)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
+          <Eye size={12} /> Decision Log
+        </Link>
       </div>
 
       <div className="p-6 max-w-7xl mx-auto grid grid-cols-[340px_1fr] gap-6 items-start">
@@ -476,17 +493,17 @@ export default function ReviewsPanel({
                                   </div>
                                 )}
 
-                                {/* Review action */}
+                                {/* Review action buttons */}
                                 {canEdit && finding.status === 'Pending' && !isReviewing && (
                                   <div className="flex gap-2 pt-1">
                                     <button
-                                      onClick={() => { setReviewingId(finding.id); setReviewNote('') }}
+                                      onClick={() => { setReviewingId(finding.id); setReviewingAction('Approved'); setReviewNote(''); setReviewDecisionType(''); setReviewError(null) }}
                                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80"
                                       style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
                                       <CheckCircle2 size={11} /> Approve
                                     </button>
                                     <button
-                                      onClick={() => { setReviewingId(finding.id); setReviewNote('') }}
+                                      onClick={() => { setReviewingId(finding.id); setReviewingAction('Rejected'); setReviewNote(''); setReviewDecisionType(''); setReviewError(null) }}
                                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80"
                                       style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>
                                       <XCircle size={11} /> Reject
@@ -495,29 +512,83 @@ export default function ReviewsPanel({
                                 )}
 
                                 {/* Inline review form */}
-                                {canEdit && isReviewing && (
-                                  <div className="space-y-2 pt-1">
-                                    <textarea
-                                      value={reviewNote}
-                                      onChange={e => setReviewNote(e.target.value)}
-                                      placeholder="Add review note (optional)…"
-                                      rows={2}
-                                      className="w-full rounded-lg px-3 py-2 text-xs resize-none"
-                                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-                                    />
-                                    <div className="flex gap-2">
-                                      <button onClick={() => reviewFinding(finding.id, 'Approved')}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-80"
-                                        style={{ background: '#4ade80', color: '#000' }}>
-                                        <CheckCircle2 size={11} /> Approve
+                                {canEdit && isReviewing && reviewingAction && (
+                                  <div className="rounded-xl border p-4 space-y-3 mt-1"
+                                    style={{ background: 'var(--bg-surface)', borderColor: reviewingAction === 'Approved' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)' }}>
+                                    <p className="text-xs font-semibold"
+                                      style={{ color: reviewingAction === 'Approved' ? '#4ade80' : '#f87171' }}>
+                                      {reviewingAction === 'Approved' ? '✓ Record Approval Decision' : '✕ Record Rejection Reason'}
+                                    </p>
+
+                                    {/* Decision type */}
+                                    <div>
+                                      <label className="block text-[10px] font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>
+                                        DECISION TYPE <span style={{ color: '#f87171' }}>*</span>
+                                      </label>
+                                      <select
+                                        value={reviewDecisionType}
+                                        onChange={e => setReviewDecisionType(e.target.value)}
+                                        className="w-full rounded-lg px-3 py-2 text-xs"
+                                        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: reviewDecisionType ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                                        <option value="">Select decision type…</option>
+                                        {reviewingAction === 'Approved' ? (
+                                          <>
+                                            <option>Design Change Required</option>
+                                            <option>Accepted as Risk</option>
+                                            <option>Deferred to Later Stage</option>
+                                            <option>Further Investigation Required</option>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <option>Not Applicable</option>
+                                            <option>AI Interpretation Error</option>
+                                            <option>Duplicate Finding</option>
+                                            <option>Out of Scope</option>
+                                          </>
+                                        )}
+                                      </select>
+                                    </div>
+
+                                    {/* Comment */}
+                                    <div>
+                                      <label className="block text-[10px] font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>
+                                        {reviewingAction === 'Approved'
+                                          ? 'WHAT WILL BE DONE / ACTION REQUIRED'
+                                          : 'REASON FOR REJECTION'}
+                                        {' '}<span style={{ color: '#f87171' }}>*</span>
+                                      </label>
+                                      <textarea
+                                        value={reviewNote}
+                                        onChange={e => setReviewNote(e.target.value)}
+                                        placeholder={reviewingAction === 'Approved'
+                                          ? 'Describe the action to be taken, who is responsible, and any target date…'
+                                          : 'Explain why this finding does not apply or is being rejected…'}
+                                        rows={3}
+                                        className="w-full rounded-lg px-3 py-2 text-xs resize-none"
+                                        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                                      />
+                                    </div>
+
+                                    {reviewError && (
+                                      <p className="text-xs px-3 py-2 rounded-lg"
+                                        style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>
+                                        {reviewError}
+                                      </p>
+                                    )}
+
+                                    <div className="flex gap-2 pt-1">
+                                      <button onClick={() => reviewFinding(finding.id, reviewingAction)}
+                                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold hover:opacity-80"
+                                        style={{
+                                          background: reviewingAction === 'Approved' ? '#4ade80' : '#f87171',
+                                          color: '#000',
+                                        }}>
+                                        {reviewingAction === 'Approved'
+                                          ? <><CheckCircle2 size={11} /> Confirm Approval</>
+                                          : <><XCircle size={11} /> Confirm Rejection</>}
                                       </button>
-                                      <button onClick={() => reviewFinding(finding.id, 'Rejected')}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-80"
-                                        style={{ background: '#f87171', color: '#000' }}>
-                                        <XCircle size={11} /> Reject
-                                      </button>
-                                      <button onClick={() => { setReviewingId(null); setReviewNote('') }}
-                                        className="px-3 py-1.5 rounded-lg text-xs hover:opacity-80"
+                                      <button onClick={() => { setReviewingId(null); setReviewingAction(null); setReviewNote(''); setReviewDecisionType(''); setReviewError(null) }}
+                                        className="px-3 py-2 rounded-lg text-xs hover:opacity-80"
                                         style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
                                         Cancel
                                       </button>
@@ -525,11 +596,24 @@ export default function ReviewsPanel({
                                   </div>
                                 )}
 
-                                {/* Existing review note */}
-                                {finding.status !== 'Pending' && finding.review_notes && (
-                                  <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                                    <p className="font-medium mb-0.5" style={{ color: 'var(--text-muted)' }}>Review note</p>
-                                    <p style={{ color: 'var(--text-secondary)' }}>{finding.review_notes}</p>
+                                {/* Existing decision */}
+                                {finding.status !== 'Pending' && (
+                                  <div className="rounded-lg px-3 py-2.5 text-xs space-y-1"
+                                    style={{ background: 'var(--bg-surface)', border: `1px solid ${finding.status === 'Approved' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}` }}>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <p className="font-semibold" style={{ color: finding.status === 'Approved' ? '#4ade80' : '#f87171' }}>
+                                        {finding.status}
+                                      </p>
+                                      {(finding as any).decision_type && (
+                                        <span className="px-2 py-0.5 rounded text-[10px]"
+                                          style={{ background: 'var(--bg-elevated)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
+                                          {(finding as any).decision_type}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {finding.review_notes && (
+                                      <p style={{ color: 'var(--text-secondary)' }}>{finding.review_notes}</p>
+                                    )}
                                   </div>
                                 )}
                               </div>

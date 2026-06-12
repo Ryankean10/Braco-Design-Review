@@ -39,7 +39,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
       .limit(10),
     supabase
       .from('design_findings')
-      .select('id, run_id, lens, severity, title, description, clause_ref, drawing_refs, document_refs, procurement_item_id, status, reviewed_at, review_notes')
+      .select('id, run_id, lens, severity, title, description, clause_ref, drawing_refs, document_refs, procurement_item_id, status, decision_type, reviewed_at, review_notes')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false }),
   ])
