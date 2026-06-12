@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const message = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 3000,
+    max_tokens: 4096,
     messages: [{
       role: 'user',
       content: `You are a UK BESS (Battery Energy Storage System) procurement specialist. Extract all procurable equipment, materials and services from this Employer's Requirements document.
@@ -74,7 +74,10 @@ ${erText}`
     const stripped = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
     const jsonMatch = stripped.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON found')
-    result = JSON.parse(jsonMatch[0])
+    let raw = jsonMatch[0]
+    // Repair common Claude JSON issues: trailing commas before ] or }
+    raw = raw.replace(/,\s*([}\]])/g, '$1')
+    result = JSON.parse(raw)
     if (!Array.isArray(result.items)) result.items = []
   } catch (e: any) {
     return NextResponse.json({ error: `Parse failed: ${e.message}` }, { status: 500 })

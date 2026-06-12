@@ -6,6 +6,7 @@ import {
   Clock, PoundSterling, Upload, X, Check, Pencil, Trash2,
   CheckSquare, Square, FileText
 } from 'lucide-react'
+import AIProgressBar from '@/components/AIProgressBar'
 import { createClient } from '@/lib/supabase/client'
 
 const CATEGORIES = [
@@ -566,12 +567,12 @@ export default function ProcurementClient({ projectId, hasER, initialItems, supp
 
       {/* Toolbar */}
       <div className="flex flex-wrap gap-2 items-center">
-        {hasER && canEdit && (
-          <button onClick={extractFromER} disabled={extracting}
-            className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium text-white disabled:opacity-60"
+        {hasER && canEdit && !extracting && (
+          <button onClick={extractFromER}
+            className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium text-white"
             style={{ background: 'linear-gradient(135deg, var(--accent), #a855f7)' }}>
-            <Sparkles size={14} className={extracting ? 'animate-pulse' : ''} />
-            {extracting ? 'Extracting from ER…' : 'Extract items from ER'}
+            <Sparkles size={14} />
+            Extract items from ER
           </button>
         )}
         {canEdit && !addingItem && (
@@ -595,7 +596,20 @@ export default function ProcurementClient({ projectId, hasER, initialItems, supp
         </select>
       </div>
 
-      {extractMsg && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{extractMsg}</p>}
+      {extracting && (
+        <AIProgressBar
+          stages={[
+            { pct: 10, label: 'Downloading ER from storage…',        ms: 800  },
+            { pct: 22, label: 'Extracting text from PDF…',           ms: 1200 },
+            { pct: 38, label: 'Sending to AI for analysis…',         ms: 800  },
+            { pct: 55, label: 'Identifying procurable items…',        ms: 7000 },
+            { pct: 72, label: 'Estimating lead times…',              ms: 5000 },
+            { pct: 88, label: 'Checking for duplicates…',            ms: 3000 },
+          ]}
+          note="This takes 20–40 seconds — AI is reading the full ER for equipment and materials"
+        />
+      )}
+      {!extracting && extractMsg && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{extractMsg}</p>}
 
       {/* Add item form */}
       {addingItem && (

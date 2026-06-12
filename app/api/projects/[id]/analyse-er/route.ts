@@ -103,7 +103,8 @@ ${erTextTruncated}`
     const stripped = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
     const jsonMatch = stripped.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error(`No JSON found. Claude said: ${responseText.slice(0, 300)}`)
-    result = JSON.parse(jsonMatch[0])
+    const raw = jsonMatch[0].replace(/,\s*([}\]])/g, '$1')
+    result = JSON.parse(raw)
     if (!Array.isArray(result.applicable_ids)) result.applicable_ids = []
     if (!Array.isArray(result.missing_standards)) result.missing_standards = []
   } catch (e: any) {

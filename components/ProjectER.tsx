@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { FileText, Sparkles, X, Upload, ChevronDown, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react'
+import AIProgressBar from '@/components/AIProgressBar'
 import { createClient } from '@/lib/supabase/client'
 
 interface MissingStandard {
@@ -32,8 +33,6 @@ export default function ProjectER({
   const [analysedAt, setAnalysedAt] = useState(initAnalysedAt)
   const [uploading, setUploading] = useState(false)
   const [analysing, setAnalysing] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [progressLabel, setProgressLabel] = useState('')
   const [error, setError] = useState('')
   const [result, setResult] = useState<{ linked: number } | null>(null)
   const [expandedMissing, setExpandedMissing] = useState(true)
@@ -105,47 +104,18 @@ export default function ProjectER({
     setAnalysing(true)
     setError('')
     setResult(null)
-    setProgress(0)
-
-    // Staged progress simulation
-    const stages: { pct: number; label: string; ms: number }[] = [
-      { pct: 8,  label: 'Downloading ER from storage…',         ms: 800  },
-      { pct: 20, label: 'Extracting text from PDF…',            ms: 1200 },
-      { pct: 32, label: 'Loading standards library…',           ms: 600  },
-      { pct: 45, label: 'Sending to Claude for analysis…',      ms: 1000 },
-      { pct: 60, label: "Claude reading Employer's Requirements…",  ms: 8000 },
-      { pct: 75, label: 'Cross-referencing standards…',         ms: 8000 },
-      { pct: 88, label: 'Identifying gaps…',                    ms: 6000 },
-      { pct: 94, label: 'Finalising results…',                  ms: 4000 },
-    ]
-
-    let cancelled = false
-    let i = 0
-    function tick() {
-      if (cancelled || i >= stages.length) return
-      const s = stages[i++]
-      setProgress(s.pct)
-      setProgressLabel(s.label)
-      setTimeout(tick, s.ms)
-    }
-    tick()
-
     try {
       const res = await fetch(`/api/projects/${projectId}/analyse-er`, { method: 'POST' })
       const text = await res.text()
-      cancelled = true
       let data: any
       try { data = JSON.parse(text) } catch { throw new Error(text.slice(0, 300) || 'Server error — possible timeout') }
       if (!res.ok) throw new Error(data.error ?? 'Analysis failed')
-      setProgress(100)
-      setProgressLabel('Done')
       setResult({ linked: data.linked })
       setMissing(data.missing ?? [])
       setAnalysedAt(new Date().toISOString())
       setExpandedMissing(true)
       setDismissedMissing(new Set())
     } catch (e: any) {
-      cancelled = true
       setError(e.message)
     } finally {
       setAnalysing(false)
@@ -236,27 +206,18 @@ export default function ProjectER({
         )}
 
         {analysing && (
-          <div className="rounded-xl border px-4 py-4 space-y-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-            <div className="flex items-center justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
-              <span className="flex items-center gap-1.5">
-                <Sparkles size={12} className="animate-pulse" style={{ color: 'var(--accent)' }} />
-                {progressLabel}
-              </span>
-              <span style={{ color: 'var(--accent)' }}>{progress}%</span>
-            </div>
-            <div className="w-full rounded-full h-2" style={{ background: 'var(--border)' }}>
-              <div
-                className="h-2 rounded-full transition-all duration-700 ease-out"
-                style={{
-                  width: `${progress}%`,
-                  background: 'linear-gradient(90deg, var(--accent), #a855f7)',
-                }}
-              />
-            </div>
-            <p className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>
-              This takes 30–60 seconds — Claude is reading the full ER document
-            </p>
-          </div>
+          <AIProgressBar
+            stages={[
+              { pct: 8,  label: 'Downloading ER from storage…',          ms: 800  },
+              { pct: 20, label: 'Extracting text from PDF…',             ms: 1200 },
+              { pct: 35, label: 'Loading standards library…',            ms: 600  },
+              { pct: 50, label: 'Sending to AI for analysis…',           ms: 1000 },
+              { pct: 65, label: "Reading Employer's Requirements…",       ms: 8000 },
+              { pct: 78, label: 'Cross-referencing standards…',          ms: 8000 },
+              { pct: 90, label: 'Identifying gaps…',                     ms: 5000 },
+            ]}
+            note="This takes 30–60 seconds — AI is reading the full ER document"
+          />
         )}
 
         {/* Error */}
