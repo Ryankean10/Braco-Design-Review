@@ -43,9 +43,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `PDF extraction failed: ${e.message}` }, { status: 500 })
   }
 
-  // Truncate to ~80k chars to stay within Claude context limits
-  const erTextTruncated = erText.length > 80000
-    ? erText.slice(0, 80000) + '\n\n[... document truncated for analysis ...]'
+  // Truncate to ~40k chars — enough to capture all standards references without hitting timeout
+  const erTextTruncated = erText.length > 40000
+    ? erText.slice(0, 40000) + '\n\n[... document truncated for analysis ...]'
     : erText
 
   // Load full standards library
@@ -57,15 +57,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!standards?.length) return NextResponse.json({ error: 'No standards in library' }, { status: 400 })
 
   const libraryList = standards.map(s =>
-    `- ID: ${s.id}\n  Ref: ${s.ref}\n  Title: ${s.title}\n  Category: ${s.category}\n  Summary: ${s.summary ?? 'N/A'}`
-  ).join('\n\n')
+    `ID:${s.id} | ${s.ref} | ${s.category}`
+  ).join('\n')
 
-  // Call Claude
+  // Call Claude — use Haiku for speed, task is structured extraction not reasoning
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2048,
     messages: [{
       role: 'user',
       content: `You are a UK BESS (Battery Energy Storage System) engineering standards expert. Analyse the following Employer's Requirements (ER) document and cross-reference it against the provided standards library.

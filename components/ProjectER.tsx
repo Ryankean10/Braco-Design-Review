@@ -132,8 +132,10 @@ export default function ProjectER({
 
     try {
       const res = await fetch(`/api/projects/${projectId}/analyse-er`, { method: 'POST' })
-      const data = await res.json()
+      const text = await res.text()
       cancelled = true
+      let data: any
+      try { data = JSON.parse(text) } catch { throw new Error(text.slice(0, 300) || 'Server error — possible timeout') }
       if (!res.ok) throw new Error(data.error ?? 'Analysis failed')
       setProgress(100)
       setProgressLabel('Done')
