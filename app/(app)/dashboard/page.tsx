@@ -46,19 +46,34 @@ export default async function DashboardPage() {
 
     const projectIds = (projects ?? []).map((p: any) => p.id)
 
-    const [{ data: docs }, { data: tests }, { data: comments }] = await Promise.all([
+    const [{ data: docs }, { data: tests }, { data: comments }, { data: stageRows }] = await Promise.all([
       supabase.from('documents').select('id, project_id').eq('for_client_review', true).in('project_id', projectIds),
       supabase.from('test_register').select('id, project_id, status').in('project_id', projectIds),
       supabase.from('client_comments').select('id, project_id, status, created_by').in('project_id', projectIds),
+      supabase.from('project_stages').select('project_id, stage, status').in('project_id', projectIds),
     ])
 
-    const enriched = (projects ?? []).map(p => ({
+    // Active stages per project (In Progress or On Hold), ordered
+    const stageOrder = ['Feasibility','Design','Procure','Build & Install','Test & Commission','Energise & Handover']
+    const activeStagesMap: Record<string, string[]> = {}
+    for (const s of stageRows ?? []) {
+      if (s.status === 'In Progress' || s.status === 'On Hold') {
+        if (!activeStagesMap[s.project_id]) activeStagesMap[s.project_id] = []
+        activeStagesMap[s.project_id].push(s.stage)
+      }
+    }
+    for (const pid of Object.keys(activeStagesMap)) {
+      activeStagesMap[pid].sort((a, b) => stageOrder.indexOf(a) - stageOrder.indexOf(b))
+    }
+
+    const enriched = (projects ?? []).map((p: any) => ({
       ...p,
-      docCount:               (docs ?? []).filter(d => d.project_id === p.id).length,
-      testPassCount:          (tests ?? []).filter(t => t.project_id === p.id && t.status === 'Pass').length,
-      testTotalCount:         (tests ?? []).filter(t => t.project_id === p.id).length,
-      openComments:           (comments ?? []).filter(c => c.project_id === p.id && c.status === 'Open' && c.created_by === user.id).length,
-      awaitingResponseCount:  (comments ?? []).filter(c => c.project_id === p.id && c.status === 'Responded' && c.created_by === user.id).length,
+      activeStages:           activeStagesMap[p.id] ?? [],
+      docCount:               (docs ?? []).filter((d: any) => d.project_id === p.id).length,
+      testPassCount:          (tests ?? []).filter((t: any) => t.project_id === p.id && t.status === 'Pass').length,
+      testTotalCount:         (tests ?? []).filter((t: any) => t.project_id === p.id).length,
+      openComments:           (comments ?? []).filter((c: any) => c.project_id === p.id && c.status === 'Open' && c.created_by === user.id).length,
+      awaitingResponseCount:  (comments ?? []).filter((c: any) => c.project_id === p.id && c.status === 'Responded' && c.created_by === user.id).length,
     }))
 
     return <ClientDashboard profile={{ full_name: profile?.full_name ?? null, email: profile?.email ?? user.email ?? '' }} projects={enriched} />

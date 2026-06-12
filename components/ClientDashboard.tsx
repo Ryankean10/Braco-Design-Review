@@ -12,12 +12,13 @@ interface ProjectSummary {
   client: string
   location: string
   stage: Stage
+  activeStages: string[]
   capacity_mw: number | null
   docCount: number
   testPassCount: number
   testTotalCount: number
   openComments: number
-  awaitingResponseCount: number  // responses waiting for client to resolve
+  awaitingResponseCount: number
 }
 
 interface Props {
@@ -84,10 +85,14 @@ export default function ClientDashboard({ profile, projects }: Props) {
                   <h2 className="text-base font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</h2>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.location}{p.capacity_mw ? ` · ${p.capacity_mw} MW` : ''}</p>
                 </div>
-                <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
-                  style={{ background: `${STAGE_COLORS[p.stage] ?? '#94a3b8'}20`, color: STAGE_COLORS[p.stage] ?? '#94a3b8' }}>
-                  {p.stage}
-                </span>
+                <div className="flex flex-wrap gap-1.5 justify-end flex-shrink-0">
+                  {(p.activeStages.length > 0 ? p.activeStages : [p.stage]).map((s: string) => (
+                    <span key={s} className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: `${STAGE_COLORS[s] ?? '#94a3b8'}20`, color: STAGE_COLORS[s] ?? '#94a3b8' }}>
+                      {s}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* Stats row */}
