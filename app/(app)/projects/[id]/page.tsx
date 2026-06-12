@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Pencil, FileText } from 'lucide-react'
 import type { Stage } from '@/lib/types'
+import ProjectReferences from '@/components/ProjectReferences'
 
 const STAGE_ORDER: Stage[] = [
   'Feasibility', 'Design', 'Procure', 'Build & Install', 'Test & Commission', 'Energise & Handover'
@@ -21,6 +22,32 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   if (!project) notFound()
 
   const currentIdx = STAGE_ORDER.indexOf(project.stage)
+
+  // Load project-linked references and full library in parallel
+  const [
+    { data: linkedStandardRows },
+    { data: linkedHsRows },
+    { data: linkedLessonRows },
+    { data: linkedOpRows },
+    { data: allStandards },
+    { data: allHs },
+    { data: allLessons },
+    { data: allOps },
+  ] = await Promise.all([
+    supabase.from('project_standards').select('standard_id, standards(*, standard_clauses(*))').eq('project_id', id),
+    supabase.from('project_hs_references').select('hs_id, hs_references(*)').eq('project_id', id),
+    supabase.from('project_lessons_learned').select('lesson_id, lessons_learned(*)').eq('project_id', id),
+    supabase.from('project_operator_rules').select('rule_id, operator_rules(*)').eq('project_id', id),
+    supabase.from('standards').select('*, standard_clauses(*)').order('category').order('ref'),
+    supabase.from('hs_references').select('*').order('category').order('ref'),
+    supabase.from('lessons_learned').select('*').order('severity').order('category'),
+    supabase.from('operator_rules').select('*').order('operator').order('category'),
+  ])
+
+  const linkedStandards = (linkedStandardRows ?? []).map((r: any) => r.standards).filter(Boolean)
+  const linkedHs = (linkedHsRows ?? []).map((r: any) => r.hs_references).filter(Boolean)
+  const linkedLessons = (linkedLessonRows ?? []).map((r: any) => r.lessons_learned).filter(Boolean)
+  const linkedOps = (linkedOpRows ?? []).map((r: any) => r.operator_rules).filter(Boolean)
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -93,11 +120,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Feature panels */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 mb-6">
         <Link
           href={`/projects/${id}/documents`}
           className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80 transition-opacity"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 120 }}
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}
         >
           <FileText size={20} style={{ color: 'var(--accent)' }} />
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Document Library</p>
@@ -107,12 +134,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <div
             key={label}
             className="rounded-xl border p-5 flex items-center justify-center"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 120 }}
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}
           >
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{label} — coming in M3/M5</p>
           </div>
         ))}
       </div>
+
+      {/* Applicable references */}
+      <ProjectReferences
+        projectId={id}
+        linkedStandards={linkedStandards}
+        linkedHs={linkedHs}
+        linkedLessons={linkedLessons}
+        linkedOps={linkedOps}
+        allStandards={allStandards ?? []}
+        allHs={allHs ?? []}
+        allLessons={allLessons ?? []}
+        allOps={allOps ?? []}
+      />
     </div>
   )
 }
