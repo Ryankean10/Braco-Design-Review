@@ -117,45 +117,42 @@ export default function ReviewsPanel({
     if (!selectedDocs.length || !selectedLenses.length) return
     setIsRunning(true)
     setRunError(null)
+    setRunProgress({ lens: `Sending ${selectedLenses.length} lens${selectedLenses.length > 1 ? 'es' : ''} to Claude…`, pct: 10 })
 
-    let runId: string | null = null
-    const totalLenses = selectedLenses.length
+    // Single API call for all selected lenses
+    try {
+      const progressTimer = setInterval(() => {
+        setRunProgress(prev => prev && prev.pct < 85 ? { ...prev, pct: prev.pct + 5 } : prev)
+      }, 8000)
 
-    for (let i = 0; i < selectedLenses.length; i++) {
-      const lens = selectedLenses[i]
-      const lensLabel = LENSES.find(l => l.key === lens)?.label ?? lens
-      setRunProgress({ lens: `Running ${lensLabel}…`, pct: Math.round((i / totalLenses) * 90) })
+      const res: Response = await fetch(`/api/projects/${projectId}/run-review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lenses: selectedLenses, documentIds: selectedDocs }),
+      })
+      clearInterval(progressTimer)
 
-      try {
-        const res: Response = await fetch(`/api/projects/${projectId}/run-review`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lens, documentIds: selectedDocs, runId }),
-        })
+      const data: { runId?: string; findingCount?: number; byLens?: Record<string, number>; warnings?: string[]; error?: string } = await res.json()
 
-        const data: { runId?: string; findingCount?: number; error?: string } = await res.json()
-        if (!res.ok) {
-          setRunError(`${lensLabel} failed: ${data.error}`)
-          setIsRunning(false)
-          setRunProgress(null)
-          return
-        }
-
-        if (!runId) runId = data.runId ?? null
-      } catch (e: any) {
-        setRunError(`Network error on ${lensLabel}: ${e.message}`)
+      if (!res.ok) {
+        setRunError(data.error ?? 'Review failed')
         setIsRunning(false)
         setRunProgress(null)
         return
       }
+
+      setRunProgress({ lens: `Complete — ${data.findingCount ?? 0} findings generated`, pct: 100 })
+
+      if (data.warnings?.length) {
+        setRunError(`Warning: ${data.warnings.join('; ')}`)
+      }
+
+      setTimeout(() => window.location.reload(), 1200)
+    } catch (e: any) {
+      setRunError(`Network error: ${e.message}`)
+      setIsRunning(false)
+      setRunProgress(null)
     }
-
-    setRunProgress({ lens: 'Saving findings…', pct: 95 })
-
-    // Reload findings for this run
-    const res = await fetch(`/api/projects/${projectId}/run-review?runId=${runId}`)
-    // Refresh findings from DB via page reload for simplicity
-    window.location.reload()
   }
 
   async function reviewFinding(findingId: string, status: 'Approved' | 'Rejected') {
@@ -345,10 +342,14 @@ export default function ReviewsPanel({
                       </p>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full"
                         style={{
-                          color: run.status === 'complete' ? '#4ade80' : run.status === 'failed' ? '#f87171' : '#94a3b8',
-                          background: run.status === 'complete' ? 'rgba(74,222,128,0.15)' : run.status === 'failed' ? 'rgba(248,113,113,0.15)' : 'rgba(148,163,184,0.15)',
+                          color: run.status === 'complete' ? '#4ade80'
+                               : run.status === 'ai_complete' ? '#60a5fa'
+                               : run.status === 'failed' ? '#f87171' : '#94a3b8',
+                          background: run.status === 'complete' ? 'rgba(74,222,128,0.15)'
+                               : run.status === 'ai_complete' ? 'rgba(96,165,250,0.15)'
+                               : run.status === 'failed' ? 'rgba(248,113,113,0.15)' : 'rgba(148,163,184,0.15)',
                         }}>
-                        {run.status}
+                        {run.status === 'ai_complete' ? 'AI done' : run.status}
                       </span>
                     </div>
                     <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>

@@ -3,16 +3,16 @@ import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractAndParse } from '@/lib/repairJson'
 
-export const maxDuration = 120
+export const maxDuration = 300
 
 type Lens = 'er_compliance' | 'standards' | 'constructability' | 'procurement' | 'clash'
 
-const LENSES_LABELS: Record<Lens, string> = {
-  er_compliance:    "ER Compliance",
-  standards:        "Standards",
-  constructability: "Constructability",
-  procurement:      "Procurement Linkage",
-  clash:            "Clash Detection",
+const LENS_LABELS: Record<Lens, string> = {
+  er_compliance:    'ER Compliance',
+  standards:        'Standards',
+  constructability: 'Constructability',
+  procurement:      'Procurement Linkage',
+  clash:            'Clash Detection',
 }
 
 interface FindingRaw {
@@ -22,7 +22,7 @@ interface FindingRaw {
   clause_ref?: string
   drawing_refs?: string[]
   document_refs?: string[]
-  procurement_item_id?: string
+  procurement_item_id?: string | null
 }
 
 async function extractPdfText(fileData: Blob): Promise<string> {
@@ -31,7 +31,7 @@ async function extractPdfText(fileData: Blob): Promise<string> {
   const require = createRequire(import.meta.url)
   const pdfParse = require('pdf-parse/lib/pdf-parse.js')
   const parsed = await pdfParse(buf)
-  return parsed.text as string
+  return (parsed.text as string) ?? ''
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -45,59 +45,63 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!['admin', 'project_manager', 'engineer'].includes(profile?.role ?? ''))
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
 
-  const body = await req.json() as { lens: Lens; documentIds: string[]; runId?: string }
-  const { lens, documentIds, runId: existingRunId } = body
+  const body = await req.json() as { lenses: Lens[]; documentIds: string[] }
+  const { lenses, documentIds } = body
 
-  if (!lens || !documentIds?.length)
-    return NextResponse.json({ error: 'lens and documentIds required' }, { status: 400 })
+  if (!lenses?.length || !documentIds?.length)
+    return NextResponse.json({ error: 'lenses and documentIds required' }, { status: 400 })
 
-  // ── Create or reuse run record ─────────────────────────────────────────────
-  let runId = existingRunId
-  if (!runId) {
-    const { data: run, error: runErr } = await supabase
-      .from('design_review_runs')
-      .insert({
-        project_id: projectId,
-        run_by: user.id,
-        document_ids: documentIds,
-        lenses: [lens],
-        status: 'running',
-      })
-      .select('id')
-      .single()
-    if (runErr) return NextResponse.json({ error: runErr.message }, { status: 500 })
-    runId = run.id
-  } else {
-    // Append lens to existing run's lenses array
-    const { data: existing } = await supabase.from('design_review_runs').select('lenses').eq('id', runId).single()
-    const updatedLenses = [...(existing?.lenses ?? []), lens]
-    await supabase.from('design_review_runs').update({ lenses: updatedLenses, status: 'running' }).eq('id', runId)
-  }
+  // ── Create run record ──────────────────────────────────────────────────────
+  const { data: run, error: runErr } = await supabase
+    .from('design_review_runs')
+    .insert({
+      project_id: projectId,
+      run_by: user.id,
+      document_ids: documentIds,
+      lenses,
+      status: 'running',
+    })
+    .select('id')
+    .single()
+
+  if (runErr) return NextResponse.json({ error: runErr.message }, { status: 500 })
+  const runId = run.id
 
   // ── Load project ───────────────────────────────────────────────────────────
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
-  // ── Download & extract selected design documents ───────────────────────────
+  // ── Download & extract design documents ───────────────────────────────────
   const { data: docs } = await supabase
     .from('documents')
-    .select('id, doc_no, title, rev, type, storage_path, file_name')
+    .select('id, doc_no, title, rev, type, storage_path')
     .in('id', documentIds)
 
   const docTexts: { doc_no: string; title: string; text: string }[] = []
+  const failedDocs: string[] = []
+
   for (const doc of docs ?? []) {
     try {
       const { data: fileData } = await supabase.storage.from('documents').download(doc.storage_path)
-      if (!fileData) continue
+      if (!fileData) { failedDocs.push(doc.doc_no); continue }
       const text = await extractPdfText(fileData)
-      docTexts.push({ doc_no: doc.doc_no, title: doc.title, text: text.slice(0, 20000) })
+      if (text.trim().length < 50) {
+        failedDocs.push(`${doc.doc_no} (no readable text — may be a scanned image PDF)`)
+        continue
+      }
+      docTexts.push({ doc_no: doc.doc_no, title: doc.title, text: text.slice(0, 15000) })
     } catch {
-      // Skip documents that can't be parsed
+      failedDocs.push(doc.doc_no)
     }
   }
 
-  if (!docTexts.length)
-    return NextResponse.json({ error: 'No document text could be extracted' }, { status: 400 })
+  if (!docTexts.length) {
+    const msg = failedDocs.length
+      ? `Could not extract text from any selected document. ${failedDocs.join(', ')}. Ensure PDFs contain selectable text (not scanned images).`
+      : 'No document text could be extracted.'
+    await supabase.from('design_review_runs').update({ status: 'failed', error: msg }).eq('id', runId)
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
 
   const combinedDocText = docTexts.map(d =>
     `=== DOCUMENT: ${d.doc_no} — ${d.title} ===\n${d.text}`
@@ -105,210 +109,111 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const docList = (docs ?? []).map(d => `${d.doc_no} — ${d.title} Rev ${d.rev}`).join('\n')
 
-  // ── Build lens-specific prompt ─────────────────────────────────────────────
-  let systemPrompt = `You are a senior UK BESS (Battery Energy Storage System) engineering reviewer with expertise in UK regulations, DNO requirements (G99 Issue 2), and NESO Grid Code. You are conducting a formal design review. Be thorough and specific. Every finding must include a drawing or document reference.`
+  // ── Build context sections for requested lenses ────────────────────────────
+  const contextSections: string[] = []
 
-  let userPrompt = ''
-
-  if (lens === 'er_compliance') {
-    let erText = ''
+  if (lenses.includes('er_compliance')) {
+    let erText = '(No ER document uploaded for this project)'
     if (project.er_storage_path) {
       try {
         const { data: erFile } = await supabase.storage.from('documents').download(project.er_storage_path)
-        if (erFile) erText = (await extractPdfText(erFile)).slice(0, 30000)
-      } catch { /* skip */ }
+        if (erFile) {
+          const t = await extractPdfText(erFile)
+          erText = t.trim().length > 50 ? t.slice(0, 25000) : '(ER document could not be parsed — may be a scanned image)'
+        }
+      } catch { /* leave default */ }
     }
-
-    userPrompt = `Review the following design documents against the Employer's Requirements (ER) and identify all non-conformances, gaps, and areas requiring clarification.
-
-AVAILABLE DOCUMENTS:
-${docList}
-
-EMPLOYER'S REQUIREMENTS:
-${erText || '(No ER document uploaded — flag this as a Critical finding)'}
-
-DESIGN DOCUMENTS:
-${combinedDocText}
-
-Return ONLY valid JSON:
-{
-  "findings": [
-    {
-      "severity": "Critical|Major|Minor|Observation",
-      "title": "Short descriptive title",
-      "description": "Detailed description of the non-conformance. Quote the relevant ER clause verbatim where possible.",
-      "clause_ref": "ER section/clause reference e.g. 'ER Section 4.2.1'",
-      "drawing_refs": ["DOC-001", "DWG-003"],
-      "document_refs": ["ER Section 4"]
-    }
-  ]
-}`
+    contextSections.push(`EMPLOYER'S REQUIREMENTS (for er_compliance lens):\n${erText}`)
   }
 
-  else if (lens === 'standards') {
-    const { data: linkedStandards } = await supabase
+  if (lenses.includes('standards')) {
+    const { data: linked } = await supabase
       .from('project_standards')
       .select('standard_id, standards(ref, title, category, summary)')
       .eq('project_id', projectId)
-
-    const standardsList = (linkedStandards ?? []).map((ps: any) => {
+    const list = (linked ?? []).map((ps: any) => {
       const s = ps.standards
-      return `${s.ref} — ${s.title} (${s.category})${s.summary ? ': ' + s.summary : ''}`
+      return `${s.ref} — ${s.title} (${s.category})${s.summary ? ': ' + s.summary.slice(0, 120) : ''}`
     }).join('\n')
-
-    userPrompt = `Review the following design documents against the linked standards library. Identify non-conformances with specific standards, clauses not met, and any standards referenced in the design that are NOT in the library below (flag these as gaps requiring library update).
-
-AVAILABLE DOCUMENTS:
-${docList}
-
-LINKED STANDARDS LIBRARY:
-${standardsList || '(No standards linked to this project yet — flag as Major finding)'}
-
-DESIGN DOCUMENTS:
-${combinedDocText}
-
-Return ONLY valid JSON:
-{
-  "findings": [
-    {
-      "severity": "Critical|Major|Minor|Observation",
-      "title": "Short descriptive title",
-      "description": "Detailed description. Quote the specific standard clause that is not met or is missing from the library.",
-      "clause_ref": "Standard ref and clause e.g. 'BS EN 62477-1 Clause 5.3.2'",
-      "drawing_refs": ["DOC-001"],
-      "document_refs": ["BS EN 62477-1"]
-    }
-  ]
-}`
+    contextSections.push(`LINKED STANDARDS LIBRARY (for standards lens):\n${list || '(No standards linked to this project)'}`)
   }
 
-  else if (lens === 'constructability') {
+  if (lenses.includes('constructability') || lenses.includes('clash')) {
     const { data: lessons } = await supabase
-      .from('lessons_learned')
-      .select('title, description, category, severity')
-      .limit(50)
-
-    const lessonsList = (lessons ?? []).map((l: any) =>
+      .from('lessons_learned').select('title, description, category, severity').limit(40)
+    const list = (lessons ?? []).map((l: any) =>
       `[${l.severity ?? 'Note'}] ${l.category ?? ''}: ${l.title} — ${l.description}`
     ).join('\n')
-
-    userPrompt = `Review the following design documents for constructability issues. Consider: access for plant and personnel, sequencing constraints, interface risks between packages, temporary works requirements, buildability of specified details, and likely rework scenarios. Cross-reference with the lessons-learned library.
-
-AVAILABLE DOCUMENTS:
-${docList}
-
-LESSONS LEARNED LIBRARY:
-${lessonsList || '(No lessons learned in library)'}
-
-DESIGN DOCUMENTS:
-${combinedDocText}
-
-Return ONLY valid JSON:
-{
-  "findings": [
-    {
-      "severity": "Critical|Major|Minor|Observation",
-      "title": "Short descriptive title",
-      "description": "Describe the constructability issue clearly, including what will go wrong, the likely consequence, and what should be done differently. Reference any applicable lesson learned.",
-      "clause_ref": "Relevant lesson reference or design clause",
-      "drawing_refs": ["DWG-001"],
-      "document_refs": ["DOC-002"]
-    }
-  ]
-}`
+    contextSections.push(`LESSONS LEARNED LIBRARY (for constructability and clash lenses):\n${list || '(No lessons learned in library)'}`)
   }
 
-  else if (lens === 'procurement') {
-    const { data: procItems } = await supabase
+  if (lenses.includes('procurement')) {
+    const { data: items } = await supabase
       .from('procurement_items')
       .select('id, title, description, category, estimated_lead_weeks, status, notes')
       .eq('project_id', projectId)
-
-    const procList = (procItems ?? []).map((p: any) =>
-      `ID:${p.id} | ${p.title} (${p.category}) | Lead: ${p.estimated_lead_weeks ?? '?'} wks | Status: ${p.status ?? 'Not ordered'} | ${p.notes ?? ''}`
+    const list = (items ?? []).map((p: any) =>
+      `ID:${p.id} | ${p.title} (${p.category}) | Lead: ${p.estimated_lead_weeks ?? '?'} wks | Status: ${p.status ?? 'Not ordered'}`
     ).join('\n')
+    contextSections.push(`PROCUREMENT REGISTER (for procurement lens):\n${list || '(Empty procurement register)'}`)
+  }
 
-    userPrompt = `Review the following design documents against the procurement register. Identify:
-1. Equipment/materials specified in the design that are already on the procurement register — flag any specification mismatches
-2. Equipment/materials specified in the design that are NOT on the procurement register — these are procurement gaps
-3. Long-lead items where design decisions may constrain the procurement programme
-4. Design specifications that are too vague to procure against
+  // ── Build lens instructions ────────────────────────────────────────────────
+  const lensInstructions: string[] = []
+
+  if (lenses.includes('er_compliance')) lensInstructions.push(`
+"er_compliance": Review the design documents against the Employer's Requirements above. Identify every non-conformance, gap, or area requiring clarification. Quote the specific ER clause in clause_ref. Drawing reference is mandatory.`)
+
+  if (lenses.includes('standards')) lensInstructions.push(`
+"standards": Check the design against the linked standards library. Flag: (1) standards not met by the design, (2) standards referenced in the design but absent from the library. Quote the specific clause in clause_ref.`)
+
+  if (lenses.includes('constructability')) lensInstructions.push(`
+"constructability": Identify construction risks: access for plant/personnel, sequencing constraints, interface risks, temporary works gaps, buildability issues, likely rework scenarios. Reference lessons learned where applicable.`)
+
+  if (lenses.includes('procurement')) lensInstructions.push(`
+"procurement": Link design-specified equipment to the procurement register. Flag: spec mismatches, items not on the register, vague specifications, lead-time risks. Include procurement_item_id (the UUID) for matched items.`)
+
+  if (lenses.includes('clash')) lensInstructions.push(`
+"clash": Identify physical and compliance clashes across ALL documents: ducting vs drainage, buried services vs foundations, earthing conflicts, above-ground clearances, cross-document contradictions, interface gaps between packages. Reference both clashing documents.`)
+
+  // ── Single Claude call for all lenses ─────────────────────────────────────
+  const systemPrompt = `You are a senior UK BESS engineering reviewer. Conduct a thorough multi-lens design review. Be specific and technical. Every finding must include at least one drawing_ref or document_ref — do not raise a finding without a reference. Severity: Critical = safety/legal/grid connection risk; Major = significant design flaw; Minor = improvement needed; Observation = advisory note.`
+
+  const userPrompt = `Review the following design documents across ${lenses.length} lens${lenses.length > 1 ? 'es' : ''}.
 
 AVAILABLE DOCUMENTS:
-${docList}
+${docList}${failedDocs.length ? `\n\nWARNING — could not extract text from: ${failedDocs.join(', ')}` : ''}
 
-PROCUREMENT REGISTER:
-${procList || '(Empty procurement register)'}
+${contextSections.join('\n\n')}
 
 DESIGN DOCUMENTS:
 ${combinedDocText}
 
-Return ONLY valid JSON. For findings linked to a procurement item include its ID:
+LENS INSTRUCTIONS:
+${lensInstructions.join('\n')}
+
+Return ONLY valid JSON — no preamble, no markdown fences. Structure:
 {
-  "findings": [
+${lenses.map(l => `  "${l}": [
     {
       "severity": "Critical|Major|Minor|Observation",
-      "title": "Short descriptive title",
-      "description": "Describe the procurement risk or gap clearly. For mismatches quote both the design spec and the procurement item spec.",
-      "clause_ref": "Design document clause or section reference",
+      "title": "Short title",
+      "description": "Detailed description quoting relevant clauses and explaining the consequence",
+      "clause_ref": "Document/standard clause reference",
       "drawing_refs": ["DOC-001"],
-      "document_refs": ["Procurement Register"],
-      "procurement_item_id": "uuid-of-matched-item-or-null"
+      "document_refs": ["ER Section 4"],
+      "procurement_item_id": null
     }
-  ]
+  ]`).join(',\n')}
 }`
-  }
 
-  else if (lens === 'clash') {
-    const { data: lessons } = await supabase
-      .from('lessons_learned')
-      .select('title, description, category')
-      .limit(30)
-
-    const lessonsList = (lessons ?? []).map((l: any) =>
-      `${l.category ?? ''}: ${l.title} — ${l.description}`
-    ).join('\n')
-
-    userPrompt = `Perform a comprehensive clash detection review across all provided design documents. Identify:
-1. Physical clashes: ducting vs drainage, underground services vs foundations/ground beams, above-ground connections interfering with access routes, earthing electrode positions conflicting with other buried services
-2. Compliance clashes: where design decisions in one document create a compliance problem defined in another (e.g. cable routes that violate separation requirements, earthing that conflicts with protection settings)
-3. Cross-document contradictions: where two documents specify conflicting requirements for the same element
-4. Interface gaps: where two packages share an interface but neither document adequately defines it
-
-Reference the lessons-learned library for known clash types on BESS sites.
-
-AVAILABLE DOCUMENTS:
-${docList}
-
-LESSONS LEARNED:
-${lessonsList || '(No lessons learned in library)'}
-
-ALL DESIGN DOCUMENTS:
-${combinedDocText}
-
-Return ONLY valid JSON:
-{
-  "findings": [
-    {
-      "severity": "Critical|Major|Minor|Observation",
-      "title": "Short descriptive title",
-      "description": "Describe the clash clearly: what clashes with what, where on site, what the consequence is if not resolved, and what action is required.",
-      "clause_ref": "Document/drawing reference where clash originates",
-      "drawing_refs": ["DWG-001", "DWG-002"],
-      "document_refs": ["DOC-003", "DOC-004"]
-    }
-  ]
-}`
-  }
-
-  // ── Call Claude ────────────────────────────────────────────────────────────
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   let responseText = ''
   try {
     const stream = anthropic.messages.stream({
       model: 'claude-opus-4-8',
-      max_tokens: 8192,
+      max_tokens: 16000,
       thinking: { type: 'adaptive' },
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
@@ -320,62 +225,82 @@ Return ONLY valid JSON:
     return NextResponse.json({ error: `Claude API error: ${e.message}` }, { status: 500 })
   }
 
-  // ── Parse and insert findings ──────────────────────────────────────────────
-  let findings: FindingRaw[] = []
+  // ── Parse response ─────────────────────────────────────────────────────────
+  let parsed: Partial<Record<Lens, FindingRaw[]>> = {}
   try {
-    const parsed = extractAndParse<{ findings: FindingRaw[] }>(responseText)
-    findings = Array.isArray(parsed.findings) ? parsed.findings : []
+    parsed = extractAndParse(responseText)
+    for (const lens of lenses) {
+      if (!Array.isArray(parsed[lens])) parsed[lens] = []
+    }
   } catch (e: any) {
     await supabase.from('design_review_runs').update({ status: 'failed', error: `Parse error: ${e.message}` }).eq('id', runId)
     return NextResponse.json({ error: `Failed to parse findings: ${e.message}` }, { status: 500 })
   }
 
-  const VALID_SEVERITIES = ['Critical', 'Major', 'Minor', 'Observation']
-  const rows = findings
-    .filter(f => f.title && f.description)
-    .map(f => ({
-      run_id: runId,
-      project_id: projectId,
-      lens,
-      severity: VALID_SEVERITIES.includes(f.severity) ? f.severity : 'Minor',
-      title: f.title,
-      description: f.description,
-      clause_ref: f.clause_ref ?? null,
-      drawing_refs: Array.isArray(f.drawing_refs) ? f.drawing_refs : [],
-      document_refs: Array.isArray(f.document_refs) ? f.document_refs : [],
-      procurement_item_id: f.procurement_item_id ?? null,
-      status: 'Pending',
-    }))
+  // ── Insert findings ────────────────────────────────────────────────────────
+  const VALID_SEV = ['Critical', 'Major', 'Minor', 'Observation']
+  const allRows: any[] = []
 
-  if (rows.length) {
-    const { data: inserted, error: insertErr } = await supabase
-      .from('design_findings')
-      .insert(rows)
-      .select('id, lens, severity, title')
+  for (const lens of lenses) {
+    const findings = parsed[lens] ?? []
+    for (const f of findings) {
+      if (!f.title?.trim() || !f.description?.trim()) continue
+      const hasRef = (f.drawing_refs?.length ?? 0) > 0 || (f.document_refs?.length ?? 0) > 0 || f.clause_ref
+      if (!hasRef) continue // enforce mandatory reference rule
+      allRows.push({
+        run_id: runId,
+        project_id: projectId,
+        lens,
+        severity: VALID_SEV.includes(f.severity) ? f.severity : 'Minor',
+        title: f.title.trim(),
+        description: f.description.trim(),
+        clause_ref: f.clause_ref?.trim() ?? null,
+        drawing_refs: Array.isArray(f.drawing_refs) ? f.drawing_refs : [],
+        document_refs: Array.isArray(f.document_refs) ? f.document_refs : [],
+        procurement_item_id: f.procurement_item_id ?? null,
+        status: 'Pending',
+      })
+    }
+  }
+
+  let insertedFindings: any[] = []
+  if (allRows.length) {
+    const { data: ins, error: insertErr } = await supabase
+      .from('design_findings').insert(allRows).select('id, lens, severity, title')
     if (insertErr) {
       await supabase.from('design_review_runs').update({ status: 'failed', error: insertErr.message }).eq('id', runId)
       return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
+    insertedFindings = ins ?? []
 
-    // Auto-log every finding as "Raised" in the decision log
-    if (inserted?.length) {
-      const logRows = inserted.map((f: any) => ({
-        finding_id: f.id,
-        project_id: projectId,
-        run_id: runId,
-        lens: f.lens,
-        finding_title: f.title,
-        severity: f.severity,
-        action: 'Raised',
-        comment: `Raised by AI review (${LENSES_LABELS[lens as Lens] ?? lens})`,
-        actioned_by: user.id,
-      }))
-      await supabase.from('design_decision_log').insert(logRows)
+    // Log every finding as "Raised"
+    if (insertedFindings.length) {
+      await supabase.from('design_decision_log').insert(
+        insertedFindings.map((f: any) => ({
+          finding_id: f.id,
+          project_id: projectId,
+          run_id: runId,
+          lens: f.lens,
+          finding_title: f.title,
+          severity: f.severity,
+          action: 'Raised',
+          comment: `Raised by AI review (${LENS_LABELS[f.lens as Lens] ?? f.lens})`,
+          actioned_by: user.id,
+        }))
+      )
     }
   }
 
-  // Mark run complete
-  await supabase.from('design_review_runs').update({ status: 'complete' }).eq('id', runId)
+  // Status: ai_complete means AI finished — findings still need human sign-off
+  await supabase.from('design_review_runs').update({ status: 'ai_complete' }).eq('id', runId)
 
-  return NextResponse.json({ runId, findingCount: rows.length })
+  return NextResponse.json({
+    runId,
+    findingCount: insertedFindings.length,
+    byLens: lenses.reduce<Record<string, number>>((acc, l) => {
+      acc[l] = insertedFindings.filter((f: any) => f.lens === l).length
+      return acc
+    }, {}),
+    warnings: failedDocs.length ? [`Could not extract text from: ${failedDocs.join(', ')}`] : [],
+  })
 }
