@@ -97,7 +97,7 @@ export default async function DashboardPage() {
           </div>
           <div className="space-y-1">
             {(openComments ?? []).slice(0, 5).map((c: any) => (
-              <Link key={c.id} href={`/projects/${c.project_id}`}
+              <Link key={c.id} href={`/comments?project=${c.project_id}`}
                 className="flex items-center justify-between px-3 py-2 rounded-lg hover:opacity-80"
                 style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.15)' }}>
                 <span className="text-xs truncate" style={{ color: '#fdba74' }}>

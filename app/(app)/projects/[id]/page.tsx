@@ -74,7 +74,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     { data: allOps },
   ] = await Promise.all([
     supabase.from('client_comments')
-      .select('*, comment_attachments(*), creator:profiles!created_by(full_name), responder:profiles!responded_by(full_name)')
+      .select('*, comment_attachments(*)')
       .eq('project_id', id)
       .order('created_at', { ascending: false }),
     supabase.from('project_standards').select('standard_id, standards(*, standard_clauses(*))').eq('project_id', id),
@@ -91,6 +91,23 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const linkedHs        = (linkedHsRows ?? []).map((r: any) => r.hs_references).filter(Boolean)
   const linkedLessons   = (linkedLessonRows ?? []).map((r: any) => r.lessons_learned).filter(Boolean)
   const linkedOps       = (linkedOpRows ?? []).map((r: any) => r.operator_rules).filter(Boolean)
+
+  // Resolve display names for comment audit stamps
+  const commentUserIds = new Set<string>()
+  for (const c of projectComments ?? []) {
+    if ((c as any).created_by)   commentUserIds.add((c as any).created_by)
+    if ((c as any).responded_by) commentUserIds.add((c as any).responded_by)
+  }
+  const { data: commentProfiles } = commentUserIds.size > 0
+    ? await supabase.from('profiles').select('id, full_name, email').in('id', [...commentUserIds])
+    : { data: [] }
+  const nameMap = Object.fromEntries((commentProfiles ?? []).map((p: any) => [p.id, p.full_name ?? p.email ?? 'Unknown']))
+
+  const enrichedComments = (projectComments ?? []).map((c: any) => ({
+    ...c,
+    creator_name:   c.created_by   ? (nameMap[c.created_by]   ?? null) : null,
+    responder_name: c.responded_by ? (nameMap[c.responded_by] ?? null) : null,
+  }))
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -198,11 +215,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <InternalCommentPanel
             projectId={id}
             userId={user.id}
-            initialComments={(projectComments ?? []).map((c: any) => ({
-              ...c,
-              creator_name: c.creator?.full_name ?? null,
-              responder_name: c.responder?.full_name ?? null,
-            }))}
+            initialComments={enrichedComments}
           />
         </div>
       )}

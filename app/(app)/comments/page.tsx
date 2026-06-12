@@ -17,19 +17,33 @@ export default async function CommentsRegisterPage({
 
   const { project: projectFilter } = await searchParams
 
+  // Load comments + attachments + project name
   let query = supabase
     .from('client_comments')
-    .select('*, comment_attachments(*), projects(name, client), creator:profiles!created_by(full_name), responder:profiles!responded_by(full_name)')
+    .select('*, comment_attachments(*), projects(id, name, client)')
     .order('created_at', { ascending: false })
 
   if (projectFilter) query = query.eq('project_id', projectFilter)
 
   const { data: comments } = await query
 
+  // Collect all user IDs involved so we can look up display names in one query
+  const userIds = new Set<string>()
+  for (const c of comments ?? []) {
+    if (c.created_by)   userIds.add(c.created_by)
+    if (c.responded_by) userIds.add(c.responded_by)
+  }
+
+  const { data: profiles } = userIds.size > 0
+    ? await supabase.from('profiles').select('id, full_name, email').in('id', [...userIds])
+    : { data: [] }
+
+  const nameMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p.full_name ?? p.email ?? 'Unknown']))
+
   const mapped = (comments ?? []).map((c: any) => ({
     ...c,
-    creator_name:   c.creator?.full_name   ?? null,
-    responder_name: c.responder?.full_name ?? null,
+    creator_name:   c.created_by   ? (nameMap[c.created_by]   ?? null) : null,
+    responder_name: c.responded_by ? (nameMap[c.responded_by] ?? null) : null,
   }))
 
   return (
