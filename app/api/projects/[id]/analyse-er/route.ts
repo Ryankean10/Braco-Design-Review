@@ -28,10 +28,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `Storage error: ${storageErr?.message}` }, { status: 500 })
   }
 
-  // Extract text from PDF using pdf-parse
+  // Extract text from PDF using pdf-parse (CJS module — use createRequire)
   let erText = ''
   try {
     const buf = Buffer.from(await fileData.arrayBuffer())
+    const { createRequire } = await import('module')
+    const require = createRequire(import.meta.url)
     const pdfParse = require('pdf-parse')
     const parsed = await pdfParse(buf)
     erText = parsed.text
