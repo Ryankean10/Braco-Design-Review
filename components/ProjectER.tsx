@@ -113,7 +113,7 @@ export default function ProjectER({
       { pct: 20, label: 'Extracting text from PDF…',            ms: 1200 },
       { pct: 32, label: 'Loading standards library…',           ms: 600  },
       { pct: 45, label: 'Sending to Claude for analysis…',      ms: 1000 },
-      { pct: 60, label: 'Claude reading Employer's Requirements…', ms: 8000 },
+      { pct: 60, label: "Claude reading Employer's Requirements…",  ms: 8000 },
       { pct: 75, label: 'Cross-referencing standards…',         ms: 8000 },
       { pct: 88, label: 'Identifying gaps…',                    ms: 6000 },
       { pct: 94, label: 'Finalising results…',                  ms: 4000 },
