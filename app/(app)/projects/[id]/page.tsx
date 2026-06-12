@@ -8,6 +8,7 @@ import ProjectER from '@/components/ProjectER'
 import ClientProjectView from '@/components/ClientProjectView'
 import InternalCommentPanel from '@/components/InternalCommentPanel'
 import ProjectStageTracker from '@/components/ProjectStageTracker'
+import ClientAccessPanel from '@/components/ClientAccessPanel'
 import { makeDefaultStages, STAGE_ORDER as STAGE_NAMES } from '@/lib/stageDefaults'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +29,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   // ── Client view ────────────────────────────────────────────────────────────
   if (role === 'client') {
+    // Check this client is assigned to this project
+    const { data: assignment } = await supabase
+      .from('project_clients')
+      .select('id')
+      .eq('project_id', id)
+      .eq('user_id', user.id)
+      .single()
+    if (!assignment) notFound()
+
     const [{ data: docs }, { data: tests }, { data: comments }] = await Promise.all([
       supabase.from('documents')
         .select('id, doc_no, title, rev, type, storage_path, file_name, client_review_note')
@@ -64,6 +74,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const [
     { data: projectComments },
     { data: projectStageRows },
+    { data: assignedClients },
+    { data: allClientProfiles },
     { data: linkedStandardRows },
     { data: linkedHsRows },
     { data: linkedLessonRows },
@@ -81,6 +93,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .select('*')
       .eq('project_id', id)
       .order('created_at'),
+    supabase.from('project_clients')
+      .select('id, user_id, profiles(full_name, email)')
+      .eq('project_id', id),
+    supabase.from('profiles')
+      .select('id, full_name, email')
+      .eq('role', 'client'),
     supabase.from('project_standards').select('standard_id, standards(*, standard_clauses(*))').eq('project_id', id),
     supabase.from('project_hs_references').select('hs_id, hs_references(*)').eq('project_id', id),
     supabase.from('project_lessons_learned').select('lesson_id, lessons_learned(*)').eq('project_id', id),
@@ -221,6 +239,26 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             projectId={id}
             userId={user.id}
             initialComments={enrichedComments}
+          />
+        </div>
+      )}
+
+      {/* Client access — admin/PM only */}
+      {['admin', 'project_manager'].includes(role) && (
+        <div className="mb-4">
+          <ClientAccessPanel
+            projectId={id}
+            initialAssigned={(assignedClients ?? []).map((a: any) => ({
+              id: a.id,
+              user_id: a.user_id,
+              full_name: a.profiles?.full_name ?? null,
+              email: a.profiles?.email ?? '',
+            }))}
+            availableClients={(allClientProfiles ?? []).map((p: any) => ({
+              id: p.id,
+              full_name: p.full_name ?? null,
+              email: p.email ?? '',
+            }))}
           />
         </div>
       )}

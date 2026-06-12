@@ -28,12 +28,23 @@ export default async function DashboardPage() {
 
   // ── Client dashboard ───────────────────────────────────────────────────────
   if (role === 'client') {
-    const { data: projects } = await supabase
-      .from('projects')
-      .select('id, name, client, location, stage, capacity_mw')
-      .order('updated_at', { ascending: false })
+    // Only show projects this client user is assigned to
+    const { data: assignments } = await supabase
+      .from('project_clients')
+      .select('project_id')
+      .eq('user_id', user.id)
 
-    const projectIds = (projects ?? []).map(p => p.id)
+    const assignedIds = (assignments ?? []).map((a: any) => a.project_id)
+
+    const { data: projects } = assignedIds.length > 0
+      ? await supabase
+          .from('projects')
+          .select('id, name, client, location, stage, capacity_mw')
+          .in('id', assignedIds)
+          .order('updated_at', { ascending: false })
+      : { data: [] }
+
+    const projectIds = (projects ?? []).map((p: any) => p.id)
 
     const [{ data: docs }, { data: tests }, { data: comments }] = await Promise.all([
       supabase.from('documents').select('id, project_id').eq('for_client_review', true).in('project_id', projectIds),
