@@ -94,7 +94,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .eq('project_id', id)
       .order('created_at'),
     supabase.from('project_clients')
-      .select('id, user_id, profiles(full_name, email)')
+      .select('id, user_id')
       .eq('project_id', id),
     supabase.from('profiles')
       .select('id, full_name, email')
@@ -248,12 +248,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <div className="mb-4">
           <ClientAccessPanel
             projectId={id}
-            initialAssigned={(assignedClients ?? []).map((a: any) => ({
-              id: a.id,
-              user_id: a.user_id,
-              full_name: a.profiles?.full_name ?? null,
-              email: a.profiles?.email ?? '',
-            }))}
+            initialAssigned={(assignedClients ?? []).map((a: any) => {
+              const profile = (allClientProfiles ?? []).find((p: any) => p.id === a.user_id)
+              return {
+                id: a.id,
+                user_id: a.user_id,
+                full_name: profile?.full_name ?? null,
+                email: profile?.email ?? '',
+              }
+            })}
             availableClients={(allClientProfiles ?? []).map((p: any) => ({
               id: p.id,
               full_name: p.full_name ?? null,
