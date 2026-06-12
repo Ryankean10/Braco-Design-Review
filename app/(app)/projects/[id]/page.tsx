@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 
 const STAGE_ORDER: Stage[] = [
@@ -36,6 +36,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             {project.client} · {project.location}{project.capacity_mw ? ` · ${project.capacity_mw} MW` : ''}
           </p>
         </div>
+        <Link
+          href={`/projects/${id}/documents`}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-80"
+          style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+        >
+          <FileText size={13} />
+          Documents
+        </Link>
         <Link
           href={`/projects/${id}/edit`}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-80"
@@ -84,15 +92,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Placeholder panels for future milestones */}
+      {/* Feature panels */}
       <div className="grid grid-cols-2 gap-4">
-        {['Document Library', 'AI Reviews', 'Findings', 'Clash Detection'].map(label => (
+        <Link
+          href={`/projects/${id}/documents`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80 transition-opacity"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 120 }}
+        >
+          <FileText size={20} style={{ color: 'var(--accent)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Document Library</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Upload and manage project documents</p>
+        </Link>
+        {['AI Reviews', 'Findings', 'Clash Detection'].map(label => (
           <div
             key={label}
             className="rounded-xl border p-5 flex items-center justify-center"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 120 }}
           >
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{label} — coming in M2/M3</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{label} — coming in M3/M5</p>
           </div>
         ))}
       </div>
