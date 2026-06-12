@@ -101,9 +101,17 @@ ${erText}`
       created_by: user.id,
     }))
 
+  let inserted = 0
   if (toInsert.length) {
-    await supabase.from('procurement_items').insert(toInsert)
+    const { data: rows, error: insertErr } = await supabase
+      .from('procurement_items')
+      .insert(toInsert)
+      .select('id')
+    if (insertErr) {
+      return NextResponse.json({ error: `DB insert failed: ${insertErr.message}` }, { status: 500 })
+    }
+    inserted = rows?.length ?? 0
   }
 
-  return NextResponse.json({ inserted: toInsert.length, skipped: result.items.length - toInsert.length })
+  return NextResponse.json({ inserted, skipped: result.items.length - toInsert.length })
 }
