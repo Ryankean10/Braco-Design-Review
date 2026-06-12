@@ -2,19 +2,21 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 
 const NAV = [
-  { href: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard },
-  { href: '/projects',          label: 'Projects',         icon: FolderOpen },
-  { href: '/reference-library', label: 'Reference Library',icon: BookOpen },
+  { href: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard, roles: null },
+  { href: '/projects',          label: 'Projects',         icon: FolderOpen,      roles: null },
+  { href: '/reference-library', label: 'Reference Library',icon: BookOpen,        roles: null },
+  { href: '/users',             label: 'Users',            icon: Users,           roles: ['admin'] },
 ]
 
 export default function Sidebar({ profile }: { profile: Profile | null }) {
   const pathname = usePathname()
   const router = useRouter()
+  const role = profile?.role ?? 'engineer'
 
   async function signOut() {
     const supabase = createClient()
@@ -46,7 +48,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {NAV.filter(({ roles }) => !roles || roles.includes(role)).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
             <Link
