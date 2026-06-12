@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const buf = Buffer.from(await fileData.arrayBuffer())
     const { createRequire } = await import('module')
     const require = createRequire(import.meta.url)
-    const pdfParse = require('pdf-parse')
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js')
     const parsed = await pdfParse(buf)
     erText = parsed.text
   } catch (e: any) {
