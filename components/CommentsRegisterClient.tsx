@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { MessageSquare, Send, X, Reply, CheckCircle2, Filter, Clock, ArrowUpRight } from 'lucide-react'
+import { MessageSquare, Send, X, Reply, CheckCircle2, Filter, Clock, ArrowUpRight, ArrowLeft, Paperclip } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { ClientComment } from '@/components/ClientCommentThread'
 
@@ -34,6 +34,7 @@ interface RowProps {
 function CommentRow({ c, replyId, replyText, saving, onOpenReply, onCancelReply, onReplyTextChange, onSend, onClose }: RowProps) {
   const cfg = STATUS_CFG[c.status]
   const fmtDate = (s: string) => new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const attachments = (c as any).comment_attachments ?? []
 
   return (
     <div className="rounded-xl border overflow-hidden"
@@ -59,8 +60,7 @@ function CommentRow({ c, replyId, replyText, saving, onOpenReply, onCancelReply,
             </span>
           </div>
           <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            Client · {fmtDate(c.created_at)}
-            {c.responded_at && ` · Responded ${fmtDate(c.responded_at)}`}
+            {(c as any).creator_name ?? 'Client'} · {fmtDate(c.created_at)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -84,12 +84,24 @@ function CommentRow({ c, replyId, replyText, saving, onOpenReply, onCancelReply,
       {/* Existing response */}
       {c.response && (
         <div className="px-4 py-2.5 border-t text-xs" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-          <span style={{ color: 'var(--accent)' }}>Response: </span>
+          <p className="font-medium mb-0.5" style={{ color: 'var(--accent)' }}>
+            {(c as any).responder_name ?? 'Team'}{c.responded_at ? ` · ${fmtDate(c.responded_at)}` : ''}
+          </p>
           <span style={{ color: 'var(--text-secondary)' }}>{c.response}</span>
           {c.client_resolved && (
             <span className="ml-2 text-[10px]" style={{ color: '#4ade80' }}>
               <CheckCircle2 size={10} className="inline mr-0.5" />Client resolved
             </span>
+          )}
+          {attachments.filter((a: any) => a.attached_to === 'response').length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {attachments.filter((a: any) => a.attached_to === 'response').map((a: any) => (
+                <span key={a.id} className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+                  <Paperclip size={9} />{a.file_name}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -136,7 +148,7 @@ function CommentRow({ c, replyId, replyText, saving, onOpenReply, onCancelReply,
 
 // ── Register page ─────────────────────────────────────────────────────────────
 
-export default function CommentsRegisterClient({ initialComments, userId }: { initialComments: CommentWithProject[]; userId: string }) {
+export default function CommentsRegisterClient({ initialComments, userId, projectFilter }: { initialComments: CommentWithProject[]; userId: string; projectFilter: string | null }) {
   const [comments, setComments] = useState<CommentWithProject[]>(initialComments)
   const [filterStatus, setFilterStatus] = useState<Status | 'All'>('All')
   const [filterType, setFilterType] = useState<string>('All')
@@ -160,7 +172,7 @@ export default function CommentsRegisterClient({ initialComments, userId }: { in
     if (!replyText.trim()) return
     setSaving(true)
     const { data } = await supabase.from('client_comments')
-      .update({ response: replyText.trim(), status: 'Responded', responded_at: new Date().toISOString() })
+      .update({ response: replyText.trim(), status: 'Responded', responded_by: userId, responded_at: new Date().toISOString() })
       .eq('id', c.id).select().single()
     if (data) setComments(prev => prev.map(x => x.id === data.id ? { ...x, ...data } : x))
     setReplyId(null)
@@ -177,9 +189,20 @@ export default function CommentsRegisterClient({ initialComments, userId }: { in
   return (
     <div className="min-h-screen p-6 space-y-6 max-w-4xl mx-auto" style={{ background: 'var(--bg-base)' }}>
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Comments Register</h1>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>All client comments across projects</p>
+      <div className="flex items-center gap-3">
+        {projectFilter && (
+          <Link href={`/projects/${projectFilter}`} className="p-1.5 rounded-lg hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
+            <ArrowLeft size={16} />
+          </Link>
+        )}
+        <div>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Comments Register</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            {projectFilter
+              ? `${comments[0]?.projects?.name ?? 'Project'} — client comment & response log`
+              : 'All client comments across projects'}
+          </p>
+        </div>
       </div>
 
       {/* Summary cards */}

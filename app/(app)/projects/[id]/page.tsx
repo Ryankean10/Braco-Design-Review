@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -73,7 +73,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     { data: allLessons },
     { data: allOps },
   ] = await Promise.all([
-    supabase.from('client_comments').select('*').eq('project_id', id).order('created_at', { ascending: false }),
+    supabase.from('client_comments')
+      .select('*, comment_attachments(*), creator:profiles!created_by(full_name), responder:profiles!responded_by(full_name)')
+      .eq('project_id', id)
+      .order('created_at', { ascending: false }),
     supabase.from('project_standards').select('standard_id, standards(*, standard_clauses(*))').eq('project_id', id),
     supabase.from('project_hs_references').select('hs_id, hs_references(*)').eq('project_id', id),
     supabase.from('project_lessons_learned').select('lesson_id, lessons_learned(*)').eq('project_id', id),
@@ -162,6 +165,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Test Register</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Plate loads, GIs, cable tests, FAT &amp; SAT</p>
         </Link>
+        {role !== 'operative' && (
+          <Link href={`/comments?project=${id}`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: (projectComments ?? []).some((c: any) => c.status === 'Open') ? 'rgba(251,146,60,0.5)' : 'var(--border)', minHeight: 100 }}>
+            <div className="flex items-center gap-2">
+              <MessageSquare size={20} style={{ color: (projectComments ?? []).some((c: any) => c.status === 'Open') ? '#fb923c' : 'var(--accent)' }} />
+              {(projectComments ?? []).filter((c: any) => c.status === 'Open').length > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                  style={{ background: 'rgba(251,146,60,0.2)', color: '#fb923c' }}>
+                  {(projectComments ?? []).filter((c: any) => c.status === 'Open').length} open
+                </span>
+              )}
+            </div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Comments</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {(projectComments ?? []).length === 0 ? 'Client comment & response log' : `${(projectComments ?? []).length} comment${(projectComments ?? []).length !== 1 ? 's' : ''} — view register`}
+            </p>
+          </Link>
+        )}
         {['AI Reviews', 'Findings', 'Clash Detection'].map(label => (
           <div key={label} className="rounded-xl border p-5 flex items-center justify-center"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
@@ -173,7 +195,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       {/* Client comments — visible to admin/PM/engineer, hidden from operative */}
       {role !== 'operative' && (projectComments ?? []).length > 0 && (
         <div className="mb-4">
-          <InternalCommentPanel projectId={id} initialComments={projectComments ?? []} />
+          <InternalCommentPanel
+            projectId={id}
+            userId={user.id}
+            initialComments={(projectComments ?? []).map((c: any) => ({
+              ...c,
+              creator_name: c.creator?.full_name ?? null,
+              responder_name: c.responder?.full_name ?? null,
+            }))}
+          />
         </div>
       )}
 
