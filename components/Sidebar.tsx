@@ -2,14 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BookOpen, MessageSquare, LogOut, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/projects', label: 'Projects', icon: FolderOpen },
-  { href: '/reference-library', label: 'Reference Library', icon: BookOpen },
+  { href: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard },
+  { href: '/projects',          label: 'Projects',         icon: FolderOpen },
+  { href: '/reference-library', label: 'Reference Library',icon: BookOpen },
+  { href: '/comments',          label: 'Comments',         icon: MessageSquare },
 ]
 
 export default function Sidebar({ profile }: { profile: Profile | null }) {
