@@ -12,20 +12,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Load project + ER document
   const { data: project } = await supabase
     .from('projects')
-    .select('*, documents!projects_er_document_id_fkey(id, storage_path, file_name)')
+    .select('*')
     .eq('id', projectId)
     .single()
 
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-  if (!project.er_document_id) return NextResponse.json({ error: 'No ER document linked' }, { status: 400 })
-
-  const erDoc = (project as any).documents
-  if (!erDoc?.storage_path) return NextResponse.json({ error: 'ER document has no file attached' }, { status: 400 })
+  if (!project.er_storage_path) return NextResponse.json({ error: 'No ER document uploaded' }, { status: 400 })
 
   // Download ER PDF from storage
   const { data: fileData, error: storageErr } = await supabase.storage
     .from('documents')
-    .download(erDoc.storage_path)
+    .download(project.er_storage_path)
 
   if (storageErr || !fileData) {
     return NextResponse.json({ error: `Storage error: ${storageErr?.message}` }, { status: 500 })

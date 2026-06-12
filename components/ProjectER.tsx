@@ -1,9 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { FileText, Sparkles, X, ChevronDown, ChevronRight, AlertCircle, CheckCircle, Plus } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { FileText, Sparkles, X, Upload, ChevronDown, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Document } from '@/lib/types'
 
 interface MissingStandard {
   ref: string
@@ -14,45 +13,88 @@ interface MissingStandard {
 
 interface Props {
   projectId: string
-  erDocumentId: string | null
+  erStoragePath: string | null
+  erFileName: string | null
   erMissingStandards: MissingStandard[]
   erAnalysedAt: string | null
-  documents: Document[]  // all project documents to pick from
 }
 
 export default function ProjectER({
   projectId,
-  erDocumentId: initErDocId,
+  erStoragePath: initStoragePath,
+  erFileName: initFileName,
   erMissingStandards: initMissing,
   erAnalysedAt: initAnalysedAt,
-  documents,
 }: Props) {
-  const [erDocumentId, setErDocumentId] = useState(initErDocId)
+  const [storagePath, setStoragePath] = useState(initStoragePath)
+  const [fileName, setFileName] = useState(initFileName)
   const [missing, setMissing] = useState<MissingStandard[]>(initMissing ?? [])
   const [analysedAt, setAnalysedAt] = useState(initAnalysedAt)
+  const [uploading, setUploading] = useState(false)
   const [analysing, setAnalysing] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<{ linked: number } | null>(null)
-  const [picking, setPicking] = useState(false)
-  const [expandedMissing, setExpandedMissing] = useState(false)
+  const [expandedMissing, setExpandedMissing] = useState(true)
   const [dismissedMissing, setDismissedMissing] = useState<Set<string>>(new Set())
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const supabase = createClient()
 
-  const erDoc = documents.find(d => d.id === erDocumentId)
-  const docsWithFiles = documents.filter(d => d.storage_path || d.file_name)
-
-  async function selectDoc(docId: string) {
-    await supabase.from('projects').update({ er_document_id: docId }).eq('id', projectId)
-    setErDocumentId(docId)
-    setPicking(false)
-    setResult(null)
+  async function handleUpload(file: File) {
+    if (!file || file.type !== 'application/pdf') {
+      setError('Please upload a PDF file')
+      return
+    }
+    setUploading(true)
     setError('')
+
+    const path = `${projectId}/er/${Date.now()}-${file.name.replace(/\s+/g, '_')}`
+
+    // Remove old file if exists
+    if (storagePath) {
+      await supabase.storage.from('documents').remove([storagePath])
+    }
+
+    const { error: uploadErr } = await supabase.storage
+      .from('documents')
+      .upload(path, file, { upsert: false })
+
+    if (uploadErr) {
+      setError(`Upload failed: ${uploadErr.message}`)
+      setUploading(false)
+      return
+    }
+
+    const { error: dbErr } = await supabase.from('projects')
+      .update({ er_storage_path: path, er_file_name: file.name })
+      .eq('id', projectId)
+
+    if (dbErr) {
+      setError(`Failed to save: ${dbErr.message}`)
+      setUploading(false)
+      return
+    }
+
+    setStoragePath(path)
+    setFileName(file.name)
+    setResult(null)
+    setUploading(false)
   }
 
   async function removeER() {
-    await supabase.from('projects').update({ er_document_id: null }).eq('id', projectId)
-    setErDocumentId(null)
+    if (storagePath) {
+      await supabase.storage.from('documents').remove([storagePath])
+    }
+    await supabase.from('projects').update({
+      er_storage_path: null,
+      er_file_name: null,
+      er_missing_standards: [],
+      er_analysed_at: null,
+    }).eq('id', projectId)
+    setStoragePath(null)
+    setFileName(null)
+    setMissing([])
+    setAnalysedAt(null)
     setResult(null)
     setError('')
   }
@@ -68,6 +110,8 @@ export default function ProjectER({
       setResult({ linked: data.linked })
       setMissing(data.missing ?? [])
       setAnalysedAt(new Date().toISOString())
+      setExpandedMissing(true)
+      setDismissedMissing(new Set())
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -80,94 +124,77 @@ export default function ProjectER({
   return (
     <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <div className="flex items-center gap-2">
-          <FileText size={16} style={{ color: 'var(--accent)' }} />
+      <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        <FileText size={16} style={{ color: 'var(--accent)' }} />
+        <div className="flex-1">
           <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Employer's Requirements</span>
-          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(108,114,245,0.15)', color: 'var(--accent)' }}>Master Reference</span>
+          <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(108,114,245,0.15)', color: 'var(--accent)' }}>Master Reference</span>
         </div>
+        {storagePath && (
+          <button onClick={removeER} className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+            <X size={12} /> Remove
+          </button>
+        )}
       </div>
 
       <div className="p-5 space-y-4" style={{ background: 'var(--bg-elevated)' }}>
-        {/* No ER linked */}
-        {!erDocumentId && !picking && (
-          <div className="border-2 border-dashed rounded-xl p-6 text-center" style={{ borderColor: 'var(--border)' }}>
-            <FileText size={24} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>No ER document linked</p>
-            <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-              Link the Employer's Requirements document from your project library. The AI will cross-reference it against all standards and identify what applies to this project.
+
+        {/* Upload zone — shown when no ER or to replace */}
+        {!storagePath && (
+          <div
+            className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:opacity-80 transition-opacity"
+            style={{ borderColor: 'var(--border)' }}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleUpload(f) }}
+          >
+            <Upload size={24} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+            <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+              {uploading ? 'Uploading…' : 'Upload Employer\'s Requirements'}
             </p>
-            <button
-              onClick={() => setPicking(true)}
-              className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium text-white"
-              style={{ background: 'var(--accent)' }}
-            >
-              <Plus size={14} />
-              Select ER from document library
-            </button>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Drop the ER PDF here or click to browse. The AI will cross-reference it against the standards library and identify what applies to this project.
+            </p>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }}
+            />
           </div>
         )}
 
-        {/* Document picker */}
-        {picking && (
-          <div className="border rounded-xl overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-              <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Select ER document</p>
-              <button onClick={() => setPicking(false)} style={{ color: 'var(--text-muted)' }}><X size={13} /></button>
-            </div>
-            <div className="max-h-60 overflow-y-auto">
-              {docsWithFiles.length === 0 ? (
-                <p className="text-xs p-4 text-center" style={{ color: 'var(--text-muted)' }}>No documents with files attached in the project library</p>
-              ) : docsWithFiles.map(doc => (
-                <button
-                  key={doc.id}
-                  onClick={() => selectDoc(doc.id)}
-                  className="w-full flex items-start gap-3 px-4 py-2.5 border-b text-left hover:opacity-80 transition-opacity"
-                  style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
-                >
-                  <FileText size={13} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent)' }} />
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{doc.title}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{doc.doc_no} Rev {doc.rev}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ER linked */}
-        {erDocumentId && erDoc && (
-          <div className="rounded-xl border px-4 py-3 flex items-start gap-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-            <FileText size={16} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent)' }} />
+        {/* Attached ER */}
+        {storagePath && fileName && (
+          <div className="flex items-center gap-3 rounded-xl border px-4 py-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+            <FileText size={20} style={{ color: 'var(--accent)' }} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{erDoc.title}</p>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{erDoc.doc_no} Rev {erDoc.rev}</p>
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{fileName}</p>
               {analysedAt && (
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Last analysed: {new Date(analysedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Last analysed {new Date(analysedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPicking(true)}
-                className="text-xs px-2.5 py-1 rounded-lg border"
-                style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
-              >
-                Change
-              </button>
-              <button onClick={removeER} style={{ color: 'var(--text-muted)' }}><X size={13} /></button>
-            </div>
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="text-xs px-2.5 py-1 rounded-lg border flex-shrink-0"
+              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+            >
+              Replace
+            </button>
+            <input ref={inputRef} type="file" accept=".pdf" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
           </div>
         )}
 
         {/* Analyse button */}
-        {erDocumentId && erDoc && (
+        {storagePath && (
           <button
             onClick={analyse}
-            disabled={analysing}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white transition-opacity disabled:opacity-60"
+            disabled={analysing || uploading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium text-white disabled:opacity-60 transition-opacity"
             style={{ background: 'linear-gradient(135deg, var(--accent), #a855f7)' }}
           >
             <Sparkles size={15} className={analysing ? 'animate-pulse' : ''} />
@@ -186,21 +213,21 @@ export default function ProjectER({
           </div>
         )}
 
-        {/* Success result */}
+        {/* Success */}
         {result && (
           <div className="flex items-start gap-2 rounded-lg px-3 py-2.5" style={{ background: '#052e16', border: '1px solid #166534' }}>
             <CheckCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--success)' }} />
             <p className="text-xs" style={{ color: '#86efac' }}>
               {result.linked > 0
-                ? `${result.linked} standard${result.linked !== 1 ? 's' : ''} automatically linked to this project from the library.`
-                : 'Analysis complete — standards reviewed.'
+                ? `${result.linked} standard${result.linked !== 1 ? 's' : ''} automatically linked to this project.`
+                : 'Analysis complete — all applicable standards reviewed.'
               }
-              {visibleMissing.length > 0 && ` ${visibleMissing.length} additional standard${visibleMissing.length !== 1 ? 's' : ''} identified as gaps (see below).`}
+              {visibleMissing.length > 0 && ` ${visibleMissing.length} gap${visibleMissing.length !== 1 ? 's' : ''} identified below.`}
             </p>
           </div>
         )}
 
-        {/* Missing standards (gaps) */}
+        {/* Gap list */}
         {visibleMissing.length > 0 && (
           <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#854d0e' }}>
             <button
@@ -211,10 +238,13 @@ export default function ProjectER({
               <div className="flex items-center gap-2">
                 <AlertCircle size={13} style={{ color: '#fb923c' }} />
                 <span className="text-xs font-semibold" style={{ color: '#fed7aa' }}>
-                  {visibleMissing.length} standard{visibleMissing.length !== 1 ? 's' : ''} referenced in ER not yet in library
+                  {visibleMissing.length} standard{visibleMissing.length !== 1 ? 's' : ''} referenced in ER — not yet in library
                 </span>
               </div>
-              {expandedMissing ? <ChevronDown size={13} style={{ color: '#fb923c' }} /> : <ChevronRight size={13} style={{ color: '#fb923c' }} />}
+              {expandedMissing
+                ? <ChevronDown size={13} style={{ color: '#fb923c' }} />
+                : <ChevronRight size={13} style={{ color: '#fb923c' }} />
+              }
             </button>
             {expandedMissing && (
               <div className="divide-y" style={{ borderColor: '#7c2d12' }}>
@@ -226,13 +256,12 @@ export default function ProjectER({
                         <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: '#431407', color: '#fed7aa' }}>{m.category}</span>
                       </div>
                       <p className="text-xs font-medium mb-0.5" style={{ color: '#fed7aa' }}>{m.title}</p>
-                      <p className="text-[10px]" style={{ color: '#fdba74', lineHeight: 1.5 }}>{m.reason}</p>
+                      <p className="text-[10px] leading-relaxed" style={{ color: '#fdba74' }}>{m.reason}</p>
                     </div>
                     <button
                       onClick={() => setDismissedMissing(prev => new Set([...prev, m.ref]))}
-                      className="flex-shrink-0"
-                      style={{ color: '#fb923c' }}
                       title="Dismiss"
+                      style={{ color: '#fb923c' }}
                     >
                       <X size={12} />
                     </button>
@@ -240,7 +269,7 @@ export default function ProjectER({
                 ))}
                 <div className="px-4 py-2.5" style={{ background: '#1c0a00' }}>
                   <p className="text-[10px]" style={{ color: '#fb923c' }}>
-                    Add these to the Reference Library so future projects and AI reviews can use them.
+                    Add these to the Reference Library so they are available for AI reviews on this and future projects.
                   </p>
                 </div>
               </div>
