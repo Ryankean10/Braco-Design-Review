@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { BookOpen, Shield, AlertTriangle, Zap, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import type { Standard, HsReference, LessonLearned, OperatorRule } from '@/lib/types'
+import LessonsLearnedTable from '@/components/LessonsLearned'
+import StandardDocUpload from '@/components/StandardDocUpload'
 
 type Tab = 'standards' | 'hs' | 'lessons' | 'operators'
 
@@ -15,6 +17,8 @@ interface StandardWithClauses extends Standard {
     review_lenses: string[]
     severity_hint: string | null
   }>
+  doc_storage_path?: string | null
+  doc_file_name?: string | null
 }
 
 interface Props {
@@ -61,7 +65,7 @@ function SeverityChip({ sev }: { sev: string | null }) {
   )
 }
 
-function StandardRow({ std }: { std: StandardWithClauses }) {
+function StandardRow({ std, isAdmin }: { std: StandardWithClauses; isAdmin: boolean }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="border rounded-xl overflow-hidden" style={{ borderColor: 'var(--border)' }}>
@@ -101,6 +105,12 @@ function StandardRow({ std }: { std: StandardWithClauses }) {
           {std.summary && (
             <p className="text-xs pt-3" style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{std.summary}</p>
           )}
+          <StandardDocUpload
+            standardId={std.id}
+            docStoragePath={std.doc_storage_path ?? null}
+            docFileName={std.doc_file_name ?? null}
+            isAdmin={isAdmin}
+          />
           {std.standard_clauses?.length > 0 && (
             <div className="space-y-2 pt-1">
               <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Key Clauses</p>
@@ -241,7 +251,7 @@ function OpRuleRow({ rule }: { rule: OperatorRule }) {
   )
 }
 
-export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules }: Props) {
+export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, isAdmin }: Props) {
   const [tab, setTab] = useState<Tab>('standards')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -337,7 +347,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
         {tab === 'standards' && (
           filteredStandards.length === 0
             ? <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No standards found</p>
-            : filteredStandards.map(s => <StandardRow key={s.id} std={s} />)
+            : filteredStandards.map(s => <StandardRow key={s.id} std={s} isAdmin={isAdmin} />)
         )}
         {tab === 'hs' && (
           filteredHs.length === 0
@@ -345,9 +355,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
             : filteredHs.map(h => <HsRow key={h.id} hs={h} />)
         )}
         {tab === 'lessons' && (
-          filteredLessons.length === 0
-            ? <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No lessons learned found</p>
-            : filteredLessons.map(l => <LessonRow key={l.id} lesson={l} />)
+          <LessonsLearnedTable initial={lessons} isAdmin={isAdmin} />
         )}
         {tab === 'operators' && (
           filteredOps.length === 0

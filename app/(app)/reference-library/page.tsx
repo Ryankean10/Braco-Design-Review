@@ -8,11 +8,12 @@ export default async function ReferenceLibraryPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const isAdmin = profile?.role === 'admin'
 
   const [{ data: standards }, { data: hsRefs }, { data: lessons }, { data: opRules }] = await Promise.all([
     supabase.from('standards').select('*, standard_clauses(*)').order('category').order('ref'),
     supabase.from('hs_references').select('*').order('category').order('ref'),
-    supabase.from('lessons_learned').select('*').order('severity').order('category'),
+    supabase.from('lessons_learned').select('*').order('created_at', { ascending: false }),
     supabase.from('operator_rules').select('*').order('operator').order('category'),
   ])
 
@@ -22,7 +23,7 @@ export default async function ReferenceLibraryPage() {
       hsRefs={hsRefs ?? []}
       lessons={lessons ?? []}
       opRules={opRules ?? []}
-      isAdmin={profile?.role === 'admin'}
+      isAdmin={isAdmin}
     />
   )
 }
