@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -130,6 +130,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <FileText size={20} style={{ color: 'var(--accent)' }} />
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Document Library</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Upload and manage project documents</p>
+        </Link>
+          <Link
+          href={`/projects/${id}/procurement`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80 transition-opacity"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}
+        >
+          <ShoppingCart size={20} style={{ color: 'var(--accent)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Procurement</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Equipment register, quotes and lead times</p>
         </Link>
         {['AI Reviews', 'Findings', 'Clash Detection'].map(label => (
           <div
