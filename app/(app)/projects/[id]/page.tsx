@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft, Pencil, FileText } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
+import ProjectER from '@/components/ProjectER'
 
 const STAGE_ORDER: Stage[] = [
   'Feasibility', 'Design', 'Procure', 'Build & Install', 'Test & Commission', 'Energise & Handover'
@@ -24,6 +25,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const currentIdx = STAGE_ORDER.indexOf(project.stage)
 
   // Load project-linked references and full library in parallel
+  // Load project documents for ER picker
+  const { data: projectDocs } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('project_id', id)
+    .order('title')
+
   const [
     { data: linkedStandardRows },
     { data: linkedHsRows },
@@ -139,6 +147,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{label} — coming in M3/M5</p>
           </div>
         ))}
+      </div>
+
+      {/* ER — master reference */}
+      <div className="mb-4">
+        <ProjectER
+          projectId={id}
+          erDocumentId={project.er_document_id ?? null}
+          erMissingStandards={project.er_missing_standards ?? []}
+          erAnalysedAt={project.er_analysed_at ?? null}
+          documents={projectDocs ?? []}
+        />
       </div>
 
       {/* Applicable references */}
