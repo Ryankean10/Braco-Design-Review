@@ -99,11 +99,15 @@ ${erTextTruncated}`
 
   let result: { applicable_ids: string[]; missing_standards: any[] }
   try {
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('No JSON in response')
+    // Strip markdown code fences if present
+    const stripped = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error(`No JSON found. Claude said: ${responseText.slice(0, 300)}`)
     result = JSON.parse(jsonMatch[0])
-  } catch {
-    return NextResponse.json({ error: 'Failed to parse Claude response', raw: responseText }, { status: 500 })
+    if (!Array.isArray(result.applicable_ids)) result.applicable_ids = []
+    if (!Array.isArray(result.missing_standards)) result.missing_standards = []
+  } catch (e: any) {
+    return NextResponse.json({ error: `Failed to parse response: ${e.message}` }, { status: 500 })
   }
 
   // Auto-link applicable standards (ignore duplicates)
