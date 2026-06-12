@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!['admin', 'project_manager', 'engineer'].includes(profile?.role ?? ''))
+  if (!['admin', 'engineer'].includes(profile?.role ?? ''))
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
 
   const body = await req.json() as { lenses: Lens[]; documentIds: string[] }

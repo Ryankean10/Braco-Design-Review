@@ -156,7 +156,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     projectStages.find((s: any) => s.stage === name)
   ).filter(Boolean) as any[]
 
-  const canEdit = ['admin', 'project_manager', 'engineer'].includes(role)
+  const canEdit = ['admin', 'engineer'].includes(role)
 
   return (
     <div className="p-8 max-w-4xl mx-auto">

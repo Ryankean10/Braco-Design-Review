@@ -29,7 +29,7 @@ export default async function ProcurementPage({ params }: { params: Promise<{ id
       .order('company_name'),
   ])
 
-  const canEdit = ['admin','project_manager','engineer'].includes(profile?.role ?? '')
+  const canEdit = ['admin', 'engineer'].includes(profile?.role ?? '')
 
   return (
     <div className="p-6 max-w-6xl mx-auto">

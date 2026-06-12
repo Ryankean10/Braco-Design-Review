@@ -19,7 +19,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
   const role = profile?.role ?? 'engineer'
   if (role === 'client') redirect(`/projects/${projectId}`)
 
-  const canEdit = ['admin', 'project_manager', 'engineer'].includes(role)
+  const canEdit = ['admin', 'engineer'].includes(role)
 
   const [
     { data: documents },
