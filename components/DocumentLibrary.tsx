@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Upload, Download, FileText, ChevronDown, ChevronUp, History } from 'lucide-react'
+import { Upload, Download, FileText, ChevronUp, History, FileSpreadsheet } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import DocumentImport from '@/components/DocumentImport'
 import type { Document, DocType, Stage } from '@/lib/types'
 
 const DOC_TYPES: DocType[] = ['Drawing', 'Specification', 'Report', 'Schedule', 'Certificate', 'Other']
@@ -25,6 +26,7 @@ interface Props {
 export default function DocumentLibrary({ projectId, projectStage, initialDocuments, userRole }: Props) {
   const [documents, setDocuments] = useState<Document[]>(initialDocuments)
   const [showUpload, setShowUpload] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [expandedRevs, setExpandedRevs] = useState<Set<string>>(new Set())
@@ -119,15 +121,38 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           {latestDocs.length} document{latestDocs.length !== 1 ? 's' : ''}
         </p>
-        <button
-          onClick={() => { setShowUpload(!showUpload); resetForm() }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
-          style={{ background: 'var(--accent)' }}
-        >
-          <Upload size={14} />
-          Upload document
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowImport(!showImport); setShowUpload(false) }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+          >
+            <FileSpreadsheet size={14} />
+            Import CSV
+          </button>
+          <button
+            onClick={() => { setShowUpload(!showUpload); setShowImport(false); resetForm() }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            style={{ background: 'var(--accent)' }}
+          >
+            <Upload size={14} />
+            Upload document
+          </button>
+        </div>
       </div>
+
+      {/* CSV Import */}
+      {showImport && (
+        <DocumentImport
+          projectId={projectId}
+          onImported={(count) => {
+            setShowImport(false)
+            // Reload page to show imported docs
+            window.location.reload()
+          }}
+          onClose={() => setShowImport(false)}
+        />
+      )}
 
       {/* Upload form */}
       {showUpload && (
