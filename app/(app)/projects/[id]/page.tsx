@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -234,12 +234,27 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </p>
           </Link>
         )}
-        {['AI Reviews', 'Findings', 'Clash Detection'].map(label => (
-          <div key={label} className="rounded-xl border p-5 flex items-center justify-center"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{label} — coming in M3/M5</p>
-          </div>
-        ))}
+        <Link href={`/projects/${id}/reviews`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+          <Sparkles size={20} style={{ color: 'var(--accent)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>AI Design Reviews</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>ER compliance, standards, constructability, procurement & clash</p>
+        </Link>
+        <Link href={`/projects/${id}/reviews`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+          <AlertTriangle size={20} style={{ color: '#fb923c' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Findings</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Review and sign off AI-raised findings</p>
+        </Link>
+        <Link href={`/projects/${id}/reviews#clash`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+          <Zap size={20} style={{ color: '#f472b6' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Clash Detection</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Physical & compliance clashes across all design documents</p>
+        </Link>
       </div>
 
       {/* Client comments — visible to admin/PM/engineer, hidden from operative */}
