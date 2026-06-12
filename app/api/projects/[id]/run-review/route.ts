@@ -215,16 +215,19 @@ ${lenses.map(l => `  "${l}": [
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   let responseText = ''
+  let stopReason = ''
   try {
     const stream = anthropic.messages.stream({
       model: 'claude-opus-4-8',
-      max_tokens: 16000,
+      max_tokens: 32000,
       thinking: { type: 'adaptive' },
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     })
     const msg = await stream.finalMessage()
     responseText = msg.content.find(b => b.type === 'text')?.text ?? ''
+    stopReason = msg.stop_reason ?? ''
+    console.log('[run-review] stop_reason:', stopReason, '| text length:', responseText.length, '| preview:', responseText.slice(0, 200))
   } catch (e: any) {
     await supabase.from('design_review_runs').update({ status: 'failed', error: e.message }).eq('id', runId)
     return NextResponse.json({ error: `Claude API error: ${e.message}` }, { status: 500 })
@@ -234,11 +237,13 @@ ${lenses.map(l => `  "${l}": [
   let parsed: Partial<Record<Lens, FindingRaw[]>> = {}
   try {
     parsed = extractAndParse(responseText)
+    console.log('[run-review] parsed lens counts:', Object.fromEntries(lenses.map(l => [l, Array.isArray(parsed[l]) ? parsed[l]!.length : 'missing'])))
     for (const lens of lenses) {
       if (!Array.isArray(parsed[lens])) parsed[lens] = []
     }
   } catch (e: any) {
-    await supabase.from('design_review_runs').update({ status: 'failed', error: `Parse error: ${e.message}` }).eq('id', runId)
+    console.error('[run-review] parse error:', e.message, '| raw:', responseText.slice(0, 500))
+    await supabase.from('design_review_runs').update({ status: 'failed', error: `Parse error: ${e.message}. Raw (first 500): ${responseText.slice(0, 500)}` }).eq('id', runId)
     return NextResponse.json({ error: `Failed to parse findings: ${e.message}` }, { status: 500 })
   }
 
@@ -315,7 +320,7 @@ ${lenses.map(l => `  "${l}": [
   const noFindings = insertedFindings.length === 0 && !failedDocs.length
   await supabase.from('design_review_runs').update({
     status: 'ai_complete',
-    ...(noFindings ? { error: `AI returned 0 findings. Raw response (first 500 chars): ${responseText.slice(0, 500)}` } : {}),
+    ...(noFindings ? { error: `AI returned 0 findings. stop_reason=${stopReason} | Raw (first 800): ${responseText.slice(0, 800)}` } : {}),
   }).eq('id', runId)
 
   return NextResponse.json({
