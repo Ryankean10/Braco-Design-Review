@@ -250,8 +250,6 @@ ${lenses.map(l => `  "${l}": [
     const findings = parsed[lens] ?? []
     for (const f of findings) {
       if (!f.title?.trim() || !f.description?.trim()) continue
-      const hasRef = (f.drawing_refs?.length ?? 0) > 0 || (f.document_refs?.length ?? 0) > 0 || f.clause_ref
-      if (!hasRef) continue // enforce mandatory reference rule
       allRows.push({
         run_id: runId,
         project_id: projectId,
@@ -313,8 +311,12 @@ ${lenses.map(l => `  "${l}": [
     }
   }
 
-  // Status: ai_complete means AI finished — findings still need human sign-off
-  await supabase.from('design_review_runs').update({ status: 'ai_complete' }).eq('id', runId)
+  // If nothing came back, store the raw response to aid debugging
+  const noFindings = insertedFindings.length === 0 && !failedDocs.length
+  await supabase.from('design_review_runs').update({
+    status: 'ai_complete',
+    ...(noFindings ? { error: `AI returned 0 findings. Raw response (first 500 chars): ${responseText.slice(0, 500)}` } : {}),
+  }).eq('id', runId)
 
   return NextResponse.json({
     runId,
