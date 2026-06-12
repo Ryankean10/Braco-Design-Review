@@ -87,6 +87,13 @@ alter table public.procurement_items enable row level security;
 alter table public.procurement_quotes enable row level security;
 
 -- All authenticated users can read
+drop policy if exists "Auth read suppliers"   on public.procurement_suppliers;
+drop policy if exists "Auth read proc_items"  on public.procurement_items;
+drop policy if exists "Auth read proc_quotes" on public.procurement_quotes;
+drop policy if exists "Editor mutate proc_items"  on public.procurement_items;
+drop policy if exists "Editor mutate proc_quotes" on public.procurement_quotes;
+drop policy if exists "Auth mutate suppliers" on public.procurement_suppliers;
+
 create policy "Auth read suppliers"   on public.procurement_suppliers for select using (auth.role() = 'authenticated');
 create policy "Auth read proc_items"  on public.procurement_items     for select using (auth.role() = 'authenticated');
 create policy "Auth read proc_quotes" on public.procurement_quotes     for select using (auth.role() = 'authenticated');

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { extractAndParse } from '@/lib/repairJson'
 
 export const maxDuration = 30
 
@@ -80,10 +81,7 @@ ${docText}`
 
   let extracted: any
   try {
-    const stripped = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('No JSON found')
-    extracted = JSON.parse(jsonMatch[0])
+    extracted = extractAndParse(responseText)
   } catch (e: any) {
     return NextResponse.json({ error: `Parse failed: ${e.message}` }, { status: 500 })
   }

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const maxDuration = 60
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { extractAndParse } from '@/lib/repairJson'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params
@@ -99,12 +100,7 @@ ${erTextTruncated}`
 
   let result: { applicable_ids: string[]; missing_standards: any[] }
   try {
-    // Strip markdown code fences if present
-    const stripped = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error(`No JSON found. Claude said: ${responseText.slice(0, 300)}`)
-    const raw = jsonMatch[0].replace(/,\s*([}\]])/g, '$1')
-    result = JSON.parse(raw)
+    result = extractAndParse(responseText)
     if (!Array.isArray(result.applicable_ids)) result.applicable_ids = []
     if (!Array.isArray(result.missing_standards)) result.missing_standards = []
   } catch (e: any) {

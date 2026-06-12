@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { extractAndParse } from '@/lib/repairJson'
 
 export const maxDuration = 60
 
@@ -71,13 +72,7 @@ ${erText}`
 
   let result: { items: any[] }
   try {
-    const stripped = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('No JSON found')
-    let raw = jsonMatch[0]
-    // Repair common Claude JSON issues: trailing commas before ] or }
-    raw = raw.replace(/,\s*([}\]])/g, '$1')
-    result = JSON.parse(raw)
+    result = extractAndParse(responseText)
     if (!Array.isArray(result.items)) result.items = []
   } catch (e: any) {
     return NextResponse.json({ error: `Parse failed: ${e.message}` }, { status: 500 })
