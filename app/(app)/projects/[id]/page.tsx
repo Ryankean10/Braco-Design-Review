@@ -7,10 +7,8 @@ import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
 import ClientProjectView from '@/components/ClientProjectView'
 import InternalCommentPanel from '@/components/InternalCommentPanel'
-
-const STAGE_ORDER: Stage[] = [
-  'Feasibility', 'Design', 'Procure', 'Build & Install', 'Test & Commission', 'Energise & Handover'
-]
+import ProjectStageTracker from '@/components/ProjectStageTracker'
+import { makeDefaultStages, STAGE_ORDER as STAGE_NAMES } from '@/lib/stageDefaults'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -60,10 +58,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   }
 
   // ── Internal view ──────────────────────────────────────────────────────────
-  const currentIdx = STAGE_ORDER.indexOf(project.stage)
+  const { data: userProfile } = await supabase.from('profiles').select('full_name, email').eq('id', user.id).single()
+  const userName = userProfile?.full_name ?? userProfile?.email ?? 'Unknown'
 
   const [
     { data: projectComments },
+    { data: projectStageRows },
     { data: linkedStandardRows },
     { data: linkedHsRows },
     { data: linkedLessonRows },
@@ -77,6 +77,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .select('*, comment_attachments(*)')
       .eq('project_id', id)
       .order('created_at', { ascending: false }),
+    supabase.from('project_stages')
+      .select('*')
+      .eq('project_id', id)
+      .order('created_at'),
     supabase.from('project_standards').select('standard_id, standards(*, standard_clauses(*))').eq('project_id', id),
     supabase.from('project_hs_references').select('hs_id, hs_references(*)').eq('project_id', id),
     supabase.from('project_lessons_learned').select('lesson_id, lessons_learned(*)').eq('project_id', id),
@@ -109,6 +113,23 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     responder_name: c.responded_by ? (nameMap[c.responded_by] ?? null) : null,
   }))
 
+  // Seed project_stages if this project has none yet
+  let projectStages = projectStageRows ?? []
+  if (projectStages.length === 0) {
+    const defaults = makeDefaultStages(id)
+    const { data: seeded } = await supabase
+      .from('project_stages')
+      .insert(defaults)
+      .select()
+    projectStages = seeded ?? []
+  }
+  // Ensure all 6 stages present (handles projects created before migration)
+  const stagesOrdered = STAGE_NAMES.map(name =>
+    projectStages.find((s: any) => s.stage === name)
+  ).filter(Boolean) as any[]
+
+  const canEdit = ['admin', 'project_manager', 'engineer'].includes(role)
+
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -134,29 +155,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Stage tracker */}
-      <div className="rounded-xl border p-5 mb-6" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <p className="text-xs font-medium mb-4" style={{ color: 'var(--text-muted)' }}>LIFECYCLE STAGE</p>
-        <div className="flex items-center gap-0">
-          {STAGE_ORDER.map((stage, idx) => {
-            const done = idx < currentIdx
-            const active = idx === currentIdx
-            return (
-              <div key={stage} className="flex items-center flex-1 min-w-0">
-                <div className="flex flex-col items-center flex-1 min-w-0">
-                  <div className="w-3 h-3 rounded-full mb-1.5 shrink-0"
-                    style={{ background: done ? 'var(--success)' : active ? 'var(--accent)' : 'var(--border)' }} />
-                  <span className="text-[9px] text-center leading-tight px-0.5"
-                    style={{ color: active ? 'var(--accent)' : done ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {stage}
-                  </span>
-                </div>
-                {idx < STAGE_ORDER.length - 1 && (
-                  <div className="h-px flex-1 mx-0.5 mb-4" style={{ background: done ? 'var(--success)' : 'var(--border)' }} />
-                )}
-              </div>
-            )
-          })}
-        </div>
+      <div className="mb-6">
+        <ProjectStageTracker
+          stages={stagesOrdered}
+          canEdit={canEdit}
+          userId={user.id}
+          userName={userName}
+        />
       </div>
 
       {/* Feature panels */}
