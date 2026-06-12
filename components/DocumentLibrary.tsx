@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, Download, FileText, ChevronUp, History, FileSpreadsheet, Paperclip, AlertCircle } from 'lucide-react'
+import { Upload, Download, FileText, ChevronUp, History, FileSpreadsheet, Paperclip, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import DocumentImport from '@/components/DocumentImport'
 import DocumentBulkAttach from '@/components/DocumentBulkAttach'
@@ -129,6 +129,15 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
       .createSignedUrl(doc.storage_path, 60)
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
   }
+
+  async function toggleClientReview(doc: Document) {
+    const supabase = createClient()
+    const next = !(doc as any).for_client_review
+    await supabase.from('documents').update({ for_client_review: next }).eq('id', doc.id)
+    setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, for_client_review: next } as any : d))
+  }
+
+  const canEdit = ['admin', 'project_manager', 'engineer'].includes(userRole)
 
   // Group by doc_no for revision history display
   const byDocNo = documents.reduce<Record<string, Document[]>>((acc, doc) => {
@@ -382,6 +391,15 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
                             {attachingId === doc.id ? '…' : <><Paperclip size={11} /> Attach</>}
                           </button>
                         </>
+                      )}
+                      {canEdit && doc.storage_path && (
+                        <button
+                          onClick={() => toggleClientReview(doc)}
+                          title={(doc as any).for_client_review ? 'Remove from client review' : 'Share with client'}
+                          className="p-1 rounded hover:opacity-70 transition-opacity"
+                          style={{ color: (doc as any).for_client_review ? '#4ade80' : 'var(--text-muted)' }}>
+                          {(doc as any).for_client_review ? <Eye size={14} /> : <EyeOff size={14} />}
+                        </button>
                       )}
                       {hasHistory && (
                         <button
