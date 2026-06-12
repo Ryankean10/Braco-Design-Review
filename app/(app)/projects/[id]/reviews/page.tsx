@@ -24,7 +24,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
   const [
     { data: documents },
     { data: runs },
-    { data: findings },
+    { data: findings, error: findingsError },
   ] = await Promise.all([
     supabase
       .from('documents')
@@ -39,10 +39,13 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
       .limit(10),
     supabase
       .from('design_findings')
-      .select('id, run_id, lens, severity, title, description, clause_ref, drawing_refs, document_refs, procurement_item_id, status, decision_type, reviewed_at, review_notes')
+      .select('id, run_id, lens, severity, title, description, clause_ref, drawing_refs, document_refs, procurement_item_id, status, reviewed_by, reviewed_at, review_notes, decision_type')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false }),
   ])
+
+  if (findingsError) console.error('[reviews/page] findings query error:', findingsError.message, findingsError.details)
+  console.log('[reviews/page] findings count:', findings?.length ?? 0)
 
   // Resolve reviewer names for findings
   const reviewerIds = [...new Set((findings ?? []).map((f: any) => f.reviewed_by).filter(Boolean))]
