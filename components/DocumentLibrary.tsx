@@ -353,7 +353,16 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
                       <span className="chip-stage text-xs px-2 py-0.5 rounded-full">{doc.stage}</span>
                     </span>
                     <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {doc.storage_path ? formatBytes(doc.file_size) : (
+                      {doc.storage_path ? (
+                        <span className="flex flex-col gap-0.5">
+                          <span>{formatBytes(doc.file_size)}</span>
+                          {doc.mime_type && doc.mime_type !== 'application/pdf' && (
+                            <span className="flex items-center gap-1 text-[10px]" style={{ color: '#fb923c' }} title="Non-PDF files cannot be used in AI design reviews — replace with a searchable PDF export">
+                              <AlertCircle size={10} /> Not PDF
+                            </span>
+                          )}
+                        </span>
+                      ) : (
                         <span className="flex items-center gap-1" style={{ color: 'var(--major)' }}>
                           <AlertCircle size={11} /> No file
                         </span>

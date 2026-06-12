@@ -28,7 +28,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
   ] = await Promise.all([
     supabase
       .from('documents')
-      .select('id, doc_no, title, rev, type, stage')
+      .select('id, doc_no, title, rev, type, stage, mime_type, storage_path')
       .eq('project_id', projectId)
       .order('doc_no'),
     supabase

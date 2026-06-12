@@ -37,6 +37,8 @@ interface Doc {
   rev: string
   type: string
   stage: string
+  mime_type: string | null
+  storage_path: string | null
 }
 
 interface Finding {
@@ -234,9 +236,17 @@ export default function ReviewsPanel({
           <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
               <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Select Documents</p>
-              <button onClick={() => setSelectedDocs(selectedDocs.length === documents.length ? [] : documents.map(d => d.id))}
+              <button
+                onClick={() => {
+                  const pdfIds = documents.filter(d => d.storage_path && d.mime_type === 'application/pdf').map(d => d.id)
+                  setSelectedDocs(selectedDocs.length === pdfIds.length && pdfIds.every(id => selectedDocs.includes(id)) ? [] : pdfIds)
+                }}
                 className="text-[10px]" style={{ color: 'var(--accent)' }}>
-                {selectedDocs.length === documents.length ? 'Deselect all' : 'Select all'}
+                {(() => {
+                  const pdfIds = documents.filter(d => d.storage_path && d.mime_type === 'application/pdf').map(d => d.id)
+                  return selectedDocs.length === pdfIds.length && pdfIds.length > 0 && pdfIds.every(id => selectedDocs.includes(id))
+                    ? 'Deselect all' : 'Select all PDFs'
+                })()}
               </button>
             </div>
             {documents.length === 0 ? (
@@ -246,19 +256,36 @@ export default function ReviewsPanel({
               </p>
             ) : (
               <div className="max-h-52 overflow-y-auto divide-y" style={{ borderColor: 'var(--border)' }}>
-                {documents.map(doc => (
-                  <label key={doc.id} className="flex items-start gap-3 px-4 py-2.5 cursor-pointer hover:opacity-80">
-                    <input type="checkbox" checked={selectedDocs.includes(doc.id)} onChange={() => toggleDoc(doc.id)}
-                      className="mt-0.5 flex-shrink-0" style={{ accentColor: 'var(--accent)' }} />
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                        <span className="font-mono text-[10px] mr-1" style={{ color: 'var(--text-muted)' }}>{doc.doc_no}</span>
-                        {doc.title}
-                      </p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Rev {doc.rev} · {doc.type} · {doc.stage}</p>
-                    </div>
-                  </label>
-                ))}
+                {documents.map(doc => {
+                  const isPdf = doc.storage_path && doc.mime_type === 'application/pdf'
+                  const noFile = !doc.storage_path
+                  return (
+                    <label key={doc.id}
+                      className={`flex items-start gap-3 px-4 py-2.5 ${isPdf ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed opacity-50'}`}>
+                      <input type="checkbox"
+                        checked={selectedDocs.includes(doc.id)}
+                        disabled={!isPdf}
+                        onChange={() => isPdf && toggleDoc(doc.id)}
+                        className="mt-0.5 flex-shrink-0" style={{ accentColor: 'var(--accent)' }} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                          <span className="font-mono text-[10px] mr-1" style={{ color: 'var(--text-muted)' }}>{doc.doc_no}</span>
+                          {doc.title}
+                        </p>
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Rev {doc.rev} · {doc.type} · {doc.stage}</p>
+                        {noFile && (
+                          <p className="text-[10px] mt-0.5" style={{ color: '#fb923c' }}>⚠ No file attached</p>
+                        )}
+                        {!noFile && !isPdf && (
+                          <p className="text-[10px] mt-0.5" style={{ color: '#fb923c' }}>
+                            ⚠ Not a PDF — AI review unavailable.{' '}
+                            <Link href={`/projects/${projectId}/documents`} style={{ color: 'var(--accent)' }}>Replace in doc library</Link>
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  )
+                })}
               </div>
             )}
           </div>
