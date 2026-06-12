@@ -196,6 +196,7 @@ export default function ClientCommentThread({
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const supabase = createClient()
 
   const openCount = comments.filter(c => c.status === 'Open').length
@@ -203,6 +204,9 @@ export default function ClientCommentThread({
   async function submit() {
     if (!text.trim()) return
     setSaving(true)
+    setSubmitError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSubmitError('Not authenticated'); setSaving(false); return }
     const { data, error } = await supabase.from('client_comments')
       .insert([{
         project_id: projectId,
@@ -210,10 +214,12 @@ export default function ClientCommentThread({
         subject_id: subjectId ?? null,
         subject_label: subjectLabel ?? null,
         comment: text.trim(),
+        created_by: user.id,
       }])
       .select()
       .single()
-    if (!error && data) {
+    if (error) { setSubmitError(error.message); setSaving(false); return }
+    if (data) {
       setComments(prev => [data, ...prev])
       setText('')
       setOpen(false)
@@ -275,6 +281,9 @@ export default function ClientCommentThread({
               <Send size={11} />{saving ? 'Sending…' : 'Submit Comment'}
             </button>
           </div>
+          {submitError && (
+            <p className="text-xs px-1" style={{ color: '#f87171' }}>{submitError}</p>
+          )}
         </div>
       )}
 
