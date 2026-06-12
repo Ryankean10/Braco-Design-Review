@@ -33,7 +33,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
       .order('doc_no'),
     supabase
       .from('design_review_runs')
-      .select('id, run_at, status, lenses, document_ids, run_by')
+      .select('id, run_at, status, lenses, document_ids, run_by, error')
       .eq('project_id', projectId)
       .order('run_at', { ascending: false })
       .limit(10),

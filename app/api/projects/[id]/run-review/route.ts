@@ -96,11 +96,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   if (!docTexts.length) {
-    const msg = failedDocs.length
-      ? `Could not extract text from any selected document. ${failedDocs.join(', ')}. Ensure PDFs contain selectable text (not scanned images).`
-      : 'No document text could be extracted.'
+    const msg = `Could not extract text from ${failedDocs.length ? failedDocs.join(', ') : 'any selected document'}. Ensure PDFs contain selectable text (not scanned images — try re-exporting from your CAD/design tool as a searchable PDF).`
     await supabase.from('design_review_runs').update({ status: 'failed', error: msg }).eq('id', runId)
     return NextResponse.json({ error: msg }, { status: 400 })
+  }
+
+  // Store partial extraction warnings in the run record now (survive page reload)
+  if (failedDocs.length) {
+    await supabase.from('design_review_runs').update({
+      error: `Partial extraction: could not read text from — ${failedDocs.join('; ')}. Review above was conducted on the remaining documents only.`,
+    }).eq('id', runId)
   }
 
   const combinedDocText = docTexts.map(d =>
@@ -261,6 +266,23 @@ ${lenses.map(l => `  "${l}": [
         status: 'Pending',
       })
     }
+  }
+
+  // Inject a persistent warning finding for any unreadable documents
+  if (failedDocs.length) {
+    allRows.unshift({
+      run_id: runId,
+      project_id: projectId,
+      lens: 'er_compliance',
+      severity: 'Major',
+      title: `Document extraction failed — ${failedDocs.length} file${failedDocs.length > 1 ? 's' : ''} not reviewed`,
+      description: `The following documents could not be text-extracted and were EXCLUDED from this review: ${failedDocs.join('; ')}. These are likely scanned image PDFs. Re-export as searchable PDFs (with OCR or from the original CAD/design tool) and re-run the review to cover them. Until then, findings from these documents are missing from the log.`,
+      clause_ref: 'Document Quality — Searchable PDF Required',
+      drawing_refs: failedDocs.map(d => d.split(' (')[0]),
+      document_refs: [],
+      procurement_item_id: null,
+      status: 'Pending',
+    })
   }
 
   let insertedFindings: any[] = []

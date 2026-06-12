@@ -64,6 +64,7 @@ interface Run {
   lenses: string[]
   document_ids: string[]
   runner_name: string | null
+  error: string | null
 }
 
 interface Props {
@@ -86,7 +87,9 @@ export default function ReviewsPanel({
   const [findings, setFindings] = useState<Finding[]>(initialFindings)
   const [isRunning, setIsRunning] = useState(false)
   const [runProgress, setRunProgress] = useState<{ lens: string; pct: number } | null>(null)
-  const [runError, setRunError] = useState<string | null>(null)
+  // Show any persistent warning from the most recent run (survives page reload)
+  const latestRunWarning = initialRuns[0]?.error ?? null
+  const [runError, setRunError] = useState<string | null>(latestRunWarning)
   const [expandedLenses, setExpandedLenses] = useState<Set<string>>(new Set(['er_compliance']))
   const [filterStatus, setFilterStatus] = useState<'all' | 'Pending' | 'Approved' | 'Rejected'>('all')
   const [activeRunId, setActiveRunId] = useState<string>('all')
@@ -141,13 +144,20 @@ export default function ReviewsPanel({
         return
       }
 
-      setRunProgress({ lens: `Complete — ${data.findingCount ?? 0} findings generated`, pct: 100 })
+      const findingCount = data.findingCount ?? 0
+      const hasWarnings = (data.warnings?.length ?? 0) > 0
 
-      if (data.warnings?.length) {
-        setRunError(`Warning: ${data.warnings.join('; ')}`)
+      setRunProgress({ lens: `Complete — ${findingCount} finding${findingCount !== 1 ? 's' : ''} generated`, pct: 100 })
+
+      if (hasWarnings) {
+        // Keep warning visible — don't auto-reload so user can read it
+        setRunError(`Some documents could not be read: ${data.warnings!.join('; ')}. A warning finding has been added to the log. Fix the PDFs and re-run to cover those documents.`)
+        setIsRunning(false)
+        // Reload after a longer delay so user sees the message
+        setTimeout(() => window.location.reload(), 5000)
+      } else {
+        setTimeout(() => window.location.reload(), 1000)
       }
-
-      setTimeout(() => window.location.reload(), 1200)
     } catch (e: any) {
       setRunError(`Network error: ${e.message}`)
       setIsRunning(false)
@@ -299,14 +309,22 @@ export default function ReviewsPanel({
                   style={{ width: `${runProgress.pct}%`, background: 'linear-gradient(90deg, var(--accent), #a855f7)' }} />
               </div>
               <p className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>
-                Using Claude Opus with adaptive thinking — each lens takes ~30–60 s
+                All {selectedLenses.length} lens{selectedLenses.length > 1 ? 'es' : ''} sent in one call — typically 60–120 s
               </p>
             </div>
           )}
 
           {runError && (
-            <div className="rounded-xl border px-4 py-3 text-xs" style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
-              {runError}
+            <div className="rounded-xl border px-4 py-3 text-xs space-y-1.5"
+              style={{
+                borderColor: runError.startsWith('Some documents') || runError.startsWith('Partial') ? 'rgba(251,146,60,0.4)' : 'rgba(248,113,113,0.4)',
+                background:  runError.startsWith('Some documents') || runError.startsWith('Partial') ? 'rgba(251,146,60,0.08)' : 'rgba(248,113,113,0.08)',
+                color:       runError.startsWith('Some documents') || runError.startsWith('Partial') ? '#fb923c' : '#f87171',
+              }}>
+              <div className="flex items-start justify-between gap-2">
+                <p className="flex-1">{runError}</p>
+                <button onClick={() => setRunError(null)} className="flex-shrink-0 opacity-60 hover:opacity-100 text-base leading-none">×</button>
+              </div>
             </div>
           )}
 
