@@ -65,8 +65,27 @@ export default async function DashboardPage() {
   }
 
   // ── Internal dashboard ─────────────────────────────────────────────────────
+
+  // Non-admin roles only see their assigned projects
+  let projectQuery = supabase.from('projects').select('*').order('updated_at', { ascending: false })
+  if (role !== 'admin') {
+    const { data: memberships } = await supabase
+      .from('project_members').select('project_id').eq('user_id', user.id)
+    const ids = (memberships ?? []).map((m: any) => m.project_id)
+    if (ids.length === 0) {
+      // No assignments yet — show empty state
+      return (
+        <div className="p-8 max-w-6xl mx-auto">
+          <h1 className="text-2xl font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Dashboard</h1>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>You haven't been assigned to any projects yet. Ask an admin to assign you.</p>
+        </div>
+      )
+    }
+    projectQuery = projectQuery.in('id', ids)
+  }
+
   const [{ data: projects }, { data: allProjectStages }, { data: openComments }] = await Promise.all([
-    supabase.from('projects').select('*').order('updated_at', { ascending: false }),
+    projectQuery,
     supabase.from('project_stages').select('project_id, stage, status, checklist'),
     role !== 'operative'
       ? supabase.from('client_comments').select('id, project_id, subject_label, created_at, status').eq('status', 'Open').order('created_at', { ascending: false })

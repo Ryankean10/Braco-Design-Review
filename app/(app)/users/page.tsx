@@ -11,16 +11,36 @@ export default async function UsersPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  // Use service role to list all users with profile data
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  const { data: profiles } = await admin
-    .from('profiles')
-    .select('id, email, full_name, role, created_at')
-    .order('created_at', { ascending: false })
+  const [
+    { data: profiles },
+    { data: projects },
+    { data: members },
+    { data: clients },
+  ] = await Promise.all([
+    admin.from('profiles').select('id, email, full_name, role, created_at').order('created_at', { ascending: false }),
+    supabase.from('projects').select('id, name, client').order('name'),
+    supabase.from('project_members').select('project_id, user_id'),
+    supabase.from('project_clients').select('project_id, user_id'),
+  ])
 
-  return <UsersClient users={profiles ?? []} currentUserId={user.id} />
+  // Build project assignment map: userId → projectId[]
+  const assignmentMap: Record<string, string[]> = {}
+  for (const m of [...(members ?? []), ...(clients ?? [])]) {
+    if (!assignmentMap[m.user_id]) assignmentMap[m.user_id] = []
+    assignmentMap[m.user_id].push(m.project_id)
+  }
+
+  return (
+    <UsersClient
+      users={profiles ?? []}
+      projects={projects ?? []}
+      assignmentMap={assignmentMap}
+      currentUserId={user.id}
+    />
+  )
 }

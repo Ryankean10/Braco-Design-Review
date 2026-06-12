@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, FolderOpen } from 'lucide-react'
 import { STAGE_ORDER } from '@/lib/stageDefaults'
@@ -15,9 +16,27 @@ const STAGE_COLOUR: Record<StageName, string> = {
 
 export default async function ProjectsPage() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const role = profile?.role ?? 'engineer'
+
+  let projectIds: string[] | null = null
+  if (role !== 'admin') {
+    const table = role === 'client' ? 'project_clients' : 'project_members'
+    const { data: memberships } = await supabase.from(table).select('project_id').eq('user_id', user.id)
+    projectIds = (memberships ?? []).map((m: any) => m.project_id)
+  }
+
+  let projectQuery = supabase.from('projects').select('*').order('updated_at', { ascending: false })
+  if (projectIds !== null) {
+    if (projectIds.length === 0) projectQuery = projectQuery.in('id', ['none'])
+    else projectQuery = projectQuery.in('id', projectIds)
+  }
 
   const [{ data: projects }, { data: stages }] = await Promise.all([
-    supabase.from('projects').select('*').order('updated_at', { ascending: false }),
+    projectQuery,
     supabase.from('project_stages').select('project_id, stage, status'),
   ])
 
