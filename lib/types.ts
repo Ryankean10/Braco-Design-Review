@@ -96,6 +96,47 @@ export interface OperatorRule {
   created_at: string
 }
 
+export type TestStatus = 'Planned' | 'In Progress' | 'Pass' | 'Conditional Pass' | 'Fail' | 'Awaiting Review' | 'Cancelled'
+export type TestCategory = 'Civils & Geotechnical' | 'HV Electrical' | 'LV Electrical' | 'Protection & Control' | 'BESS & Inverter' | 'FAT' | 'SAT' | 'DNO / Grid' | 'Fire & Safety' | 'Other'
+
+export interface TestRecord {
+  id: string
+  project_id: string
+  test_ref: string | null
+  title: string
+  category: TestCategory
+  test_type: string
+  description: string | null
+  planned_date: string | null
+  actual_date: string | null
+  location: string | null
+  status: TestStatus
+  pass_criteria: string | null
+  result_summary: string | null
+  results_data: any | null
+  results_source: string | null
+  witnessed_by: string | null
+  certificate_ref: string | null
+  itp_ref: string | null
+  notes: string | null
+  assigned_to: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  test_documents?: TestDocument[]
+}
+
+export interface TestDocument {
+  id: string
+  test_id: string
+  storage_path: string
+  file_name: string
+  file_size: number | null
+  doc_type: 'Result Sheet' | 'Certificate' | 'Method Statement' | 'Witness Sheet' | 'Calibration Certificate' | 'Other'
+  uploaded_by: string | null
+  uploaded_at: string
+}
+
 export interface Document {
   id: string
   project_id: string
