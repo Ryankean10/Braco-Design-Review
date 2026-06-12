@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Upload, Download, FileText, ChevronUp, History, FileSpreadsheet, Paperclip } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Upload, Download, FileText, ChevronUp, History, FileSpreadsheet, Paperclip, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import DocumentImport from '@/components/DocumentImport'
 import DocumentBulkAttach from '@/components/DocumentBulkAttach'
@@ -32,6 +32,9 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [expandedRevs, setExpandedRevs] = useState<Set<string>>(new Set())
+  const [attachingId, setAttachingId] = useState<string | null>(null)
+  const attachInputRef = useRef<HTMLInputElement | null>(null)
+  const [attachingDoc, setAttachingDoc] = useState<Document | null>(null)
 
   // Upload form state
   const [file, setFile] = useState<File | null>(null)
@@ -90,6 +93,33 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
     setShowUpload(false)
     resetForm()
     setUploading(false)
+  }
+
+  async function handleQuickAttach(doc: Document, file: File) {
+    setAttachingId(doc.id)
+    const supabase = createClient()
+    const ext = file.name.split('.').pop()
+    const storagePath = `${projectId}/${Date.now()}-${doc.doc_no.replace(/\s+/g, '_')}-${doc.rev}.${ext}`
+
+    const { error: storageErr } = await supabase.storage
+      .from('documents')
+      .upload(storagePath, file, { upsert: false })
+
+    if (!storageErr) {
+      await supabase.from('documents').update({
+        storage_path: storagePath,
+        file_name: file.name,
+        file_size: file.size,
+        mime_type: file.type,
+      }).eq('id', doc.id)
+
+      setDocuments(prev => prev.map(d => d.id === doc.id
+        ? { ...d, storage_path: storagePath, file_name: file.name, file_size: file.size, mime_type: file.type }
+        : d
+      ))
+    }
+    setAttachingId(null)
+    setAttachingDoc(null)
   }
 
   async function handleDownload(doc: Document) {
@@ -314,14 +344,45 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
                       <span className="chip-stage text-xs px-2 py-0.5 rounded-full">{doc.stage}</span>
                     </span>
                     <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {formatBytes(doc.file_size)}
+                      {doc.storage_path ? formatBytes(doc.file_size) : (
+                        <span className="flex items-center gap-1" style={{ color: 'var(--major)' }}>
+                          <AlertCircle size={11} /> No file
+                        </span>
+                      )}
                     </span>
                     <div className="col-span-1 flex justify-end items-center gap-1.5">
-                      <button onClick={() => handleDownload(doc)} title="Download"
-                        className="p-1 rounded hover:opacity-70 transition-opacity"
-                        style={{ color: 'var(--text-muted)' }}>
-                        <Download size={14} />
-                      </button>
+                      {doc.storage_path ? (
+                        <button onClick={() => handleDownload(doc)} title="Download"
+                          className="p-1 rounded hover:opacity-70 transition-opacity"
+                          style={{ color: 'var(--text-muted)' }}>
+                          <Download size={14} />
+                        </button>
+                      ) : (
+                        <>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.xlsx,.docx"
+                            onChange={e => {
+                              const f = e.target.files?.[0]
+                              if (f && attachingDoc) handleQuickAttach(attachingDoc, f)
+                              e.target.value = ''
+                            }}
+                            ref={el => { if (attachingDoc?.id === doc.id) attachInputRef.current = el }}
+                          />
+                          <button
+                            onClick={() => {
+                              setAttachingDoc(doc)
+                              setTimeout(() => attachInputRef.current?.click(), 50)
+                            }}
+                            title="Attach file"
+                            disabled={attachingId === doc.id}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-opacity hover:opacity-80 disabled:opacity-50"
+                            style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}>
+                            {attachingId === doc.id ? '…' : <><Paperclip size={11} /> Attach</>}
+                          </button>
+                        </>
+                      )}
                       {hasHistory && (
                         <button
                           onClick={() => setExpandedRevs(prev => {
