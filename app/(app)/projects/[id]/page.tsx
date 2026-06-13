@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -197,6 +197,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
           <FileText size={13} /> Documents
         </Link>
+        {role !== 'client' && (
+          <Link href={`/projects/${id}/technical`}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border hover:opacity-80"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+            <BookOpen size={13} /> Technical
+          </Link>
+        )}
         <Link href={`/projects/${id}/edit`}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border hover:opacity-80"
           style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
@@ -284,6 +291,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Decision Log</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Full audit trail of all findings, decisions and actions</p>
         </Link>
+        {role !== 'client' && (
+          <Link href={`/projects/${id}/technical`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'rgba(108,114,245,0.3)', minHeight: 100 }}>
+            <BookOpen size={20} style={{ color: 'var(--accent)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Technical Information</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Manuals, studies &amp; received docs — AI compliance cross-check</p>
+          </Link>
+        )}
       </div>
 
       {/* Client comments — visible to admin/PM/engineer, hidden from operative */}
