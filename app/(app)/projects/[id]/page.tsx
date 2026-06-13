@@ -38,11 +38,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .single()
     if (!assignment) notFound()
 
-    const [{ data: docs }, { data: tests }, { data: comments }, { data: clientStageRows }] = await Promise.all([
+    const [{ data: docs }, { data: tests }, { data: comments }, { data: clientStageRows }, { data: notifications }] = await Promise.all([
       supabase.from('documents')
-        .select('id, doc_no, title, rev, type, storage_path, file_name, client_review_note')
+        .select('id, doc_no, title, rev, type, storage_path, file_name, client_review_note, doc_status')
         .eq('project_id', id)
-        .eq('for_client_review', true)
+        .eq('doc_status', 'Ready for Client Review')
         .order('doc_no'),
       supabase.from('test_register')
         .select('id, test_ref, title, category, test_type, planned_date, actual_date, location, status, result_summary, witnessed_by, certificate_ref, itp_ref')
@@ -57,21 +57,43 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       supabase.from('project_stages')
         .select('stage, status')
         .eq('project_id', id),
+      // Unread notifications for this client on this project
+      supabase.from('notifications')
+        .select('id, document_id, title, body, created_at, read_at')
+        .eq('user_id', user.id)
+        .eq('project_id', id)
+        .order('created_at', { ascending: false })
+        .limit(20),
     ])
 
-    // Pass all stage statuses so client view can show complete (green tick) + active (coloured)
+    const docIds = (docs ?? []).map((d: any) => d.id as string)
+    const { data: docComments } = docIds.length > 0
+      ? await supabase.from('document_comments').select('document_id, status').in('document_id', docIds).eq('status', 'open')
+      : { data: [] }
+
     const clientStageStatuses: Record<string, string> = {}
     for (const s of clientStageRows ?? []) {
       clientStageStatuses[(s as any).stage] = (s as any).status
     }
 
+    // Open comment count per document
+    const openCommentsByDoc: Record<string, number> = {}
+    for (const c of docComments ?? []) {
+      openCommentsByDoc[(c as any).document_id] = (openCommentsByDoc[(c as any).document_id] ?? 0) + 1
+    }
+    const enrichedDocs = (docs ?? []).map((d: any) => ({
+      ...d,
+      open_comment_count: openCommentsByDoc[d.id] ?? 0,
+    }))
+
     return (
       <ClientProjectView
         project={{ id, name: project.name, client: project.client, location: project.location, stage: project.stage, capacity_mw: project.capacity_mw }}
         stageStatuses={clientStageStatuses}
-        documents={docs ?? []}
+        documents={enrichedDocs}
         tests={(tests ?? []) as any}
         comments={comments ?? []}
+        notifications={(notifications ?? []) as any}
         userId={user.id}
       />
     )
