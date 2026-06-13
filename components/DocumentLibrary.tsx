@@ -277,161 +277,237 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
         </form>
       )}
 
-      {/* Document table */}
-      <div className="rounded-xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        {latestDocs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <FileText size={36} style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No documents uploaded yet</p>
+      {/* Status summary bar */}
+      {latestDocs.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {STATUSES.map(s => {
+            const count = latestDocs.filter(d => (((d as any).doc_status) ?? 'WIP') === s).length
+            const cfg = STATUS_CFG[s]
+            return (
+              <span key={s} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
+                style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                {s} <span className="font-bold">{count}</span>
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Status-grouped document sections */}
+      {latestDocs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 rounded-xl border"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+          <FileText size={36} style={{ color: 'var(--text-muted)' }} />
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No documents uploaded yet</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {STATUSES.map(status => {
+            const sectionDocs = latestDocs.filter(d => (((d as any).doc_status) ?? 'WIP') === status)
+            if (sectionDocs.length === 0) return null
+            const cfg = STATUS_CFG[status]
+            return (
+              <StatusSection
+                key={status}
+                status={status}
+                cfg={cfg}
+                docs={sectionDocs}
+                byDocNo={byDocNo}
+                expandedDetail={expandedDetail}
+                setExpandedDetail={setExpandedDetail}
+                canEdit={canEdit}
+                statusChanging={statusChanging}
+                statusError={statusError}
+                attachingId={attachingId}
+                attachingDoc={attachingDoc}
+                attachInputRef={attachInputRef}
+                userRole={userRole}
+                onStatusChange={handleStatusChange}
+                onDownload={handleDownload}
+                onToggleClientReview={toggleClientReview}
+                onAttachDoc={(doc) => { setAttachingDoc(doc); setTimeout(() => attachInputRef.current?.click(), 50) }}
+                onAttachFile={(f) => { if (f && attachingDoc) handleQuickAttach(attachingDoc, f) }}
+              />
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface SectionProps {
+  status: DocStatus
+  cfg: { color: string; bg: string; border: string }
+  docs: Document[]
+  byDocNo: Record<string, Document[]>
+  expandedDetail: Set<string>
+  setExpandedDetail: React.Dispatch<React.SetStateAction<Set<string>>>
+  canEdit: boolean
+  statusChanging: string | null
+  statusError: Record<string, string>
+  attachingId: string | null
+  attachingDoc: Document | null
+  attachInputRef: React.MutableRefObject<HTMLInputElement | null>
+  userRole: string
+  onStatusChange: (id: string, s: DocStatus) => void
+  onDownload: (doc: Document) => void
+  onToggleClientReview: (doc: Document) => void
+  onAttachDoc: (doc: Document) => void
+  onAttachFile: (f: File | undefined) => void
+}
+
+function StatusSection({ status, cfg, docs, byDocNo, expandedDetail, setExpandedDetail, canEdit, statusChanging, statusError, attachingId, attachingDoc, attachInputRef, userRole, onStatusChange, onDownload, onToggleClientReview, onAttachDoc, onAttachFile }: SectionProps) {
+  const [open, setOpen] = useState(true)
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: cfg.border }}>
+      {/* Section header */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3"
+        style={{ background: cfg.bg }}>
+        <div className="flex items-center gap-2">
+          {open ? <ChevronUp size={14} style={{ color: cfg.color }} /> : <ChevronDown size={14} style={{ color: cfg.color }} />}
+          <span className="text-sm font-semibold" style={{ color: cfg.color }}>{status}</span>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+            style={{ background: `color-mix(in srgb, ${cfg.color} 20%, transparent)`, color: cfg.color }}>
+            {docs.length}
+          </span>
+        </div>
+      </button>
+
+      {open && (
+        <>
+          {/* Column headers */}
+          <div className="grid grid-cols-12 px-5 py-2 text-xs font-medium border-b"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+            <span className="col-span-2">Doc No.</span>
+            <span className="col-span-4">Title</span>
+            <span className="col-span-1">Rev</span>
+            <span className="col-span-1">Type</span>
+            <span className="col-span-2">Move to</span>
+            <span className="col-span-1">Size</span>
+            <span className="col-span-1 text-right">Actions</span>
           </div>
-        ) : (
-          <>
-            {/* Header */}
-            <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-medium border-b"
-              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-              <span className="col-span-2">Doc No.</span>
-              <span className="col-span-3">Title</span>
-              <span className="col-span-1">Rev</span>
-              <span className="col-span-1">Type</span>
-              <span className="col-span-3">Status</span>
-              <span className="col-span-1">Size</span>
-              <span className="col-span-1 text-right">Actions</span>
-            </div>
 
-            {latestDocs.map(doc => {
-              const revs = byDocNo[doc.doc_no] ?? []
-              const detailOpen = expandedDetail.has(doc.doc_no)
-              const docStatus = ((doc as any).doc_status ?? 'WIP') as DocStatus
-              const cfg = STATUS_CFG[docStatus] ?? STATUS_CFG['WIP']
-              const errMsg = statusError[doc.id]
+          {docs.map(doc => {
+            const revs = byDocNo[doc.doc_no] ?? []
+            const detailOpen = expandedDetail.has(doc.doc_no)
+            const errMsg = statusError[doc.id]
 
-              return (
-                <div key={doc.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--border)' }}>
-                  {/* Main row */}
-                  <div className="grid grid-cols-12 px-5 py-3 items-center">
-                    <span className="col-span-2 text-sm font-mono font-medium" style={{ color: 'var(--accent)' }}>
-                      {doc.doc_no}
-                    </span>
-                    <span className="col-span-3 text-sm truncate pr-2" style={{ color: 'var(--text-primary)' }}>{doc.title}</span>
-                    <span className="col-span-1 text-xs font-mono px-1.5 py-0.5 rounded w-fit"
-                      style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
-                      {doc.rev}
-                    </span>
-                    <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>{doc.type}</span>
+            return (
+              <div key={doc.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--border)' }}>
+                <div className="grid grid-cols-12 px-5 py-3 items-center" style={{ background: 'var(--bg-surface)' }}>
+                  <span className="col-span-2 text-sm font-mono font-medium" style={{ color: 'var(--accent)' }}>
+                    {doc.doc_no}
+                  </span>
+                  <span className="col-span-4 text-sm truncate pr-2" style={{ color: 'var(--text-primary)' }}>{doc.title}</span>
+                  <span className="col-span-1 text-xs font-mono px-1.5 py-0.5 rounded w-fit"
+                    style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+                    {doc.rev}
+                  </span>
+                  <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>{doc.type}</span>
 
-                    {/* Status cell */}
-                    <div className="col-span-3 flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
-                        style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-                        {docStatus}
-                      </span>
-                      {canEdit && doc.storage_path && (
-                        <div className="relative">
-                          <select
-                            value=""
-                            disabled={statusChanging === doc.id}
-                            onChange={e => {
-                              if (e.target.value) handleStatusChange(doc.id, e.target.value as DocStatus)
-                              e.target.value = ''
-                            }}
-                            className="text-[10px] rounded border px-1.5 py-0.5 outline-none cursor-pointer disabled:opacity-50"
-                            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-                            title="Change status">
-                            <option value="">Move to…</option>
-                            {STATUSES.filter(s => s !== docStatus).map(s => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Size */}
-                    <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {doc.storage_path ? (
-                        <span className="flex flex-col gap-0.5">
-                          <span>{formatBytes(doc.file_size)}</span>
-                          {(doc as any).mime_type && (doc as any).mime_type !== 'application/pdf' && (
-                            <span className="flex items-center gap-1 text-[10px]" style={{ color: '#fb923c' }}
-                              title="Non-PDF — AI review unavailable">
-                              <AlertCircle size={10} /> Not PDF
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1" style={{ color: 'var(--major)' }}>
-                          <AlertCircle size={11} /> No file
-                        </span>
-                      )}
-                    </span>
-
-                    {/* Actions */}
-                    <div className="col-span-1 flex justify-end items-center gap-1">
-                      {doc.storage_path ? (
-                        <button onClick={() => handleDownload(doc)} title="Download"
-                          className="p-1 rounded hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
-                          <Download size={14} />
-                        </button>
-                      ) : canEdit ? (
-                        <>
-                          <input type="file" className="hidden"
-                            accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.xlsx,.docx"
-                            onChange={e => { const f = e.target.files?.[0]; if (f && attachingDoc) handleQuickAttach(attachingDoc, f); e.target.value = '' }}
-                            ref={el => { if (attachingDoc?.id === doc.id) attachInputRef.current = el }} />
-                          <button onClick={() => { setAttachingDoc(doc); setTimeout(() => attachInputRef.current?.click(), 50) }}
-                            title="Attach file" disabled={attachingId === doc.id}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border hover:opacity-80 disabled:opacity-50"
-                            style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}>
-                            {attachingId === doc.id ? '…' : <><Paperclip size={11} /> Attach</>}
-                          </button>
-                        </>
-                      ) : null}
-                      {canEdit && doc.storage_path && (
-                        <button onClick={() => toggleClientReview(doc)}
-                          title={(doc as any).for_client_review ? 'Remove from client review' : 'Share with client'}
-                          className="p-1 rounded hover:opacity-70"
-                          style={{ color: (doc as any).for_client_review ? '#4ade80' : 'var(--text-muted)' }}>
-                          {(doc as any).for_client_review ? <Eye size={14} /> : <EyeOff size={14} />}
-                        </button>
-                      )}
-                      {/* Expand detail panel */}
-                      <button
-                        onClick={() => setExpandedDetail(prev => {
-                          const next = new Set(prev)
-                          next.has(doc.doc_no) ? next.delete(doc.doc_no) : next.add(doc.doc_no)
-                          return next
-                        })}
-                        title={detailOpen ? 'Collapse' : 'View history & comments'}
-                        className="p-1 rounded hover:opacity-70"
-                        style={{ color: detailOpen ? 'var(--accent)' : 'var(--text-muted)' }}>
-                        {detailOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                    </div>
+                  {/* Move to dropdown */}
+                  <div className="col-span-2">
+                    {canEdit && doc.storage_path ? (
+                      <select
+                        value=""
+                        disabled={statusChanging === doc.id}
+                        onChange={e => { if (e.target.value) onStatusChange(doc.id, e.target.value as DocStatus); e.target.value = '' }}
+                        className="text-[10px] rounded border px-1.5 py-0.5 outline-none cursor-pointer disabled:opacity-50 w-full"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                        <option value="">Move to…</option>
+                        {STATUSES.filter(s => s !== status).map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    ) : <span />}
                   </div>
 
-                  {/* Status change error */}
-                  {errMsg && (
-                    <div className="mx-5 mb-2 text-xs px-3 py-1.5 rounded-lg" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
-                      {errMsg}
-                    </div>
-                  )}
+                  {/* Size / no-file warning */}
+                  <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {doc.storage_path ? (
+                      <span className="flex flex-col gap-0.5">
+                        <span>{formatBytes(doc.file_size)}</span>
+                        {(doc as any).mime_type && (doc as any).mime_type !== 'application/pdf' && (
+                          <span className="flex items-center gap-1 text-[10px]" style={{ color: '#fb923c' }}
+                            title="Non-PDF — AI review unavailable">
+                            <AlertCircle size={10} /> Not PDF
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1" style={{ color: 'var(--major)' }}>
+                        <AlertCircle size={11} /> No file
+                      </span>
+                    )}
+                  </span>
 
-                  {/* Detail panel */}
-                  {detailOpen && (
-                    <DocumentDetailPanel
-                      documentId={doc.id}
-                      allRevisions={revs as any}
-                      canEdit={canEdit}
-                      userRole={userRole}
-                      onDownload={handleDownload as any}
-                    />
-                  )}
+                  {/* Actions */}
+                  <div className="col-span-1 flex justify-end items-center gap-1">
+                    {doc.storage_path ? (
+                      <button onClick={() => onDownload(doc)} title="Download"
+                        className="p-1 rounded hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
+                        <Download size={14} />
+                      </button>
+                    ) : canEdit ? (
+                      <>
+                        <input type="file" className="hidden"
+                          accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.xlsx,.docx"
+                          onChange={e => { onAttachFile(e.target.files?.[0]); e.target.value = '' }}
+                          ref={el => { if (attachingDoc?.id === doc.id) attachInputRef.current = el }} />
+                        <button onClick={() => onAttachDoc(doc)}
+                          title="Attach file" disabled={attachingId === doc.id}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border hover:opacity-80 disabled:opacity-50"
+                          style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}>
+                          {attachingId === doc.id ? '…' : <><Paperclip size={11} /> Attach</>}
+                        </button>
+                      </>
+                    ) : null}
+                    {canEdit && doc.storage_path && (
+                      <button onClick={() => onToggleClientReview(doc)}
+                        title={(doc as any).for_client_review ? 'Remove from client review' : 'Share with client'}
+                        className="p-1 rounded hover:opacity-70"
+                        style={{ color: (doc as any).for_client_review ? '#4ade80' : 'var(--text-muted)' }}>
+                        {(doc as any).for_client_review ? <Eye size={14} /> : <EyeOff size={14} />}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setExpandedDetail(prev => {
+                        const next = new Set(prev)
+                        next.has(doc.doc_no) ? next.delete(doc.doc_no) : next.add(doc.doc_no)
+                        return next
+                      })}
+                      title={detailOpen ? 'Collapse' : 'View history & comments'}
+                      className="p-1 rounded hover:opacity-70"
+                      style={{ color: detailOpen ? 'var(--accent)' : 'var(--text-muted)' }}>
+                      {detailOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                  </div>
                 </div>
-              )
-            })}
-          </>
-        )}
-      </div>
+
+                {errMsg && (
+                  <div className="mx-5 mb-2 text-xs px-3 py-1.5 rounded-lg" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
+                    {errMsg}
+                  </div>
+                )}
+
+                {detailOpen && (
+                  <DocumentDetailPanel
+                    documentId={doc.id}
+                    allRevisions={revs as any}
+                    canEdit={canEdit}
+                    userRole={userRole}
+                    onDownload={onDownload as any}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </>
+      )}
     </div>
   )
 }
