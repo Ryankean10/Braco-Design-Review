@@ -1,14 +1,25 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, Download, FileText, ChevronUp, History, FileSpreadsheet, Paperclip, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { Upload, Download, FileText, ChevronUp, ChevronDown, FileSpreadsheet, Paperclip, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import DocumentImport from '@/components/DocumentImport'
 import DocumentBulkAttach from '@/components/DocumentBulkAttach'
+import DocumentDetailPanel from '@/components/DocumentDetailPanel'
 import type { Document, DocType, Stage } from '@/lib/types'
 
 const DOC_TYPES: DocType[] = ['Drawing', 'Specification', 'Report', 'Schedule', 'Certificate', 'Other']
 const STAGES: Stage[] = ['Feasibility', 'Design', 'Procure', 'Build & Install', 'Test & Commission', 'Energise & Handover']
+
+const STATUSES = ['WIP', 'Internal Review', 'Ready for Client Review', 'Approved for Construction'] as const
+type DocStatus = typeof STATUSES[number]
+
+const STATUS_CFG: Record<DocStatus, { color: string; bg: string; border: string }> = {
+  'WIP':                        { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)',  border: 'rgba(148,163,184,0.3)' },
+  'Internal Review':            { color: '#fb923c', bg: 'rgba(251,146,60,0.1)',   border: 'rgba(251,146,60,0.3)' },
+  'Ready for Client Review':    { color: '#60a5fa', bg: 'rgba(96,165,250,0.1)',   border: 'rgba(96,165,250,0.3)' },
+  'Approved for Construction':  { color: '#34d399', bg: 'rgba(52,211,153,0.1)',   border: 'rgba(52,211,153,0.3)' },
+}
 
 function formatBytes(bytes: number | null) {
   if (!bytes) return '—'
@@ -31,10 +42,13 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
   const [showBulkAttach, setShowBulkAttach] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
-  const [expandedRevs, setExpandedRevs] = useState<Set<string>>(new Set())
+  const [expandedDetail, setExpandedDetail] = useState<Set<string>>(new Set())
   const [attachingId, setAttachingId] = useState<string | null>(null)
   const attachInputRef = useRef<HTMLInputElement | null>(null)
   const [attachingDoc, setAttachingDoc] = useState<Document | null>(null)
+  const [statusChanging, setStatusChanging] = useState<string | null>(null)
+  const [statusNote, setStatusNote] = useState('')
+  const [statusError, setStatusError] = useState<Record<string, string>>({})
 
   // Upload form state
   const [file, setFile] = useState<File | null>(null)
@@ -54,45 +68,29 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault()
     if (!file) return
-    setUploading(true)
-    setUploadError('')
+    setUploading(true); setUploadError('')
 
     const supabase = createClient()
     const ext = file.name.split('.').pop()
     const storagePath = `${projectId}/${Date.now()}-${docNo.replace(/\s+/g, '_')}-${rev}.${ext}`
 
     const { error: storageErr } = await supabase.storage
-      .from('documents')
-      .upload(storagePath, file, { upsert: false })
-
+      .from('documents').upload(storagePath, file, { upsert: false })
     if (storageErr) { setUploadError(storageErr.message); setUploading(false); return }
 
     const payload: Partial<Document> = {
       project_id: projectId,
-      doc_no: docNo.trim(),
-      title: title.trim(),
-      rev: rev.trim(),
-      type: docType,
-      stage,
-      storage_path: storagePath,
-      file_name: file.name,
-      file_size: file.size,
-      mime_type: file.type,
+      doc_no: docNo.trim(), title: title.trim(), rev: rev.trim(),
+      type: docType, stage, storage_path: storagePath,
+      file_name: file.name, file_size: file.size, mime_type: file.type,
       supersedes: supersedes || null,
     }
 
-    const { data, error: dbErr } = await supabase
-      .from('documents')
-      .insert(payload)
-      .select()
-      .single()
-
+    const { data, error: dbErr } = await supabase.from('documents').insert(payload).select().single()
     if (dbErr) { setUploadError(dbErr.message); setUploading(false); return }
 
     setDocuments(prev => [data, ...prev])
-    setShowUpload(false)
-    resetForm()
-    setUploading(false)
+    setShowUpload(false); resetForm(); setUploading(false)
   }
 
   async function handleQuickAttach(doc: Document, file: File) {
@@ -101,33 +99,44 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
     const ext = file.name.split('.').pop()
     const storagePath = `${projectId}/${Date.now()}-${doc.doc_no.replace(/\s+/g, '_')}-${doc.rev}.${ext}`
 
-    const { error: storageErr } = await supabase.storage
-      .from('documents')
-      .upload(storagePath, file, { upsert: false })
-
+    const { error: storageErr } = await supabase.storage.from('documents').upload(storagePath, file, { upsert: false })
     if (!storageErr) {
       await supabase.from('documents').update({
-        storage_path: storagePath,
-        file_name: file.name,
-        file_size: file.size,
-        mime_type: file.type,
+        storage_path: storagePath, file_name: file.name,
+        file_size: file.size, mime_type: file.type,
       }).eq('id', doc.id)
-
       setDocuments(prev => prev.map(d => d.id === doc.id
-        ? { ...d, storage_path: storagePath, file_name: file.name, file_size: file.size, mime_type: file.type }
-        : d
-      ))
+        ? { ...d, storage_path: storagePath, file_name: file.name, file_size: file.size, mime_type: file.type } : d))
     }
-    setAttachingId(null)
-    setAttachingDoc(null)
+    setAttachingId(null); setAttachingDoc(null)
   }
 
   async function handleDownload(doc: Document) {
     const supabase = createClient()
-    const { data } = await supabase.storage
-      .from('documents')
-      .createSignedUrl(doc.storage_path, 60)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    const { data } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 60)
+    if (data?.signedUrl) {
+      window.open(data.signedUrl, '_blank')
+      // Log the view (fire-and-forget)
+      fetch(`/api/documents/${doc.id}/view`, { method: 'POST' }).catch(() => {})
+    }
+  }
+
+  async function handleStatusChange(docId: string, newStatus: DocStatus) {
+    setStatusChanging(docId)
+    setStatusError(prev => ({ ...prev, [docId]: '' }))
+    const res = await fetch(`/api/documents/${docId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus, note: statusNote.trim() || undefined }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setStatusError(prev => ({ ...prev, [docId]: data.error }))
+    } else {
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, doc_status: newStatus } as any : d))
+      setStatusNote('')
+    }
+    setStatusChanging(null)
   }
 
   async function toggleClientReview(doc: Document) {
@@ -139,20 +148,16 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
 
   const canEdit = ['admin', 'engineer'].includes(userRole)
 
-  // Group by doc_no for revision history display
+  // Group by doc_no (latest revision first per group)
   const byDocNo = documents.reduce<Record<string, Document[]>>((acc, doc) => {
     if (!acc[doc.doc_no]) acc[doc.doc_no] = []
     acc[doc.doc_no].push(doc)
     return acc
   }, {})
-
-  // Latest revision per doc_no
   const latestDocs = Object.values(byDocNo).map(revs => revs[0])
 
   const fieldStyle = {
-    background: 'var(--bg-elevated)',
-    border: '1px solid var(--border)',
-    color: 'var(--text-primary)',
+    background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)',
   }
 
   return (
@@ -162,79 +167,53 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           {latestDocs.length} document{latestDocs.length !== 1 ? 's' : ''}
         </p>
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setShowBulkAttach(!showBulkAttach); setShowImport(false); setShowUpload(false) }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
-            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
-          >
-            <Paperclip size={14} />
-            Attach files
-          </button>
-          <button
-            onClick={() => { setShowImport(!showImport); setShowBulkAttach(false); setShowUpload(false) }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
-            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
-          >
-            <FileSpreadsheet size={14} />
-            Import CSV
-          </button>
-          <button
-            onClick={() => { setShowUpload(!showUpload); setShowImport(false); resetForm() }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
-            style={{ background: 'var(--accent)' }}
-          >
-            <Upload size={14} />
-            Upload document
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            <button onClick={() => { setShowBulkAttach(!showBulkAttach); setShowImport(false); setShowUpload(false) }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
+              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+              <Paperclip size={14} /> Attach files
+            </button>
+            <button onClick={() => { setShowImport(!showImport); setShowBulkAttach(false); setShowUpload(false) }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
+              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+              <FileSpreadsheet size={14} /> Import CSV
+            </button>
+            <button onClick={() => { setShowUpload(!showUpload); setShowImport(false); resetForm() }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              style={{ background: 'var(--accent)' }}>
+              <Upload size={14} /> Upload document
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Bulk attach */}
       {showBulkAttach && (
-        <DocumentBulkAttach
-          projectId={projectId}
-          documents={documents}
+        <DocumentBulkAttach projectId={projectId} documents={documents}
           onDone={() => { setShowBulkAttach(false); window.location.reload() }}
-          onClose={() => setShowBulkAttach(false)}
-        />
+          onClose={() => setShowBulkAttach(false)} />
       )}
 
       {/* CSV Import */}
       {showImport && (
-        <DocumentImport
-          projectId={projectId}
-          onImported={(count) => {
-            setShowImport(false)
-            // Reload page to show imported docs
-            window.location.reload()
-          }}
-          onClose={() => setShowImport(false)}
-        />
+        <DocumentImport projectId={projectId}
+          onImported={() => { setShowImport(false); window.location.reload() }}
+          onClose={() => setShowImport(false)} />
       )}
 
       {/* Upload form */}
       {showUpload && (
-        <form
-          onSubmit={handleUpload}
-          className="rounded-xl border p-5 space-y-4"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-        >
+        <form onSubmit={handleUpload} className="rounded-xl border p-5 space-y-4"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Upload document</h3>
-
-          {/* File picker */}
           <div>
             <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>File *</label>
-            <input
-              type="file"
-              required
-              accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.xlsx,.docx"
+            <input type="file" required accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.xlsx,.docx"
               onChange={e => setFile(e.target.files?.[0] ?? null)}
               className="w-full text-sm rounded-lg px-3 py-2 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:text-white"
-              style={{ ...fieldStyle, fileBackground: 'var(--accent)' } as React.CSSProperties}
-            />
+              style={fieldStyle} />
           </div>
-
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Doc number *</label>
@@ -249,13 +228,11 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
                 placeholder="e.g. Single Line Diagram" />
             </div>
           </div>
-
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Revision *</label>
               <input value={rev} onChange={e => setRev(e.target.value)} required
-                className="w-full rounded-lg px-3 py-2 text-sm outline-none" style={fieldStyle}
-                placeholder="e.g. P01" />
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none" style={fieldStyle} placeholder="e.g. P01" />
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Type *</label>
@@ -272,8 +249,6 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
               </select>
             </div>
           </div>
-
-          {/* Supersedes (for new revisions) */}
           {documents.length > 0 && (
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
@@ -288,24 +263,16 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
               </select>
             </div>
           )}
-
           {uploadError && (
-            <p className="text-sm rounded-lg px-3 py-2" style={{ background: '#3f1212', color: '#f87171' }}>
-              {uploadError}
-            </p>
+            <p className="text-sm rounded-lg px-3 py-2" style={{ background: '#3f1212', color: '#f87171' }}>{uploadError}</p>
           )}
-
           <div className="flex justify-end gap-3">
             <button type="button" onClick={() => { setShowUpload(false); resetForm() }}
               className="text-sm px-4 py-2 rounded-lg border"
-              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-              Cancel
-            </button>
+              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>Cancel</button>
             <button type="submit" disabled={uploading}
               className="text-sm px-4 py-2 rounded-lg font-medium text-white disabled:opacity-60"
-              style={{ background: 'var(--accent)' }}>
-              {uploading ? 'Uploading…' : 'Upload'}
-            </button>
+              style={{ background: 'var(--accent)' }}>{uploading ? 'Uploading…' : 'Upload'}</button>
           </div>
         </form>
       )}
@@ -323,41 +290,70 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
             <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-medium border-b"
               style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
               <span className="col-span-2">Doc No.</span>
-              <span className="col-span-4">Title</span>
+              <span className="col-span-3">Title</span>
               <span className="col-span-1">Rev</span>
               <span className="col-span-1">Type</span>
-              <span className="col-span-2">Stage</span>
+              <span className="col-span-3">Status</span>
               <span className="col-span-1">Size</span>
               <span className="col-span-1 text-right">Actions</span>
             </div>
 
             {latestDocs.map(doc => {
               const revs = byDocNo[doc.doc_no] ?? []
-              const hasHistory = revs.length > 1
-              const expanded = expandedRevs.has(doc.doc_no)
+              const detailOpen = expandedDetail.has(doc.doc_no)
+              const docStatus = ((doc as any).doc_status ?? 'WIP') as DocStatus
+              const cfg = STATUS_CFG[docStatus] ?? STATUS_CFG['WIP']
+              const errMsg = statusError[doc.id]
 
               return (
                 <div key={doc.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--border)' }}>
-                  {/* Latest revision row */}
+                  {/* Main row */}
                   <div className="grid grid-cols-12 px-5 py-3 items-center">
                     <span className="col-span-2 text-sm font-mono font-medium" style={{ color: 'var(--accent)' }}>
                       {doc.doc_no}
                     </span>
-                    <span className="col-span-4 text-sm" style={{ color: 'var(--text-primary)' }}>{doc.title}</span>
+                    <span className="col-span-3 text-sm truncate pr-2" style={{ color: 'var(--text-primary)' }}>{doc.title}</span>
                     <span className="col-span-1 text-xs font-mono px-1.5 py-0.5 rounded w-fit"
                       style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
                       {doc.rev}
                     </span>
                     <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>{doc.type}</span>
-                    <span className="col-span-2">
-                      <span className="chip-stage text-xs px-2 py-0.5 rounded-full">{doc.stage}</span>
-                    </span>
+
+                    {/* Status cell */}
+                    <div className="col-span-3 flex items-center gap-2">
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+                        style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                        {docStatus}
+                      </span>
+                      {canEdit && doc.storage_path && (
+                        <div className="relative">
+                          <select
+                            value=""
+                            disabled={statusChanging === doc.id}
+                            onChange={e => {
+                              if (e.target.value) handleStatusChange(doc.id, e.target.value as DocStatus)
+                              e.target.value = ''
+                            }}
+                            className="text-[10px] rounded border px-1.5 py-0.5 outline-none cursor-pointer disabled:opacity-50"
+                            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+                            title="Change status">
+                            <option value="">Move to…</option>
+                            {STATUSES.filter(s => s !== docStatus).map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Size */}
                     <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                       {doc.storage_path ? (
                         <span className="flex flex-col gap-0.5">
                           <span>{formatBytes(doc.file_size)}</span>
-                          {doc.mime_type && doc.mime_type !== 'application/pdf' && (
-                            <span className="flex items-center gap-1 text-[10px]" style={{ color: '#fb923c' }} title="Non-PDF files cannot be used in AI design reviews — replace with a searchable PDF export">
+                          {(doc as any).mime_type && (doc as any).mime_type !== 'application/pdf' && (
+                            <span className="flex items-center gap-1 text-[10px]" style={{ color: '#fb923c' }}
+                              title="Non-PDF — AI review unavailable">
                               <AlertCircle size={10} /> Not PDF
                             </span>
                           )}
@@ -368,84 +364,68 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
                         </span>
                       )}
                     </span>
-                    <div className="col-span-1 flex justify-end items-center gap-1.5">
+
+                    {/* Actions */}
+                    <div className="col-span-1 flex justify-end items-center gap-1">
                       {doc.storage_path ? (
                         <button onClick={() => handleDownload(doc)} title="Download"
-                          className="p-1 rounded hover:opacity-70 transition-opacity"
-                          style={{ color: 'var(--text-muted)' }}>
+                          className="p-1 rounded hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
                           <Download size={14} />
                         </button>
-                      ) : (
+                      ) : canEdit ? (
                         <>
-                          <input
-                            type="file"
-                            className="hidden"
+                          <input type="file" className="hidden"
                             accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.xlsx,.docx"
-                            onChange={e => {
-                              const f = e.target.files?.[0]
-                              if (f && attachingDoc) handleQuickAttach(attachingDoc, f)
-                              e.target.value = ''
-                            }}
-                            ref={el => { if (attachingDoc?.id === doc.id) attachInputRef.current = el }}
-                          />
-                          <button
-                            onClick={() => {
-                              setAttachingDoc(doc)
-                              setTimeout(() => attachInputRef.current?.click(), 50)
-                            }}
-                            title="Attach file"
-                            disabled={attachingId === doc.id}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-opacity hover:opacity-80 disabled:opacity-50"
+                            onChange={e => { const f = e.target.files?.[0]; if (f && attachingDoc) handleQuickAttach(attachingDoc, f); e.target.value = '' }}
+                            ref={el => { if (attachingDoc?.id === doc.id) attachInputRef.current = el }} />
+                          <button onClick={() => { setAttachingDoc(doc); setTimeout(() => attachInputRef.current?.click(), 50) }}
+                            title="Attach file" disabled={attachingId === doc.id}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border hover:opacity-80 disabled:opacity-50"
                             style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}>
                             {attachingId === doc.id ? '…' : <><Paperclip size={11} /> Attach</>}
                           </button>
                         </>
-                      )}
+                      ) : null}
                       {canEdit && doc.storage_path && (
-                        <button
-                          onClick={() => toggleClientReview(doc)}
+                        <button onClick={() => toggleClientReview(doc)}
                           title={(doc as any).for_client_review ? 'Remove from client review' : 'Share with client'}
-                          className="p-1 rounded hover:opacity-70 transition-opacity"
+                          className="p-1 rounded hover:opacity-70"
                           style={{ color: (doc as any).for_client_review ? '#4ade80' : 'var(--text-muted)' }}>
                           {(doc as any).for_client_review ? <Eye size={14} /> : <EyeOff size={14} />}
                         </button>
                       )}
-                      {hasHistory && (
-                        <button
-                          onClick={() => setExpandedRevs(prev => {
-                            const next = new Set(prev)
-                            next.has(doc.doc_no) ? next.delete(doc.doc_no) : next.add(doc.doc_no)
-                            return next
-                          })}
-                          title="Revision history"
-                          className="p-1 rounded hover:opacity-70 transition-opacity"
-                          style={{ color: 'var(--text-muted)' }}>
-                          {expanded ? <ChevronUp size={14} /> : <History size={14} />}
-                        </button>
-                      )}
+                      {/* Expand detail panel */}
+                      <button
+                        onClick={() => setExpandedDetail(prev => {
+                          const next = new Set(prev)
+                          next.has(doc.doc_no) ? next.delete(doc.doc_no) : next.add(doc.doc_no)
+                          return next
+                        })}
+                        title={detailOpen ? 'Collapse' : 'View history & comments'}
+                        className="p-1 rounded hover:opacity-70"
+                        style={{ color: detailOpen ? 'var(--accent)' : 'var(--text-muted)' }}>
+                        {detailOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
                     </div>
                   </div>
 
-                  {/* Revision history */}
-                  {expanded && revs.slice(1).map(older => (
-                    <div key={older.id}
-                      className="grid grid-cols-12 px-5 py-2 items-center border-t"
-                      style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
-                      <span className="col-span-2 text-xs" style={{ color: 'var(--text-muted)' }}>↳ superseded</span>
-                      <span className="col-span-4 text-xs" style={{ color: 'var(--text-muted)' }}>{older.title}</span>
-                      <span className="col-span-1 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{older.rev}</span>
-                      <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>{older.type}</span>
-                      <span className="col-span-2 text-xs" style={{ color: 'var(--text-muted)' }}>{older.stage}</span>
-                      <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>{formatBytes(older.file_size)}</span>
-                      <div className="col-span-1 flex justify-end">
-                        <button onClick={() => handleDownload(older)} title="Download"
-                          className="p-1 rounded hover:opacity-70 transition-opacity"
-                          style={{ color: 'var(--text-muted)' }}>
-                          <Download size={14} />
-                        </button>
-                      </div>
+                  {/* Status change error */}
+                  {errMsg && (
+                    <div className="mx-5 mb-2 text-xs px-3 py-1.5 rounded-lg" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
+                      {errMsg}
                     </div>
-                  ))}
+                  )}
+
+                  {/* Detail panel */}
+                  {detailOpen && (
+                    <DocumentDetailPanel
+                      documentId={doc.id}
+                      allRevisions={revs as any}
+                      canEdit={canEdit}
+                      userRole={userRole}
+                      onDownload={handleDownload as any}
+                    />
+                  )}
                 </div>
               )
             })}
