@@ -21,7 +21,7 @@ export default async function TestRegisterPage({ params }: { params: Promise<{ i
 
   if (!project) notFound()
 
-  const canEdit = ['admin', 'project_manager', 'engineer'].includes(profile?.role ?? '')
+  const canEdit = ['admin', 'engineer'].includes(profile?.role ?? '')
 
   return (
     <TestRegisterClient

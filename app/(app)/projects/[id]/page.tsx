@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -38,11 +38,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .single()
     if (!assignment) notFound()
 
-    const [{ data: docs }, { data: tests }, { data: comments }, { data: clientStageRows }] = await Promise.all([
+    const [{ data: docs }, { data: tests }, { data: comments }, { data: clientStageRows }, { data: notifications }] = await Promise.all([
       supabase.from('documents')
-        .select('id, doc_no, title, rev, type, storage_path, file_name, client_review_note')
+        .select('id, doc_no, title, rev, type, storage_path, file_name, client_review_note, doc_status')
         .eq('project_id', id)
-        .eq('for_client_review', true)
+        .eq('doc_status', 'Ready for Client Review')
         .order('doc_no'),
       supabase.from('test_register')
         .select('id, test_ref, title, category, test_type, planned_date, actual_date, location, status, result_summary, witnessed_by, certificate_ref, itp_ref')
@@ -57,21 +57,43 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       supabase.from('project_stages')
         .select('stage, status')
         .eq('project_id', id),
+      // Unread notifications for this client on this project
+      supabase.from('notifications')
+        .select('id, document_id, title, body, created_at, read_at')
+        .eq('user_id', user.id)
+        .eq('project_id', id)
+        .order('created_at', { ascending: false })
+        .limit(20),
     ])
 
-    // Pass all stage statuses so client view can show complete (green tick) + active (coloured)
+    const docIds = (docs ?? []).map((d: any) => d.id as string)
+    const { data: docComments } = docIds.length > 0
+      ? await supabase.from('document_comments').select('document_id, status').in('document_id', docIds).eq('status', 'open')
+      : { data: [] }
+
     const clientStageStatuses: Record<string, string> = {}
     for (const s of clientStageRows ?? []) {
       clientStageStatuses[(s as any).stage] = (s as any).status
     }
 
+    // Open comment count per document
+    const openCommentsByDoc: Record<string, number> = {}
+    for (const c of docComments ?? []) {
+      openCommentsByDoc[(c as any).document_id] = (openCommentsByDoc[(c as any).document_id] ?? 0) + 1
+    }
+    const enrichedDocs = (docs ?? []).map((d: any) => ({
+      ...d,
+      open_comment_count: openCommentsByDoc[d.id] ?? 0,
+    }))
+
     return (
       <ClientProjectView
         project={{ id, name: project.name, client: project.client, location: project.location, stage: project.stage, capacity_mw: project.capacity_mw }}
         stageStatuses={clientStageStatuses}
-        documents={docs ?? []}
+        documents={enrichedDocs}
         tests={(tests ?? []) as any}
         comments={comments ?? []}
+        notifications={(notifications ?? []) as any}
         userId={user.id}
       />
     )
@@ -156,7 +178,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     projectStages.find((s: any) => s.stage === name)
   ).filter(Boolean) as any[]
 
-  const canEdit = ['admin', 'project_manager', 'engineer'].includes(role)
+  const canEdit = ['admin', 'engineer'].includes(role)
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -175,6 +197,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
           <FileText size={13} /> Documents
         </Link>
+        {role !== 'client' && (
+          <Link href={`/projects/${id}/technical`}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border hover:opacity-80"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+            <BookOpen size={13} /> Technical
+          </Link>
+        )}
         <Link href={`/projects/${id}/edit`}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border hover:opacity-80"
           style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
@@ -201,6 +230,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Document Library</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Upload and manage project documents</p>
         </Link>
+        {role !== 'client' && (
+          <Link href={`/projects/${id}/technical`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'rgba(108,114,245,0.3)', minHeight: 100 }}>
+            <BookOpen size={20} style={{ color: 'var(--accent)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Technical Information</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Manuals, studies &amp; received docs — AI compliance cross-check</p>
+          </Link>
+        )}
         <Link href={`/projects/${id}/procurement`}
           className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
@@ -234,12 +272,34 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </p>
           </Link>
         )}
-        {['AI Reviews', 'Findings', 'Clash Detection'].map(label => (
-          <div key={label} className="rounded-xl border p-5 flex items-center justify-center"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{label} — coming in M3/M5</p>
-          </div>
-        ))}
+        <Link href={`/projects/${id}/reviews`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+          <Sparkles size={20} style={{ color: 'var(--accent)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>AI Design Reviews</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>ER compliance, standards, constructability, procurement & clash</p>
+        </Link>
+        <Link href={`/projects/${id}/reviews`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+          <AlertTriangle size={20} style={{ color: '#fb923c' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Findings</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Review and sign off AI-raised findings</p>
+        </Link>
+        <Link href={`/projects/${id}/reviews#clash`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+          <Zap size={20} style={{ color: '#f472b6' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Clash Detection</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Physical & compliance clashes across all design documents</p>
+        </Link>
+        <Link href={`/projects/${id}/decision-log`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+          <BookMarked size={20} style={{ color: '#34d399' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Decision Log</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Full audit trail of all findings, decisions and actions</p>
+        </Link>
       </div>
 
       {/* Client comments — visible to admin/PM/engineer, hidden from operative */}
