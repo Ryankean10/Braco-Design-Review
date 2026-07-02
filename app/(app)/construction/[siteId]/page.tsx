@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, HardHat, BookOpen } from 'lucide-react'
+import { ArrowLeft, HardHat, BookOpen, BarChart2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import CableRegister from '@/components/construction/CableRegister'
 import SiteDashboard from '@/components/construction/SiteDashboard'
@@ -70,6 +70,11 @@ export default async function ConstructionSitePage({ params }: { params: Promise
             {site.client}{site.location ? ` · ${site.location}` : ''}{site.voltage_kv ? ` · ${site.voltage_kv}kV` : ''}
           </p>
         </div>
+        <Link href={`/construction/${siteId}/analytics`}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border hover:opacity-80"
+          style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+          <BarChart2 size={12} /> Analytics
+        </Link>
         {site.project_id && (
           <Link href={`/projects/${site.project_id}`}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border hover:opacity-80"
