@@ -56,18 +56,18 @@ export default async function ConstructionSitePage({ params }: { params: Promise
     .eq('status', 'Open')
     .order('created_at', { ascending: false })
 
-  // Fetch programmes (latest first)
-  const { data: programmes } = await supabase
-    .from('construction_programmes')
-    .select('*')
-    .eq('site_id', siteId)
-    .order('uploaded_at', { ascending: false })
-
   // Generate signed URLs using service role (bypasses storage RLS)
   const serviceSupabase = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
+
+  // Fetch programmes (latest first)
+  const { data: programmes } = await serviceSupabase
+    .from('construction_programmes')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('uploaded_at', { ascending: false })
   const signedUrls: Record<string, string> = {}
   for (const prog of programmes ?? []) {
     const { data } = await serviceSupabase.storage

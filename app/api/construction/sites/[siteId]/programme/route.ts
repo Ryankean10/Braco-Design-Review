@@ -80,5 +80,13 @@ export async function POST(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Fire-and-forget AI analysis — client polls for result
+  const baseUrl = request.nextUrl.origin
+  fetch(`${baseUrl}/api/construction/sites/${siteId}/programme/${data.id}/analyse`, {
+    method: 'POST',
+    headers: { cookie: request.headers.get('cookie') ?? '' }
+  }).catch(() => {})
+
   return NextResponse.json(data)
 }
