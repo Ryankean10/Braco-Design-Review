@@ -62,6 +62,8 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
   const [showAnalysis, setShowAnalysis] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [analysing, setAnalysing] = useState(false)
+  const [analysisFailed, setAnalysisFailed] = useState(false)
+  const [analysisStep, setAnalysisStep] = useState(0) // 0-3
   const [revision, setRevision] = useState('')
   const [programmeDate, setProgrammeDate] = useState('')
   const [notes, setNotes] = useState('')
@@ -74,24 +76,60 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
   const viewingProg = programmes.find(p => p.id === viewing)
   const viewingUrl = viewing ? urls[viewing] : null
 
+  const runAnalysis = useCallback(async (progId: string) => {
+    setAnalysisFailed(false)
+    setAnalysing(true)
+    setAnalysisStep(0)
+
+    // Trigger the analysis
+    const triggerRes = await fetch(`/api/construction/sites/${siteId}/programme/${progId}/analyse`, { method: 'POST' })
+    if (!triggerRes.ok) {
+      setAnalysing(false)
+      setAnalysisFailed(true)
+      return
+    }
+    const result = await triggerRes.json()
+    if (result.error) {
+      setAnalysing(false)
+      setAnalysisFailed(true)
+      return
+    }
+    // Analysis returned directly — update state
+    setProgrammes(prev => prev.map(p => p.id === progId ? { ...p, analysis: result } : p))
+    setAnalysing(false)
+    setAnalysisStep(4)
+  }, [siteId])
+
   // Poll for analysis if latest programme doesn't have one yet
   const pollAnalysis = useCallback(async (progId: string) => {
     setAnalysing(true)
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 3000))
+    setAnalysisFailed(false)
+    // Step through stages on a timer while waiting
+    const stepInterval = setInterval(() => {
+      setAnalysisStep(s => Math.min(s + 1, ANALYSIS_STEPS.length - 1))
+    }, 8000)
+
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 4000))
       const res = await fetch(`/api/construction/sites/${siteId}/programme`)
       if (res.ok) {
         const data: Programme[] = await res.json()
         const prog = data.find(p => p.id === progId)
         if (prog?.analysis) {
+          clearInterval(stepInterval)
           setProgrammes(data)
           setAnalysing(false)
+          setAnalysisStep(4)
           return
         }
       }
     }
+    clearInterval(stepInterval)
     setAnalysing(false)
-  }, [siteId])
+    setAnalysisFailed(true)
+  }, [siteId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ANALYSIS_STEPS = ['Extracting programme data', 'Comparing revisions', 'Identifying changes', 'Generating PVA report']
 
   // Start polling if latest has no analysis
   useEffect(() => {
@@ -137,8 +175,8 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
     setUploading(false)
     if (fileRef.current) fileRef.current.value = ''
 
-    // Poll for analysis result
-    pollAnalysis(newProg.id)
+    // Trigger analysis directly
+    runAnalysis(newProg.id)
   }
 
   const fmtDate = (s: string) => new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -291,27 +329,68 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
           )}
 
           {/* AI Analysis */}
-          {(analysis || analysing) && (
+          {(analysis || analysing || analysisFailed) && (
             <div className="border-b" style={{ borderColor: 'var(--border)' }}>
-              <button onClick={() => setShowAnalysis(a => !a)}
+              <button onClick={() => !analysing && setShowAnalysis(a => !a)}
                 className="w-full flex items-center gap-2 px-5 py-2.5 text-left"
-                style={{ background: 'var(--bg-elevated)' }}>
+                style={{ background: 'var(--bg-elevated)', cursor: analysing ? 'default' : 'pointer' }}>
                 {analysing
-                  ? <Loader2 size={13} className="animate-spin" style={{ color: 'var(--accent)' }}/>
-                  : (statusCfg ? <span style={{ color: statusCfg.color }}>{statusCfg.icon}</span> : <TrendingUp size={13} style={{ color: 'var(--accent)' }}/>)
+                  ? <TrendingUp size={13} style={{ color: 'var(--accent)' }}/>
+                  : analysisFailed
+                    ? <AlertTriangle size={13} style={{ color: '#f87171' }}/>
+                    : (statusCfg ? <span style={{ color: statusCfg.color }}>{statusCfg.icon}</span> : <TrendingUp size={13} style={{ color: 'var(--accent)' }}/>)
                 }
-                <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {analysing ? 'AI analysis running…' : 'Programme Analysis'}
+                <span className="text-xs font-semibold" style={{ color: analysisFailed ? '#f87171' : 'var(--text-primary)' }}>
+                  {analysing ? ANALYSIS_STEPS[Math.min(analysisStep, ANALYSIS_STEPS.length - 1)] : analysisFailed ? 'Analysis failed' : 'Programme Analysis'}
                 </span>
-                {analysis && (
+                {analysis && !analysing && (
                   <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>
                     · {new Date(analysis.analysed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </span>
                 )}
-                <span className="ml-auto" style={{ color: 'var(--text-muted)' }}>
-                  {showAnalysis ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
-                </span>
+                {analysisFailed && (
+                  <button onClick={e => { e.stopPropagation(); latest && runAnalysis(latest.id) }}
+                    className="ml-2 text-xs px-2 py-0.5 rounded"
+                    style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171' }}>
+                    Retry
+                  </button>
+                )}
+                {!analysing && !analysisFailed && (
+                  <span className="ml-auto" style={{ color: 'var(--text-muted)' }}>
+                    {showAnalysis ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
+                  </span>
+                )}
               </button>
+
+              {/* Progress bar */}
+              {analysing && (
+                <div className="px-5 py-3" style={{ background: 'var(--bg-surface)' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    {ANALYSIS_STEPS.map((step, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <div className="w-4 h-4 rounded-full flex items-center justify-center text-xs shrink-0"
+                          style={{
+                            background: i <= analysisStep ? 'var(--accent)' : 'var(--bg-elevated)',
+                            border: `1px solid ${i <= analysisStep ? 'var(--accent)' : 'var(--border)'}`,
+                            color: i <= analysisStep ? '#000' : 'var(--text-muted)',
+                            transition: 'all 0.4s ease'
+                          }}>
+                          {i < analysisStep ? '✓' : i === analysisStep ? <Loader2 size={8} className="animate-spin"/> : null}
+                        </div>
+                        <span className="text-xs hidden sm:block" style={{ color: i <= analysisStep ? 'var(--text-primary)' : 'var(--text-muted)', transition: 'color 0.4s' }}>
+                          {step}
+                        </span>
+                        {i < ANALYSIS_STEPS.length - 1 && (
+                          <div className="flex-1 h-px mx-2" style={{
+                            background: i < analysisStep ? 'var(--accent)' : 'var(--border)',
+                            minWidth: 16, transition: 'background 0.4s ease'
+                          }}/>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {showAnalysis && analysis && (
                 <div className="px-5 py-4 space-y-4" style={{ background: 'var(--bg-surface)' }}>
