@@ -4,6 +4,7 @@ import { ArrowLeft, HardHat, BookOpen } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import CableRegister from '@/components/construction/CableRegister'
 import SiteDashboard from '@/components/construction/SiteDashboard'
+import ProgressReport from '@/components/construction/ProgressReport'
 
 export default async function ConstructionSitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
@@ -30,13 +31,20 @@ export default async function ConstructionSitePage({ params }: { params: Promise
     .eq('site_id', siteId)
     .order('package_name').order('mvs').order('cable_ref')
 
-  // Fetch last 7 daily logs for dashboard
+  // Fetch last 7 daily logs for dashboard cards
   const { data: recentLogs } = await supabase
     .from('site_daily_logs')
     .select('*')
     .eq('site_id', siteId)
     .order('log_date', { ascending: false })
     .limit(7)
+
+  // Fetch all logs for progress chart
+  const { data: allLogs } = await supabase
+    .from('site_daily_logs')
+    .select('log_date, total_manhours, personnel')
+    .eq('site_id', siteId)
+    .order('log_date', { ascending: true })
 
   // Fetch open review items
   const { data: reviewItems } = await supabase
@@ -70,6 +78,14 @@ export default async function ConstructionSitePage({ params }: { params: Promise
           </Link>
         )}
       </div>
+
+      {/* Progress report — screengrab-ready */}
+      <ProgressReport
+        siteName={site.name}
+        client={site.client ?? ''}
+        cables={cables ?? []}
+        allLogs={allLogs ?? []}
+      />
 
       {/* Dashboard rollup */}
       <SiteDashboard
