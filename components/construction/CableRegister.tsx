@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Search, Flag, ChevronDown, ChevronUp, Check, Clock, AlertCircle, Loader2, X } from 'lucide-react'
 
@@ -75,6 +75,11 @@ export default function CableRegister({ siteId, initialCables, packages, canEdit
   const [filterStatus, setFilterStatus] = useState<string>(searchParams.get('status') ?? 'all')
   const [filterFlagged, setFilterFlagged] = useState(searchParams.get('flagged') === 'true')
   const [expanded, setExpanded]   = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setFilterStatus(searchParams.get('status') ?? 'all')
+    setFilterFlagged(searchParams.get('flagged') === 'true')
+  }, [searchParams])
   const [saving, setSaving]       = useState<Set<string>>(new Set())
 
   // Derived filter options
