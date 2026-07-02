@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle2, Clock, AlertCircle, CloudRain, Flag, Users, ChevronDown, ChevronUp, Plus, Wind, Thermometer, Droplets, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
+import { CheckCircle2, Clock, AlertCircle, CloudRain, Flag, Users, ChevronDown, ChevronUp, Plus, Wind, Thermometer, Droplets, AlertTriangle, BarChart2 } from 'lucide-react'
 import DailyLogForm from './DailyLogForm'
 
 interface CableItem {
@@ -48,6 +49,7 @@ interface DailyLog {
 
 interface Props {
   site: any
+  siteId: string
   cables: CableItem[]
   recentLogs: DailyLog[]
   reviewItemCount: number
@@ -61,7 +63,7 @@ const IMPACT_COLOR: Record<string, string> = {
   None: '#4ade80', Low: '#facc15', Medium: '#fb923c', High: '#f87171',
 }
 
-export default function SiteDashboard({ site, cables, recentLogs, reviewItemCount, canEdit }: Props) {
+export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit }: Props) {
   const [showLogForm, setShowLogForm] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(recentLogs[0]?.id ?? null)
 
@@ -102,13 +104,25 @@ export default function SiteDashboard({ site, cables, recentLogs, reviewItemCoun
 
   return (
     <div className="space-y-4">
-      {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Kpi label="Overall progress" value={`${pct}%`} sub={`${complete}/${total} cables`} color={pct === 100 ? '#4ade80' : 'var(--accent)'} />
-        <Kpi label="In progress" value={String(inProg)} sub="cables active" color="#60a5fa" />
-        <Kpi label="Blocked" value={String(blocked)} sub="need action" color={blocked > 0 ? '#f87171' : 'var(--text-muted)'} highlight={blocked > 0} />
-        <Kpi label="Flagged / Review" value={String(flagged + reviewItemCount)} sub="items" color={flagged + reviewItemCount > 0 ? '#fb923c' : 'var(--text-muted)'} highlight={flagged + reviewItemCount > 0} />
-        <Kpi label="Manhours (7d)" value={totalManhours7d.toFixed(0)} sub="logged hours" color="var(--text-primary)" />
+      {/* KPI row — each tile links to the relevant data */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Kpi label="Overall progress" value={`${pct}%`} sub={`${complete}/${total} cables`}
+          color={pct === 100 ? '#4ade80' : 'var(--accent)'}
+          href={`#cable-register`} hint="View cable register" />
+        <Kpi label="In progress" value={String(inProg)} sub="cables active" color="#60a5fa"
+          href={`#cable-register`} hint="Filter in-progress cables" />
+        <Kpi label="Blocked" value={String(blocked)} sub="need action"
+          color={blocked > 0 ? '#f87171' : 'var(--text-muted)'} highlight={blocked > 0}
+          href={`#cable-register`} hint="View blocked cables" />
+        <Kpi label="Flagged / Review" value={String(flagged + reviewItemCount)} sub="items"
+          color={flagged + reviewItemCount > 0 ? '#fb923c' : 'var(--text-muted)'} highlight={flagged + reviewItemCount > 0}
+          href={`#cable-register`} hint="View flagged items" />
+        <Kpi label="Manhours (7d)" value={totalManhours7d.toFixed(0)} sub="logged hours"
+          color="var(--text-primary)"
+          href={`/construction/${siteId}/analytics`} hint="View manpower analytics" />
+        <Kpi label="Analytics" value="→" sub="crew · weather · trends"
+          color="var(--accent)"
+          href={`/construction/${siteId}/analytics`} hint="Open analytics" icon={<BarChart2 size={14}/>} />
       </div>
 
       {/* Today's weather + personnel (latest log) */}
@@ -371,14 +385,29 @@ export default function SiteDashboard({ site, cables, recentLogs, reviewItemCoun
   )
 }
 
-function Kpi({ label, value, sub, color, highlight }: { label: string; value: string; sub: string; color: string; highlight?: boolean }) {
-  return (
-    <div className="rounded-xl border p-4" style={{ background: 'var(--bg-surface)', borderColor: highlight ? color + '66' : 'var(--border)' }}>
-      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <p className="text-3xl font-bold mt-1" style={{ color }}>{value}</p>
+function Kpi({ label, value, sub, color, highlight, href, hint, icon }: {
+  label: string; value: string; sub: string; color: string
+  highlight?: boolean; href?: string; hint?: string; icon?: React.ReactNode
+}) {
+  const inner = (
+    <div className="rounded-xl border p-4 transition-all h-full"
+      title={hint}
+      style={{
+        background: 'var(--bg-surface)',
+        borderColor: highlight ? color + '66' : 'var(--border)',
+        cursor: href ? 'pointer' : 'default',
+      }}>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
+        {icon && <span style={{ color }}>{icon}</span>}
+      </div>
+      <p className="text-3xl font-bold" style={{ color }}>{value}</p>
       <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>
+      {href && <p className="text-xs mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color }}>↗ {hint}</p>}
     </div>
   )
+  if (href) return <Link href={href} className="group block hover:opacity-90 transition-opacity">{inner}</Link>
+  return inner
 }
 
 function WeatherStat({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color?: string }) {
