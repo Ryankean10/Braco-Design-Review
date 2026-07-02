@@ -27,6 +27,11 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Webhook endpoints are secured by their own secret header, not auth
+  if (pathname.startsWith('/api/construction/inbound-email')) {
+    return supabaseResponse
+  }
+
   if (!user && pathname !== '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
