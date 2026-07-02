@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import CableRegister from '@/components/construction/CableRegister'
 import SiteDashboard from '@/components/construction/SiteDashboard'
 import ProgressReport from '@/components/construction/ProgressReport'
+import ProgrammePanel from '@/components/construction/ProgrammePanel'
 
 export default async function ConstructionSitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
@@ -54,6 +55,22 @@ export default async function ConstructionSitePage({ params }: { params: Promise
     .eq('status', 'Open')
     .order('created_at', { ascending: false })
 
+  // Fetch programmes (latest first)
+  const { data: programmes } = await supabase
+    .from('construction_programmes')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('uploaded_at', { ascending: false })
+
+  // Generate signed URLs for all programmes
+  const signedUrls: Record<string, string> = {}
+  for (const prog of programmes ?? []) {
+    const { data } = await supabase.storage
+      .from('construction-programmes')
+      .createSignedUrl(prog.file_path, 3600)
+    if (data?.signedUrl) signedUrls[prog.id] = data.signedUrl
+  }
+
   const canEdit = ['admin', 'engineer'].includes(role)
 
   return (
@@ -94,6 +111,14 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         cables={cables ?? []}
         recentLogs={recentLogs ?? []}
         reviewItemCount={(reviewItems ?? []).length}
+        canEdit={canEdit}
+      />
+
+      {/* P6 Programme */}
+      <ProgrammePanel
+        siteId={siteId}
+        initialProgrammes={programmes ?? []}
+        signedUrls={signedUrls}
         canEdit={canEdit}
       />
 
