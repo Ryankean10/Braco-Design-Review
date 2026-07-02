@@ -272,7 +272,7 @@ export default function SiteDashboard({ site, cables, recentLogs, reviewItemCoun
           </div>
         )}
 
-        <div className="divide-y" style={{ divideColor: 'var(--border)' }}>
+        <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
           {recentLogs.length === 0 && (
             <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No daily logs yet</p>
           )}
