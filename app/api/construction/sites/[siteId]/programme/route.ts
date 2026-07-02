@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+
+function serviceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function GET(
   _req: NextRequest,
@@ -48,13 +56,16 @@ export async function POST(
   const ext = file.name.split('.').pop() ?? 'pdf'
   const filePath = `${siteId}/${Date.now()}_${revision.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`
 
-  const { error: uploadErr } = await supabase.storage
+  // Use service role for storage + insert to bypass RLS
+  const admin = serviceClient()
+
+  const { error: uploadErr } = await admin.storage
     .from('construction-programmes')
     .upload(filePath, file, { contentType: file.type || 'application/pdf' })
 
   if (uploadErr) return NextResponse.json({ error: uploadErr.message }, { status: 500 })
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from('construction_programmes')
     .insert({
       site_id: siteId,

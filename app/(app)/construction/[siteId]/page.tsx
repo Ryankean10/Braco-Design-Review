@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, HardHat, BookOpen } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import CableRegister from '@/components/construction/CableRegister'
 import SiteDashboard from '@/components/construction/SiteDashboard'
 import ProgressReport from '@/components/construction/ProgressReport'
@@ -62,10 +63,14 @@ export default async function ConstructionSitePage({ params }: { params: Promise
     .eq('site_id', siteId)
     .order('uploaded_at', { ascending: false })
 
-  // Generate signed URLs for all programmes
+  // Generate signed URLs using service role (bypasses storage RLS)
+  const serviceSupabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const signedUrls: Record<string, string> = {}
   for (const prog of programmes ?? []) {
-    const { data } = await supabase.storage
+    const { data } = await serviceSupabase.storage
       .from('construction-programmes')
       .createSignedUrl(prog.file_path, 3600)
     if (data?.signedUrl) signedUrls[prog.id] = data.signedUrl
