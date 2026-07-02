@@ -108,15 +108,15 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi label="Overall progress" value={`${pct}%`} sub={`${complete}/${total} cables`}
           color={pct === 100 ? '#4ade80' : 'var(--accent)'}
-          href={`#cable-register`} hint="View cable register" />
+          href={`?status=all#cable-register`} hint="View all cables" />
         <Kpi label="In progress" value={String(inProg)} sub="cables active" color="#60a5fa"
-          href={`#cable-register`} hint="Filter in-progress cables" />
+          href={`?status=In+Progress#cable-register`} hint="Filter in-progress cables" />
         <Kpi label="Blocked" value={String(blocked)} sub="need action"
           color={blocked > 0 ? '#f87171' : 'var(--text-muted)'} highlight={blocked > 0}
-          href={`#cable-register`} hint="View blocked cables" />
+          href={`?status=Blocked#cable-register`} hint="View blocked cables" />
         <Kpi label="Flagged / Review" value={String(flagged + reviewItemCount)} sub="items"
           color={flagged + reviewItemCount > 0 ? '#fb923c' : 'var(--text-muted)'} highlight={flagged + reviewItemCount > 0}
-          href={`#cable-register`} hint="View flagged items" />
+          href={`?flagged=true#cable-register`} hint="View flagged cables" />
         <Kpi label="Manhours (7d)" value={totalManhours7d.toFixed(0)} sub="logged hours"
           color="var(--text-primary)"
           href={`/construction/${siteId}/analytics`} hint="View manpower analytics" />

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Search, Flag, ChevronDown, ChevronUp, Check, Clock, AlertCircle, Loader2, X } from 'lucide-react'
 
 interface CableActivity {
@@ -66,12 +67,13 @@ function getActivityKey(act: CableActivity) {
 }
 
 export default function CableRegister({ siteId, initialCables, packages, canEdit }: Props) {
+  const searchParams = useSearchParams()
   const [cables, setCables]       = useState<CableItem[]>(initialCables)
   const [search, setSearch]       = useState('')
   const [filterPkg, setFilterPkg] = useState<string>('all')
   const [filterMvs, setFilterMvs] = useState<string>('all')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [filterFlagged, setFilterFlagged] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<string>(searchParams.get('status') ?? 'all')
+  const [filterFlagged, setFilterFlagged] = useState(searchParams.get('flagged') === 'true')
   const [expanded, setExpanded]   = useState<Set<string>>(new Set())
   const [saving, setSaving]       = useState<Set<string>>(new Set())
 
@@ -153,7 +155,7 @@ export default function CableRegister({ siteId, initialCables, packages, canEdit
   const selectStyle = { background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }
 
   return (
-    <div className="space-y-4">
+    <div id="cable-register" className="space-y-4">
       {/* Search + filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative flex-1 min-w-[200px]">
