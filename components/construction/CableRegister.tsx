@@ -77,8 +77,16 @@ export default function CableRegister({ siteId, initialCables, packages, canEdit
   const [expanded, setExpanded]   = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    setFilterStatus(searchParams.get('status') ?? 'all')
-    setFilterFlagged(searchParams.get('flagged') === 'true')
+    const status = searchParams.get('status')
+    const flagged = searchParams.get('flagged')
+    if (status !== null || flagged !== null) {
+      setFilterStatus(status ?? 'all')
+      setFilterFlagged(flagged === 'true')
+      // Scroll after state update + paint
+      requestAnimationFrame(() => {
+        document.getElementById('cable-register')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
   }, [searchParams])
   const [saving, setSaving]       = useState<Set<string>>(new Set())
 
