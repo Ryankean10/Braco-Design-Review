@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import {
   CheckCircle2, Circle, Clock, PauseCircle, ChevronDown, ChevronRight,
-  CheckSquare, Square, PenLine, AlertCircle, Lock
+  CheckSquare, Square, PenLine, AlertCircle, Lock, HardHat
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { ProjectStage, StageStatus, ChecklistItem, StageName } from '@/lib/stageDefaults'
@@ -25,14 +26,16 @@ interface Props {
   canEdit: boolean
   userId: string
   userName: string
+  projectId: string
 }
 
-export default function ProjectStageTracker({ stages: initStages, canEdit, userId, userName }: Props) {
+export default function ProjectStageTracker({ stages: initStages, canEdit, userId, userName, projectId }: Props) {
   const [stages, setStages] = useState<ProjectStage[]>(initStages)
   const [expanded, setExpanded] = useState<StageName | null>(null)
   const [signingOff, setSigningOff] = useState<StageName | null>(null)
   const [signOffNotes, setSignOffNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [constructionSiteId, setConstructionSiteId] = useState<string | null>(null)
   const supabase = createClient()
 
   function getStage(name: StageName) {
@@ -94,6 +97,20 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
       sign_off_notes: signOffNotes.trim() || null,
       completed_at: now,
     })
+
+    // Auto-provision construction site when Feasibility gate is signed off
+    if (stageName === 'Feasibility') {
+      const res = await fetch('/api/construction/provision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      })
+      if (res.ok) {
+        const { siteId } = await res.json()
+        setConstructionSiteId(siteId)
+      }
+    }
+
     setSigningOff(null)
     setSignOffNotes('')
     setSaving(false)
@@ -104,6 +121,16 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
     : null
 
   return (
+    <div className="space-y-3">
+    {constructionSiteId && (
+      <Link href={`/construction/${constructionSiteId}`}
+        className="flex items-center gap-3 px-4 py-3 rounded-xl border text-sm hover:opacity-90 transition-opacity"
+        style={{ background: 'rgba(74,222,128,0.08)', borderColor: 'rgba(74,222,128,0.4)', color: '#4ade80' }}>
+        <HardHat size={16} />
+        <span className="font-medium">Construction programme created</span>
+        <span style={{ color: 'var(--text-muted)' }}>— click to open the construction module →</span>
+      </Link>
+    )}
     <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
       {/* Header */}
       <div className="px-5 py-3 border-b flex items-center justify-between"
@@ -302,6 +329,7 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
           </div>
         )
       })()}
+    </div>
     </div>
   )
 }

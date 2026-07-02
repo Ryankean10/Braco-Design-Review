@@ -218,6 +218,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           canEdit={canEdit}
           userId={user.id}
           userName={userName}
+          projectId={id}
         />
       </div>
 
