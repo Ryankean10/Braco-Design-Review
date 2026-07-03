@@ -71,56 +71,79 @@ export async function POST(
   }
 
   const hasPrevious = !!previous && previousText.length > 50
+  const today = new Date()
+  const todayStr = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const currentDate = new Date(current.programme_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+  const sharedContext = `
+TODAY'S DATE: ${todayStr}
+Use today's date to determine what has already passed, what is currently due, and what is upcoming in the next 4 weeks.
+`
+
+  const jsonSchema = `{
+  "summary": "2-3 sentence executive summary of overall programme health relative to today",
+  "overall_status": "On Programme" | "Slipping" | "Critical" | "Ahead",
+  "completion_date_current": "planned completion date string or null",
+  "completion_date_previous": "previous revision completion date or null",
+  "slippage_days": number,
+  "status_today": [
+    "Bullet point of where the project stands right now against the programme — be specific about what phase/activity is current as of today",
+    "Another bullet — reference actual activity names and planned dates from the programme",
+    "Another bullet — call out anything that should be complete by today but may not be"
+  ],
+  "critical_path": [
+    "Activity on the critical path — include planned start/finish dates where visible",
+    "Next critical path activity"
+  ],
+  "upcoming_activities": [
+    {
+      "activity": "Activity name",
+      "due": "planned date string",
+      "days_away": number,
+      "impact": "Critical" | "Major" | "Minor",
+      "note": "Why this matters to overall completion"
+    }
+  ],
+  "key_changes": [
+    { "activity": "activity name", "change": "what changed vs previous rev", "impact": "Critical" | "Major" | "Minor" }
+  ],
+  "risks": ["Schedule risk 1", "Schedule risk 2"],
+  "recommendations": ["Specific action 1", "Specific action 2"],
+  "analysed_at": "${new Date().toISOString()}"
+}`
 
   const prompt = hasPrevious
     ? `You are a BESS construction planner analysing two revisions of a Primavera P6 construction programme for a UK battery energy storage project.
+${sharedContext}
+CURRENT PROGRAMME — ${current.revision} (issued ${currentDate}):
+${currentText.substring(0, 7000)}
 
-CURRENT PROGRAMME — ${current.revision} (${currentDate}):
-${currentText.substring(0, 8000)}
+PREVIOUS PROGRAMME — ${previousRevision} (issued ${new Date(previous!.programme_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}):
+${previousText.substring(0, 5000)}
 
-PREVIOUS PROGRAMME — ${previousRevision} (${new Date(previous!.programme_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}):
-${previousText.substring(0, 8000)}
+Produce a detailed analysis. Focus especially on:
+1. Where the project stands TODAY against the programme (status_today bullets)
+2. The critical path activities and their dates
+3. Upcoming activities in the next 4 weeks that could affect completion if they slip
 
-Produce a structured Planned vs Actual / revision comparison analysis. Return JSON only:
-{
-  "summary": "2-3 sentence executive summary of the revision changes and programme health",
-  "overall_status": "On Programme" | "Slipping" | "Critical" | "Ahead",
-  "completion_date_current": "date string or null",
-  "completion_date_previous": "date string or null",
-  "slippage_days": number (positive = slipping, negative = ahead),
-  "key_changes": [
-    { "activity": "activity name", "change": "description", "impact": "Critical" | "Major" | "Minor" }
-  ],
-  "critical_path_changes": ["change 1", "change 2"],
-  "float_erosion": ["area 1", "area 2"],
-  "risks": ["risk 1", "risk 2"],
-  "recommendations": ["action 1", "action 2"],
-  "analysed_at": "${new Date().toISOString()}"
-}`
+Return JSON only, no markdown:
+${jsonSchema}`
     : `You are a BESS construction planner reviewing a Primavera P6 construction programme for a UK battery energy storage project.
-
-PROGRAMME — ${current.revision} (${currentDate}):
+${sharedContext}
+PROGRAMME — ${current.revision} (issued ${currentDate}):
 ${currentText.substring(0, 10000)}
 
-This is the first revision uploaded. Produce a baseline programme analysis. Return JSON only:
-{
-  "summary": "2-3 sentence summary of the programme scope and key milestones",
-  "overall_status": "On Programme" | "Slipping" | "Critical" | "Ahead",
-  "completion_date_current": "date string or null",
-  "completion_date_previous": null,
-  "slippage_days": 0,
-  "key_changes": [],
-  "critical_path_changes": ["Identify the critical path activities from the programme"],
-  "float_erosion": [],
-  "risks": ["Identify any schedule risks visible in this baseline"],
-  "recommendations": ["Identify any programme recommendations"],
-  "analysed_at": "${new Date().toISOString()}"
-}`
+Produce a detailed baseline analysis. Focus especially on:
+1. Where the project should be TODAY against this programme (status_today bullets)
+2. The critical path activities and their dates
+3. Activities due in the next 4 weeks that are critical to overall completion
+
+Return JSON only, no markdown:
+${jsonSchema}`
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
+    max_tokens: 3000,
     messages: [{ role: 'user', content: prompt }]
   })
 

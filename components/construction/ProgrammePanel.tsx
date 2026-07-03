@@ -7,15 +7,24 @@ import {
   AlertCircle, CheckCircle2, Loader2, X
 } from 'lucide-react'
 
+interface UpcomingActivity {
+  activity: string
+  due: string
+  days_away: number
+  impact: 'Critical' | 'Major' | 'Minor'
+  note: string
+}
+
 interface Analysis {
   summary: string
   overall_status: 'On Programme' | 'Slipping' | 'Critical' | 'Ahead'
   completion_date_current: string | null
   completion_date_previous: string | null
   slippage_days: number
+  status_today: string[]
+  critical_path: string[]
+  upcoming_activities: UpcomingActivity[]
   key_changes: { activity: string; change: string; impact: 'Critical' | 'Major' | 'Minor' }[]
-  critical_path_changes: string[]
-  float_erosion: string[]
   risks: string[]
   recommendations: string[]
   analysed_at: string
@@ -412,14 +421,75 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
                     ))}
                   </div>
 
-                  {/* Key changes */}
-                  {analysis.key_changes.length > 0 && (
+                  {/* Status today */}
+                  {analysis.status_today?.length > 0 && (
+                    <div className="rounded-lg p-4 border" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
+                      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
+                        WHERE WE ARE TODAY — {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                      <ul className="space-y-1.5">
+                        {analysis.status_today.map((bullet, i) => (
+                          <li key={i} className="text-xs flex gap-2" style={{ color: 'var(--text-primary)' }}>
+                            <span className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }}>•</span>
+                            {bullet}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Critical path */}
+                  {analysis.critical_path?.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>KEY CHANGES</p>
+                      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>CRITICAL PATH</p>
+                      <ul className="space-y-1">
+                        {analysis.critical_path.map((c, i) => (
+                          <li key={i} className="text-xs flex gap-2" style={{ color: 'var(--text-primary)' }}>
+                            <span className="shrink-0" style={{ color: '#f87171' }}>▸</span>{c}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Upcoming activities */}
+                  {analysis.upcoming_activities?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>UPCOMING — NEXT 4 WEEKS</p>
+                      <div className="space-y-2">
+                        {analysis.upcoming_activities.map((a, i) => (
+                          <div key={i} className="flex items-start gap-3 rounded-lg px-3 py-2.5 border"
+                            style={{ background: 'var(--bg-elevated)', borderColor: IMPACT_COLOR[a.impact] + '40' }}>
+                            <div className="shrink-0 text-center" style={{ minWidth: 44 }}>
+                              <p className="text-xs font-bold" style={{ color: IMPACT_COLOR[a.impact] }}>
+                                {a.days_away <= 0 ? 'NOW' : `${a.days_away}d`}
+                              </p>
+                              <p className="text-xs" style={{ color: 'var(--text-muted)', fontSize: 10 }}>{a.due}</p>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{a.activity}</span>
+                                <span className="text-xs px-1.5 py-0.5 rounded font-semibold shrink-0"
+                                  style={{ background: IMPACT_COLOR[a.impact] + '20', color: IMPACT_COLOR[a.impact] }}>
+                                  {a.impact}
+                                </span>
+                              </div>
+                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.note}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Key changes (revision comparison) */}
+                  {analysis.key_changes?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>CHANGES FROM PREVIOUS REVISION</p>
                       <div className="space-y-1.5">
                         {analysis.key_changes.map((c, i) => (
                           <div key={i} className="flex items-start gap-2 text-xs">
-                            <span className="px-1.5 py-0.5 rounded text-xs font-semibold shrink-0"
+                            <span className="px-1.5 py-0.5 rounded font-semibold shrink-0"
                               style={{ background: IMPACT_COLOR[c.impact] + '20', color: IMPACT_COLOR[c.impact] }}>
                               {c.impact}
                             </span>
@@ -431,21 +501,9 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
                     </div>
                   )}
 
-                  {/* Critical path + risks in 2 columns */}
+                  {/* Risks + Recommendations */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {analysis.critical_path_changes.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>CRITICAL PATH</p>
-                        <ul className="space-y-1">
-                          {analysis.critical_path_changes.map((c, i) => (
-                            <li key={i} className="text-xs flex gap-2" style={{ color: 'var(--text-primary)' }}>
-                              <span style={{ color: '#f87171' }}>▸</span>{c}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {analysis.risks.length > 0 && (
+                    {analysis.risks?.length > 0 && (
                       <div>
                         <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>RISKS</p>
                         <ul className="space-y-1">
@@ -457,21 +515,19 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
                         </ul>
                       </div>
                     )}
+                    {analysis.recommendations?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>RECOMMENDATIONS</p>
+                        <ul className="space-y-1">
+                          {analysis.recommendations.map((r, i) => (
+                            <li key={i} className="text-xs flex gap-2" style={{ color: 'var(--text-primary)' }}>
+                              <span className="shrink-0" style={{ color: '#4ade80' }}>✓</span>{r}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Recommendations */}
-                  {analysis.recommendations.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>RECOMMENDATIONS</p>
-                      <ul className="space-y-1">
-                        {analysis.recommendations.map((r, i) => (
-                          <li key={i} className="text-xs flex gap-2" style={{ color: 'var(--text-primary)' }}>
-                            <span style={{ color: '#4ade80' }}>✓</span>{r}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
