@@ -13,27 +13,21 @@ export default async function PlanningPage() {
   if (role === 'client') redirect('/dashboard')
 
   // All projects + their latest forecast (if any)
-  const { data: projects } = await supabase
-    .from('projects')
-    .select('id, name, stage, capacity_mw, location, client_name')
-    .order('created_at', { ascending: false })
-
-  const { data: forecasts } = await supabase
-    .from('work_planner_forecasts')
-    .select('project_id, created_at, forecast->confidence, status')
-    .order('created_at', { ascending: false })
+  const [{ data: projects }, { data: forecasts }] = await Promise.all([
+    supabase.from('projects').select('id, name, stage, capacity_mw, location, client_name').order('created_at', { ascending: false }),
+    supabase.from('work_planner_forecasts').select('project_id, created_at, forecast, status').order('created_at', { ascending: false }),
+  ])
 
   // Latest forecast per project
   const latestForecast = new Map<string, { created_at: string; confidence: string; status: string }>()
   for (const f of forecasts ?? []) {
     if (!latestForecast.has(f.project_id)) {
-      latestForecast.set(f.project_id, { created_at: f.created_at, confidence: f.confidence as string, status: f.status })
+      const confidence = (f.forecast as Record<string, unknown>)?.confidence as string ?? 'Low'
+      latestForecast.set(f.project_id, { created_at: f.created_at, confidence, status: f.status })
     }
   }
 
   const CONF_COLOR: Record<string, string> = { High: '#10b981', Medium: '#f59e0b', Low: '#ef4444' }
-
-  const STAGE_ORDER = ['Feasibility', 'Design', 'Procure', 'Build & Install', 'Test & Commission', 'Energise & Handover']
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
