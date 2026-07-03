@@ -113,17 +113,44 @@ ${jsonSchema}`
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 3000,
+    max_tokens: 5000,
     messages: [{ role: 'user', content: prompt }]
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  // Strip markdown fences if present
-  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('Failed to parse AI analysis')
+  const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+  const start = stripped.indexOf('{')
+  const end = stripped.lastIndexOf('}')
+  if (start === -1 || end === -1) throw new Error('No JSON object in response')
 
-  const analysis = JSON.parse(jsonMatch[0])
+  let jsonStr = stripped.slice(start, end + 1)
+
+  function repairJson(s: string): string {
+    let repaired = s.replace(/,\s*$/, '').replace(/,\s*\{[^}]*$/, '')
+    const stack: string[] = []
+    let inStr = false, esc = false
+    for (const ch of repaired) {
+      if (esc) { esc = false; continue }
+      if (ch === '\\') { esc = true; continue }
+      if (ch === '"') { inStr = !inStr; continue }
+      if (!inStr) {
+        if (ch === '{' || ch === '[') stack.push(ch === '{' ? '}' : ']')
+        if (ch === '}' || ch === ']') stack.pop()
+      }
+    }
+    return repaired + stack.reverse().join('')
+  }
+
+  let analysis: any
+  try {
+    analysis = JSON.parse(jsonStr)
+  } catch {
+    try {
+      analysis = JSON.parse(repairJson(jsonStr))
+    } catch (e2: any) {
+      throw new Error('Failed to parse AI analysis: ' + e2.message)
+    }
+  }
 
   await admin
     .from('construction_programmes')
