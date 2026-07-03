@@ -185,12 +185,8 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
     setUploading(false)
     if (fileRef.current) fileRef.current.value = ''
 
-    // If analysis didn't come back with the upload, trigger it now
-    if (!newProg.analysis) {
-      runAnalysis(newProg.id)
-    } else {
-      setAnalysisStep(4)
-    }
+    // Always trigger analysis from client — upload route returns immediately
+    runAnalysis(newProg.id)
   }
 
   const fmtDate = (s: string) => new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
