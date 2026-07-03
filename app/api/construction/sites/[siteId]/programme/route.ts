@@ -82,8 +82,12 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Run analysis in background — don't block the upload response
-  analyseProgramme(siteId, data.id).catch(() => {})
-
-  return NextResponse.json(data)
+  // Run analysis synchronously — Vercel kills background promises after response
+  try {
+    const analysis = await analyseProgramme(siteId, data.id)
+    return NextResponse.json({ ...data, analysis })
+  } catch {
+    // Return the record even if analysis fails — user can retry from UI
+    return NextResponse.json(data)
+  }
 }

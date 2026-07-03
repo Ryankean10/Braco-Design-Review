@@ -140,10 +140,10 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
 
   const ANALYSIS_STEPS = ['Extracting programme data', 'Comparing revisions', 'Identifying changes', 'Generating PVA report']
 
-  // Start polling if latest has no analysis
+  // If latest programme has no analysis, trigger it
   useEffect(() => {
     if (latest && !latest.analysis) {
-      pollAnalysis(latest.id)
+      runAnalysis(latest.id)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -174,6 +174,7 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
     let signedUrl = ''
     if (urlRes.ok) { const { url } = await urlRes.json(); signedUrl = url }
 
+    // Analysis runs server-side during upload — use returned analysis if present
     setProgrammes(prev => [newProg, ...prev])
     setUrls(prev => ({ ...prev, [newProg.id]: signedUrl }))
     setViewing(newProg.id)
@@ -184,8 +185,12 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
     setUploading(false)
     if (fileRef.current) fileRef.current.value = ''
 
-    // Trigger analysis directly
-    runAnalysis(newProg.id)
+    // If analysis didn't come back with the upload, trigger it now
+    if (!newProg.analysis) {
+      runAnalysis(newProg.id)
+    } else {
+      setAnalysisStep(4)
+    }
   }
 
   const fmtDate = (s: string) => new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
