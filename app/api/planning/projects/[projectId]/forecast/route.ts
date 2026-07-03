@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as serviceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
-import pdf from 'pdf-parse'
 
 export const maxDuration = 300
 
@@ -83,6 +82,7 @@ export async function POST(
           .download(doc.storage_path)
         if (!file) continue
         const buf = Buffer.from(await file.arrayBuffer())
+        const { default: pdf } = await import('pdf-parse')
         const parsed = await pdf(buf)
         const text = parsed.text.slice(0, 15000)
         docTexts.push(`=== ${doc.title ?? doc.file_name} (${doc.doc_no ?? ''}) ===\n${text}`)
