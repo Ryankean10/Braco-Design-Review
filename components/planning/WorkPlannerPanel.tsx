@@ -16,7 +16,7 @@ interface Project {
   capacity_mw: number | null
   location: string | null
   stage: string | null
-  client_name: string | null
+  client: string | null
 }
 
 interface Doc { id: string; doc_no: string | null; title: string | null; type: string | null; rev: string | null; stage: string | null }

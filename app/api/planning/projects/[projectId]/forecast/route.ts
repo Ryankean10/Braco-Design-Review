@@ -51,7 +51,7 @@ export async function POST(
   // ── 1. Fetch project details ─────────────────────────────────────────────
   const { data: project } = await admin
     .from('projects')
-    .select('name, capacity_mw, location, client_name, stage')
+    .select('name, capacity_mw, location, client, stage')
     .eq('id', projectId)
     .single()
 

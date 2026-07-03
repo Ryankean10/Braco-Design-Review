@@ -14,7 +14,7 @@ export default async function PlanningPage() {
 
   // All projects + their latest forecast (if any)
   const [{ data: projects }, { data: forecasts }] = await Promise.all([
-    supabase.from('projects').select('id, name, stage, capacity_mw, location, client_name').order('created_at', { ascending: false }),
+    supabase.from('projects').select('id, name, stage, capacity_mw, location, client').order('created_at', { ascending: false }),
     supabase.from('work_planner_forecasts').select('project_id, created_at, forecast, status').order('created_at', { ascending: false }),
   ])
 
@@ -66,7 +66,7 @@ export default async function PlanningPage() {
                         {project.stage}
                       </span>
                     )}
-                    {project.client_name && <span>{project.client_name}</span>}
+                    {project.client && <span>{project.client}</span>}
                   </div>
                 </div>
 
