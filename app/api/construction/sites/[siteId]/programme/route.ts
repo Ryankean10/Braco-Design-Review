@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { analyseProgramme } from '@/lib/analyseProgramme'
 
 function serviceClient() {
   return createServiceClient(
@@ -81,12 +82,8 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Fire-and-forget AI analysis — client polls for result
-  const baseUrl = request.nextUrl.origin
-  fetch(`${baseUrl}/api/construction/sites/${siteId}/programme/${data.id}/analyse`, {
-    method: 'POST',
-    headers: { cookie: request.headers.get('cookie') ?? '' }
-  }).catch(() => {})
+  // Run analysis in background — don't block the upload response
+  analyseProgramme(siteId, data.id).catch(() => {})
 
   return NextResponse.json(data)
 }
