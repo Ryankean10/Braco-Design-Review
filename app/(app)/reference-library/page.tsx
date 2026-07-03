@@ -11,7 +11,7 @@ export default async function ReferenceLibraryPage() {
   const isAdmin = profile?.role === 'admin'
 
   const [{ data: standards }, { data: hsRefs }, { data: lessons }, { data: opRules }] = await Promise.all([
-    supabase.from('standards').select('*, standard_clauses(*)').order('category').order('ref'),
+    supabase.from('standards').select('*, standard_clauses(*), ai_summary, ai_key_points, ai_bess_applicability, ai_analysed_at').order('category').order('ref'),
     supabase.from('hs_references').select('*').order('category').order('ref'),
     supabase.from('lessons_learned').select('*').order('created_at', { ascending: false }),
     supabase.from('operator_rules').select('*').order('operator').order('category'),

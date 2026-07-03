@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, FileText, X, Download } from 'lucide-react'
+import { Upload, FileText, X, Download, Sparkles, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
@@ -9,20 +9,52 @@ interface Props {
   docStoragePath: string | null
   docFileName: string | null
   isAdmin: boolean
+  aiAnalysedAt?: string | null
+  aiSummary?: string | null
 }
 
-export default function StandardDocUpload({ standardId, docStoragePath: initPath, docFileName: initName, isAdmin }: Props) {
+export default function StandardDocUpload({
+  standardId,
+  docStoragePath: initPath,
+  docFileName: initName,
+  isAdmin,
+  aiAnalysedAt: initAnalysedAt,
+  aiSummary: initSummary,
+}: Props) {
   const [storagePath, setStoragePath] = useState(initPath)
   const [fileName, setFileName] = useState(initName)
   const [uploading, setUploading] = useState(false)
+  const [analysing, setAnalysing] = useState(false)
+  const [analysedAt, setAnalysedAt] = useState(initAnalysedAt ?? null)
+  const [summary, setSummary] = useState(initSummary ?? null)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
+
+  async function runAnalysis(sid: string) {
+    setAnalysing(true)
+    try {
+      const res = await fetch(`/api/reference-library/standards/${sid}/analyse`, { method: 'POST' })
+      const data = await res.json()
+      if (data.error) {
+        setError(`AI analysis failed: ${data.error}`)
+      } else {
+        setAnalysedAt(new Date().toISOString())
+        setSummary(data.summary ?? null)
+      }
+    } catch {
+      setError('AI analysis failed — document saved but could not be analysed')
+    } finally {
+      setAnalysing(false)
+    }
+  }
 
   async function handleUpload(file: File) {
     if (!file) return
     setUploading(true)
     setError('')
+    setAnalysedAt(null)
+    setSummary(null)
 
     const path = `standards/${standardId}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`
 
@@ -37,6 +69,10 @@ export default function StandardDocUpload({ standardId, docStoragePath: initPath
       doc_storage_path: path,
       doc_file_name: file.name,
       doc_file_size: file.size,
+      ai_summary: null,
+      ai_key_points: null,
+      ai_bess_applicability: null,
+      ai_analysed_at: null,
     }).eq('id', standardId)
 
     if (dbErr) { setError(dbErr.message); setUploading(false); return }
@@ -44,13 +80,21 @@ export default function StandardDocUpload({ standardId, docStoragePath: initPath
     setStoragePath(path)
     setFileName(file.name)
     setUploading(false)
+
+    // Auto-trigger AI analysis
+    await runAnalysis(standardId)
   }
 
   async function handleRemove() {
     if (storagePath) await supabase.storage.from('documents').remove([storagePath])
-    await supabase.from('standards').update({ doc_storage_path: null, doc_file_name: null, doc_file_size: null }).eq('id', standardId)
+    await supabase.from('standards').update({
+      doc_storage_path: null, doc_file_name: null, doc_file_size: null,
+      ai_summary: null, ai_key_points: null, ai_bess_applicability: null, ai_analysed_at: null,
+    }).eq('id', standardId)
     setStoragePath(null)
     setFileName(null)
+    setAnalysedAt(null)
+    setSummary(null)
   }
 
   async function handleDownload() {
@@ -59,6 +103,7 @@ export default function StandardDocUpload({ standardId, docStoragePath: initPath
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
   }
 
+  // ── No document uploaded ──────────────────────────────────────────────────
   if (!storagePath) {
     if (!isAdmin) return null
     return (
@@ -79,25 +124,69 @@ export default function StandardDocUpload({ standardId, docStoragePath: initPath
     )
   }
 
+  // ── Document uploaded ─────────────────────────────────────────────────────
   return (
-    <div className="mt-2 flex items-center gap-2">
-      <FileText size={11} style={{ color: 'var(--accent)' }} />
-      <span className="text-[10px] truncate max-w-[180px]" style={{ color: 'var(--text-muted)' }}>{fileName}</span>
-      <button onClick={handleDownload} title="Download" style={{ color: 'var(--accent)' }}>
-        <Download size={11} />
-      </button>
-      {isAdmin && (
-        <>
-          <button onClick={() => inputRef.current?.click()} title="Replace" style={{ color: 'var(--text-muted)' }}>
-            <Upload size={11} />
-          </button>
-          <button onClick={handleRemove} title="Remove" style={{ color: 'var(--text-muted)' }}>
-            <X size={11} />
-          </button>
-        </>
+    <div className="mt-2 space-y-1.5">
+      {/* File row */}
+      <div className="flex items-center gap-2">
+        <FileText size={11} style={{ color: 'var(--accent)' }} />
+        <span className="text-[10px] truncate max-w-[180px]" style={{ color: 'var(--text-muted)' }}>{fileName}</span>
+        <button onClick={handleDownload} title="Download" style={{ color: 'var(--accent)' }}>
+          <Download size={11} />
+        </button>
+        {isAdmin && (
+          <>
+            <button onClick={() => inputRef.current?.click()} title="Replace" style={{ color: 'var(--text-muted)' }}>
+              <Upload size={11} />
+            </button>
+            <button onClick={handleRemove} title="Remove" style={{ color: 'var(--text-muted)' }}>
+              <X size={11} />
+            </button>
+          </>
+        )}
+        <input ref={inputRef} type="file" accept=".pdf" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
+      </div>
+
+      {/* AI status row */}
+      {analysing && (
+        <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <Loader2 size={10} className="animate-spin" style={{ color: 'var(--accent)' }} />
+          AI analysing document…
+        </div>
       )}
-      <input ref={inputRef} type="file" accept=".pdf" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
+
+      {!analysing && analysedAt && (
+        <div className="flex items-start gap-1.5">
+          <CheckCircle2 size={10} className="mt-0.5 shrink-0" style={{ color: '#10b981' }} />
+          <div>
+            <span className="text-[10px]" style={{ color: '#10b981' }}>
+              AI reviewed · {new Date(analysedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
+            {summary && (
+              <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{summary}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!analysing && !analysedAt && storagePath && isAdmin && (
+        <button
+          onClick={() => runAnalysis(standardId)}
+          className="flex items-center gap-1 text-[10px] hover:opacity-80"
+          style={{ color: 'var(--accent)' }}
+        >
+          <Sparkles size={10} /> Run AI analysis
+        </button>
+      )}
+
+      {!analysing && !analysedAt && storagePath && !isAdmin && (
+        <div className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <AlertTriangle size={10} /> Not yet AI analysed
+        </div>
+      )}
+
+      {error && <p className="text-[10px]" style={{ color: 'var(--critical)' }}>{error}</p>}
     </div>
   )
 }

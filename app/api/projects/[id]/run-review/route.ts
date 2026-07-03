@@ -134,12 +134,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (lenses.includes('standards')) {
     const { data: linked } = await supabase
       .from('project_standards')
-      .select('standard_id, standards(ref, title, category, summary)')
+      .select('standard_id, standards(ref, title, category, summary, ai_summary, ai_key_points, ai_bess_applicability, ai_analysed_at)')
       .eq('project_id', projectId)
     const list = (linked ?? []).map((ps: any) => {
       const s = ps.standards
-      return `${s.ref} — ${s.title} (${s.category})${s.summary ? ': ' + s.summary.slice(0, 120) : ''}`
-    }).join('\n')
+      const lines: string[] = [`${s.ref} — ${s.title} (${s.category})`]
+      if (s.ai_summary) {
+        lines.push(`  AI Summary: ${s.ai_summary}`)
+      } else if (s.summary) {
+        lines.push(`  Summary: ${s.summary.slice(0, 200)}`)
+      }
+      if (s.ai_bess_applicability) {
+        lines.push(`  BESS Applicability: ${s.ai_bess_applicability}`)
+      }
+      if (s.ai_key_points?.length) {
+        lines.push(`  Key Points:\n${(s.ai_key_points as string[]).slice(0, 8).map((p: string) => `    • ${p}`).join('\n')}`)
+      }
+      return lines.join('\n')
+    }).join('\n\n')
     contextSections.push(`LINKED STANDARDS LIBRARY (for standards lens):\n${list || '(No standards linked to this project)'}`)
   }
 
