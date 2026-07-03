@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen, TrendingUp } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -300,6 +300,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <BookMarked size={20} style={{ color: '#34d399' }} />
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Decision Log</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Full audit trail of all findings, decisions and actions</p>
+        </Link>
+        <Link href={`/projects/${id}/work-planner`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'rgba(251,191,36,0.3)', minHeight: 100 }}>
+          <TrendingUp size={20} style={{ color: '#fbbf24' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Work Planner</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>AI forecast — manpower, cost & long lead procurement</p>
         </Link>
       </div>
 

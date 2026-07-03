@@ -8,11 +8,14 @@ import {
 } from 'lucide-react'
 
 interface UpcomingActivity {
-  activity: string
-  due: string
+  name?: string
+  activity?: string
+  due_date?: string
+  due?: string
   days_away: number
-  impact: 'Critical' | 'Major' | 'Minor'
-  note: string
+  impact: 'High' | 'Medium' | 'Low' | 'Critical' | 'Major' | 'Minor'
+  note?: string
+  description?: string
 }
 
 interface Analysis {
@@ -55,7 +58,7 @@ const STATUS_CFG = {
   'Critical':     { color: '#f87171', icon: <AlertCircle size={13}/> },
 }
 
-const IMPACT_COLOR = { Critical: '#f87171', Major: '#fb923c', Minor: '#60a5fa' }
+const IMPACT_COLOR: Record<string, string> = { Critical: '#f87171', High: '#f87171', Major: '#fb923c', Medium: '#f59e0b', Minor: '#60a5fa', Low: '#60a5fa' }
 
 function daysSince(iso: string) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
@@ -465,17 +468,17 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
                               <p className="text-xs font-bold" style={{ color: IMPACT_COLOR[a.impact] }}>
                                 {a.days_away <= 0 ? 'NOW' : `${a.days_away}d`}
                               </p>
-                              <p className="text-xs" style={{ color: 'var(--text-muted)', fontSize: 10 }}>{a.due}</p>
+                              <p className="text-xs" style={{ color: 'var(--text-muted)', fontSize: 10 }}>{a.due_date ?? a.due}</p>
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5">
-                                <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{a.activity}</span>
+                                <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{a.name ?? a.activity}</span>
                                 <span className="text-xs px-1.5 py-0.5 rounded font-semibold shrink-0"
                                   style={{ background: IMPACT_COLOR[a.impact] + '20', color: IMPACT_COLOR[a.impact] }}>
                                   {a.impact}
                                 </span>
                               </div>
-                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.note}</p>
+                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.note ?? a.description}</p>
                             </div>
                           </div>
                         ))}
