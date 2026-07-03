@@ -491,15 +491,17 @@ export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: 
                   {analysis.key_changes?.length > 0 && (
                     <div>
                       <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>CHANGES FROM PREVIOUS REVISION</p>
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         {analysis.key_changes.map((c, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs">
-                            <span className="px-1.5 py-0.5 rounded font-semibold shrink-0"
-                              style={{ background: IMPACT_COLOR[c.impact] + '20', color: IMPACT_COLOR[c.impact] }}>
-                              {c.impact}
-                            </span>
-                            <span className="font-medium shrink-0" style={{ color: 'var(--text-primary)' }}>{c.activity}</span>
-                            <span style={{ color: 'var(--text-muted)' }}>— {c.change}</span>
+                          <div key={i} className="rounded-lg px-3 py-2.5 border" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="px-1.5 py-0.5 rounded text-xs font-semibold shrink-0"
+                                style={{ background: IMPACT_COLOR[c.impact] + '20', color: IMPACT_COLOR[c.impact] }}>
+                                {c.impact}
+                              </span>
+                              <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{c.activity}</span>
+                            </div>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.change}</p>
                           </div>
                         ))}
                       </div>
