@@ -126,13 +126,13 @@ export default function ProjectITPUpload({ projectId, initialItps, canEdit }: Pr
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-sm hover:opacity-80 disabled:opacity-50 transition-opacity"
             style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
           >
-            {uploading ? <><Loader2 size={13} className="animate-spin" />Uploading…</> : <><Upload size={13} />Choose PDF or Excel file</>}
+            {uploading ? <><Loader2 size={13} className="animate-spin" />Uploading…</> : <><Upload size={13} />Choose PDF, Excel or XLSM file</>}
           </button>
           {error && <p className="text-xs" style={{ color: 'var(--critical)' }}>{error}</p>}
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.xlsx,.xls,.csv"
+            accept=".pdf,.xlsx,.xlsm,.xls,.csv"
             className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }}
           />
