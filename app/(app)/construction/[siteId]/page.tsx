@@ -9,6 +9,7 @@ import CableRegister from '@/components/construction/CableRegister'
 import SiteDashboard from '@/components/construction/SiteDashboard'
 import ProgrammePanel from '@/components/construction/ProgrammePanel'
 import CivilsPanel from '@/components/construction/CivilsPanel'
+import ItpPanel from '@/components/construction/ItpPanel'
 import CollapsibleSection from '@/components/construction/CollapsibleSection'
 
 export default async function ConstructionSitePage({ params }: { params: Promise<{ siteId: string }> }) {
@@ -135,6 +136,17 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         canEdit={canEdit}
         civilsActivities={civilsActivities ?? []}
       />
+
+      {/* ITP — top-level, anchored so project page link lands here */}
+      <div id="itp" style={{ scrollMarginTop: '80px' }}>
+        <CollapsibleSection
+          title="Inspection & Test Plan (ITP)"
+          badge={undefined}
+          summary="Upload and track ITP revisions — auto-seeds activity register"
+        >
+          <ItpPanel siteId={siteId} canEdit={canEdit} />
+        </CollapsibleSection>
+      </div>
 
       {/* P6 Programme */}
       <ProgrammePanel
