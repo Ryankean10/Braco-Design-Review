@@ -166,9 +166,9 @@ function PersonModal({ person, onClose, onSaved }: {
 }
 
 // ── Appoint modal ─────────────────────────────────────────────────────────────
-function AppointModal({ person, projects, sites, onClose, onSaved }: {
+function AppointModal({ person, projects, sites, currentUserId, onClose, onSaved }: {
   person: Person; projects: JobRef[]; sites: JobRef[]
-  onClose: () => void; onSaved: (a: Appointment) => void
+  currentUserId: string; onClose: () => void; onSaved: (a: Appointment) => void
 }) {
   const supabase = createClient()
   const [jobType, setJobType] = useState<'project' | 'site'>('site')
@@ -188,6 +188,7 @@ function AppointModal({ person, projects, sites, onClose, onSaved }: {
       .from('job_appointments')
       .insert({
         person_id: person.id,
+        appointed_by: currentUserId,
         project_id: jobType === 'project' ? jobId : null,
         site_id: jobType === 'site' ? jobId : null,
         role_on_job: roleOnJob || null,
@@ -623,6 +624,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
         <AppointModal
           person={appointingPerson}
           projects={projects} sites={sites}
+          currentUserId={currentUserId}
           onClose={() => setAppointingPerson(null)}
           onSaved={a => {
             setAppointments(prev => [a, ...prev])
