@@ -131,48 +131,117 @@ export async function POST(
     contentType: file.type || 'application/octet-stream', upsert: false,
   })
 
-  // Send raw text to Claude — truncated to 80k chars to stay within token limits.
-  // Claude handles structure detection; no fragile column-based pre-filtering.
-  // For large Excel files, prefer the ITP sheet content over other sheets.
-  const itpSheetStart = rawText.indexOf('=== Sheet:')
-  const filteredText = rawText.slice(itpSheetStart >= 0 ? itpSheetStart : 0, 80000)
+  // Build a compact group summary for Claude.
+  // Supports two ITP formats:
+  //   Format A (OCU/Hardy): section header rows + data rows starting with 5-digit project code.
+  //                         Col D = discipline, Col F = date submitted, Col H = client status (Yes = complete).
+  //   Format B (Braco):     Col A = activity group, Col E = discipline code, subsequent rows are detail items.
+  const allLines = rawText.split('\n').map(l => l.trim()).filter(Boolean)
+  const projectRowRe = /^\d{5}/
+
+  // Detect format: if >10% of non-header lines start with a 5-digit code → OCU format
+  const nonHeaderLines = allLines.filter(l => l.length > 10)
+  const ocuRowCount = nonHeaderLines.filter(l => projectRowRe.test(l)).length
+  const isOcuFormat = ocuRowCount / Math.max(nonHeaderLines.length, 1) > 0.1
+
+  interface GroupData { discipline: string; total: number; signed: number; ref: string }
+  const groups = new Map<string, GroupData>()
+
+  if (isOcuFormat) {
+    // OCU format: group data rows under the nearest preceding section header
+    const SKIP_HEADER = /^(=|project|keys|stage|resp|other|discipline|ref|date|status|title|sheet|doc|all stage|civils,|mechanical,|m&e,)/i
+    let currentGroup = ''
+    for (const line of allLines) {
+      const cols = line.split(',').map(v => v.replace(/^"|"$/g, '').trim())
+      const c0 = cols[0] ?? ''
+      if (projectRowRe.test(c0)) {
+        // Data row — add to current group
+        if (currentGroup) {
+          const g = groups.get(currentGroup) ?? { discipline: 'Civils', total: 0, signed: 0, ref: '' }
+          g.total++
+          // Col D (index 3) = discipline code; Col H (index 7) = client status
+          const disc = cols[3] ?? ''
+          if (!g.discipline || g.discipline === 'Civils') {
+            if (/^EME$/i.test(disc)) g.discipline = 'Electrical'
+            else if (/^ETC|^ECV.*T|commissioning/i.test(disc)) g.discipline = 'Commissioning'
+            else if (/^ECV$/i.test(disc)) g.discipline = 'Civils'
+          }
+          if (!g.ref) g.ref = cols[4] ?? ''
+          const clientStatus = cols[7] ?? ''
+          if (/^yes$/i.test(clientStatus)) g.signed++
+          groups.set(currentGroup, g)
+        }
+      } else if (c0.length > 5 && /^[A-Za-z]/.test(c0) && !SKIP_HEADER.test(line)) {
+        // Section header row — must start with a letter (filters out stray "(If Yes..." etc.)
+        // Also skip detail rows that look like headers (CT tests, bullet points)
+        if (/^(CT[0-9·]|·|·)/.test(c0)) continue
+        currentGroup = c0
+        if (!groups.has(currentGroup)) groups.set(currentGroup, { discipline: 'Civils', total: 0, signed: 0, ref: '' })
+      }
+    }
+  } else {
+    // Braco format: Col A = group name, Col E = discipline, scan all rows per group for sign-off
+    const SKIP = /^(=|,{3,}|project|document|keys|stage|resp|other|discipline|ref|date|status|title|sheet)/i
+    const groupRows = new Map<string, string[]>()
+    for (const l of allLines) {
+      const c0 = (l.split(',')[0] ?? '').trim()
+      if (c0.length > 3 && /^[A-Za-z]/.test(c0) && !SKIP.test(l)) {
+        const bucket = groupRows.get(c0) ?? []
+        bucket.push(l)
+        groupRows.set(c0, bucket)
+      }
+    }
+    for (const [name, rows] of groupRows) {
+      const firstCols = rows[0].split(',').map(v => v.replace(/^"|"$/g, '').trim())
+      const discCode = firstCols[4] ?? ''
+      const discipline = /^EME$/i.test(discCode) ? 'Electrical'
+        : /^ETC/i.test(discCode) ? 'Commissioning'
+        : 'Civils'
+      const signed = rows.filter(r => {
+        const cs = r.split(',').map(v => v.replace(/^"|"$/g, '').trim())
+        return cs.slice(5).some(v => /^(yes|y)$/i.test(v))
+          || /\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(cs.slice(5).join(','))
+      }).length
+      groups.set(name, { discipline, total: rows.length, signed, ref: firstCols[4] ?? '' })
+    }
+  }
+
+  // Build compact summary for Claude
+  const summaryLines: string[] = ['ACTIVITY GROUP | DISCIPLINE | SIGNED/TOTAL | SIGN_OFF_FLAG | ITP_REF']
+  for (const [name, g] of groups) {
+    if (g.total === 0) continue
+    const flag = g.signed === g.total ? 'SIGN_OFF:ALL'
+      : g.signed > 0 ? `SIGN_OFF:${g.signed}/${g.total}`
+      : 'SIGN_OFF:NONE'
+    summaryLines.push(`${name} | ${g.discipline} | ${g.signed}/${g.total} | ${flag} | ${g.ref}`)
+  }
+  const filteredText = summaryLines.join('\n')
 
   // ── Claude analysis ──────────────────────────────────────────────────────
   const baselineContext = baseline
     ? `\nBASELINE ACTIVITIES:\n${JSON.stringify(baseline.ai_activities, null, 2)}\n`
     : ''
 
-  const prompt = `You are analysing an Inspection and Test Plan (ITP) for a UK construction project.
+  const prompt = `You are processing a pre-analysed ITP (Inspection and Test Plan) summary for a UK construction project.
 
-The ITP may be in CSV/spreadsheet format or plain text. Your job is to:
-1. Identify the column structure from the header row(s)
-2. Extract every unique ACTIVITY GROUP (the highest-level grouping — often column A)
-3. Determine completion status for each group by reading the actual data values
+Each line contains: ACTIVITY GROUP | DISCIPLINE | SIGNED/TOTAL | SIGN_OFF_FLAG | ITP_REF
 
-DISCIPLINE — look for a discipline/trade code column:
-- ECV or "Civils" = "Civils"
-- EME or "Electrical" = "Electrical" (includes HV cable, HV switchgear, grid connection)
-- T&C, commissioning, energisation items = "Commissioning"
-- If no discipline column exists, infer from activity name
+SIGN_OFF_FLAG meanings:
+- SIGN_OFF:ALL  → every QCS item signed off — set is_complete: true, progress 100%
+- SIGN_OFF:x/y  → x out of y items signed — set is_complete: false, partial_pct = round(x/y*100)
+- SIGN_OFF:NONE → nothing signed off — not started
 
-COMPLETION — a group is complete when its inspection items show sign-off evidence:
-- "Yes" or "Y" in any check/status/completion column
-- A date value in any sign-off/witnessed column
-- Initials or a name in a signature column
-- A group is partially complete if SOME (not all) items are signed
-- A group is not started if NO items show sign-off
+DISCIPLINE is already set — use it directly: "Civils" | "Electrical" | "Commissioning"
 
-Extract UNIQUE activity groups only (deduplicated).
-
-For each group return:
-- activity_group: exact name/title of the group
-- description: one-line summary of what this activity covers
-- discipline: "Civils" | "Electrical" | "Commissioning"
-- category: Civils only → "Below Ground" (foundations, piling, drainage, ducting, drawpits) or "Above Ground". All others → "N/A"
-- itp_ref: document reference number if present, or null
-- is_complete: true if all inspection items in the group are signed off
-- partial_pct: integer 0-99 if partially signed (e.g. 3 of 7 items = 43), else 0
-- completion_evidence: brief note if complete/partial (e.g. "All 5 items signed off", "3/7 items complete"), else null
+For each activity group return:
+- activity_group: exact name from the line
+- description: one-line plain-English summary of what this activity covers
+- discipline: use the discipline from the line exactly
+- category: Civils only → "Below Ground" (foundations, piling, drainage, earthing below ground, ducting, drawpits) or "Above Ground". All others → "N/A"
+- itp_ref: the ITP_REF value, or null if blank
+- is_complete: true only if SIGN_OFF:ALL
+- partial_pct: integer 0–99 from SIGN_OFF:x/y ratio, else 0
+- completion_evidence: "All x items signed off" if complete, "x/y items complete" if partial, else null
 - sort_order: Civils below ground 1–49, Civils above ground 50–99, Electrical 100–199, Commissioning 200+
 ${baselineContext}
 ${baseline ? 'Compare against the baseline and set baseline_status for each.' : ''}
