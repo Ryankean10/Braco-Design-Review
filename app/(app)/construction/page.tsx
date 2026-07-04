@@ -17,12 +17,45 @@ export default async function ConstructionIndexPage() {
     .select('*')
     .order('created_at', { ascending: false })
 
-  // For each site get cable counts
   const siteSummaries = await Promise.all((sites ?? []).map(async site => {
-    const { count: total }    = await supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id)
-    const { count: complete } = await supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id).eq('overall_status', 'Complete')
-    const { count: blocked }  = await supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id).eq('overall_status', 'Blocked')
-    return { ...site, total: total ?? 0, complete: complete ?? 0, blocked: blocked ?? 0 }
+    const [
+      { count: total },
+      { count: complete },
+      { count: blocked },
+      { data: civils },
+    ] = await Promise.all([
+      supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
+      supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id).eq('overall_status', 'Complete'),
+      supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id).eq('overall_status', 'Blocked'),
+      supabase.from('civils_activities').select('progress_pct, status').eq('site_id', site.id),
+    ])
+
+    const cableTotal    = total    ?? 0
+    const cableComplete = complete ?? 0
+    const cableBlocked  = blocked  ?? 0
+    const cablePct = cableTotal > 0 ? Math.round((cableComplete / cableTotal) * 100) : 0
+
+    const civilsRows = civils ?? []
+    const civilsPct = civilsRows.length > 0
+      ? Math.round(civilsRows.reduce((s: number, a: any) => s + (a.progress_pct ?? 0), 0) / civilsRows.length)
+      : null
+    const civilsComplete = civilsRows.filter((a: any) => a.status === 'Complete').length
+
+    const overallPct = civilsPct !== null
+      ? Math.round((cablePct + civilsPct) / 2)
+      : cablePct
+
+    return {
+      ...site,
+      total: cableTotal,
+      complete: cableComplete,
+      blocked: cableBlocked,
+      cablePct,
+      civilsPct,
+      civilsTotal: civilsRows.length,
+      civilsComplete,
+      overallPct,
+    }
   }))
 
   return (
@@ -31,7 +64,7 @@ export default async function ConstructionIndexPage() {
         <HardHat size={24} style={{ color: 'var(--accent)' }} />
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Construction</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Site cable registers, activity tracking &amp; daily logs</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Site registers, civils, activity tracking &amp; daily logs</p>
         </div>
       </div>
 
@@ -39,48 +72,84 @@ export default async function ConstructionIndexPage() {
         <div className="text-center py-20 rounded-xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <HardHat size={36} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No construction sites yet</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Run the migration and seed scripts to add Dyce</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {siteSummaries.map(site => {
-            const pct = site.total > 0 ? Math.round((site.complete / site.total) * 100) : 0
-            return (
-              <Link key={site.id} href={`/construction/${site.id}`}
-                className="rounded-xl border p-5 hover:opacity-90 transition-opacity"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{site.name}</h2>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full capitalize"
-                        style={{ background: site.status === 'active' ? 'rgba(74,222,128,0.12)' : 'var(--bg-elevated)', color: site.status === 'active' ? '#4ade80' : 'var(--text-muted)' }}>
-                        {site.status}
-                      </span>
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {site.client}{site.location ? ` · ${site.location}` : ''}{site.voltage_kv ? ` · ${site.voltage_kv}kV` : ''}
+          {siteSummaries.map(site => (
+            <Link key={site.id} href={`/construction/${site.id}`}
+              className="rounded-xl border p-5 hover:opacity-90 transition-opacity block"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+
+              {/* Header row */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{site.name}</h2>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full capitalize"
+                      style={{ background: site.status === 'active' ? 'rgba(74,222,128,0.12)' : 'var(--bg-elevated)', color: site.status === 'active' ? '#4ade80' : 'var(--text-muted)' }}>
+                      {site.status}
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {site.client}{site.location ? ` · ${site.location}` : ''}{site.voltage_kv ? ` · ${site.voltage_kv}kV` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right">
+                    <p className="text-2xl font-bold" style={{ color: site.overallPct === 100 ? '#4ade80' : 'var(--accent)' }}>
+                      {site.overallPct}%
                     </p>
-                    <div className="flex items-center gap-4 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      <span className="flex items-center gap-1"><CheckCircle2 size={11} style={{ color: '#4ade80' }} />{site.complete} complete</span>
-                      <span className="flex items-center gap-1"><Clock size={11} />{site.total - site.complete - site.blocked} remaining</span>
-                      {site.blocked > 0 && <span className="flex items-center gap-1"><AlertCircle size={11} style={{ color: '#f87171' }} />{site.blocked} blocked</span>}
-                    </div>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      {site.civilsPct !== null ? 'overall' : 'cables'}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-2xl font-bold" style={{ color: pct === 100 ? '#4ade80' : 'var(--accent)' }}>{pct}%</p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{site.total} cables</p>
+                  <ArrowRight size={16} style={{ color: 'var(--text-muted)' }} />
+                </div>
+              </div>
+
+              {/* Split progress bars */}
+              <div className="mt-3 space-y-1.5">
+                {site.civilsPct !== null && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] w-12 text-right shrink-0" style={{ color: '#fb923c' }}>Civils</span>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${site.civilsPct}%`, background: site.civilsPct === 100 ? '#4ade80' : '#fb923c' }} />
                     </div>
-                    <ArrowRight size={16} style={{ color: 'var(--text-muted)' }} />
+                    <span className="text-[10px] w-7 shrink-0 tabular-nums" style={{ color: '#fb923c' }}>{site.civilsPct}%</span>
                   </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] w-12 text-right shrink-0" style={{ color: 'var(--accent)' }}>Cable</span>
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${site.cablePct}%`, background: site.cablePct === 100 ? '#4ade80' : 'var(--accent)' }} />
+                  </div>
+                  <span className="text-[10px] w-7 shrink-0 tabular-nums" style={{ color: 'var(--accent)' }}>{site.cablePct}%</span>
                 </div>
-                <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct === 100 ? '#4ade80' : 'var(--accent)' }} />
-                </div>
-              </Link>
-            )
-          })}
+              </div>
+
+              {/* Stat chips */}
+              <div className="flex items-center gap-4 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 size={11} style={{ color: '#4ade80' }} />
+                  {site.complete}/{site.total} cables
+                </span>
+                {site.civilsPct !== null && (
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 size={11} style={{ color: '#fb923c' }} />
+                    {site.civilsComplete}/{site.civilsTotal} civils
+                  </span>
+                )}
+                {site.blocked > 0 && (
+                  <span className="flex items-center gap-1">
+                    <AlertCircle size={11} style={{ color: '#f87171' }} />
+                    {site.blocked} blocked
+                  </span>
+                )}
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>
