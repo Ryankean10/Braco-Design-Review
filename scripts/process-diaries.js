@@ -15,9 +15,10 @@
  */
 
 const { createClient } = require('@supabase/supabase-js')
-const fs   = require('fs')
-const path = require('path')
-const pdf  = require('pdf-parse')
+const fs      = require('fs')
+const path    = require('path')
+const pdf     = require('pdf-parse')
+const mammoth = require('mammoth')
 const Anthropic = require('@anthropic-ai/sdk')
 
 // ── env ─────────────────────────────────────────────────────────────────────
@@ -66,15 +67,83 @@ function parsePlannedWorks(text) {
   return m ? m[1].trim() : ''
 }
 
-/** Find all PDFs under a directory, sorted by filename (date-ascending if named consistently) */
+/** Find all PDFs and DOCX files under a directory, sorted by filename */
 function findPdfs(dir) {
   const results = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) results.push(...findPdfs(full))
-    else if (entry.name.toLowerCase().endsWith('.pdf')) results.push(full)
+    else if (/\.(pdf|docx)$/i.test(entry.name)) results.push(full)
   }
   return results.sort()
+}
+
+/** Extract plain text from PDF or DOCX */
+async function extractTextFromFile(filePath) {
+  if (filePath.toLowerCase().endsWith('.docx')) {
+    const result = await mammoth.extractRawText({ path: filePath })
+    return result.value
+  }
+  const buf = fs.readFileSync(filePath)
+  const result = await pdf(buf)
+  return result.text
+}
+
+/** Parse the PRODUCTION table from OCU daily shift report (docx format)
+ *  Returns array of { task, pct, comment } */
+function parseProductionTable(text) {
+  const rows = []
+  // The table renders as: task name\nPct%\ncomment (or task\tpct\tcomment)
+  // We look for the block between PRODUCTION header and TIMELINE
+  const block = text.match(/PRODUCTION[\s\S]*?Planned Tasks.*?\n([\s\S]*?)(?:TIMELINE|PLANT REQUIREMENTS)/i)
+  if (!block) return rows
+  const lines = block[1].split('\n').map(l => l.trim()).filter(Boolean)
+  // Lines come in groups: task, pct%, comment (or task, pct%)
+  // Skip the header row "Percentage Complete % Comments"
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    // Skip header lines
+    if (/^Percentage Complete|^Comments$/i.test(line)) { i++; continue }
+    // If next line looks like a percentage
+    const pctLine = lines[i + 1] ?? ''
+    const pctMatch = pctLine.match(/^(\d+)\s*%$/)
+    if (pctMatch) {
+      const comment = lines[i + 2] && !lines[i + 2].match(/^\d+\s*%$/) ? lines[i + 2] : ''
+      rows.push({ task: line, pct: parseInt(pctMatch[1]), comment })
+      i += comment ? 3 : 2
+    } else {
+      i++
+    }
+  }
+  return rows
+}
+
+/** Parse date from docx format: looks for DD/MM/YYYY after DATE label */
+function parseDateDocx(text) {
+  const m = text.match(/DATE\s*\n?\s*(\d{2}\/\d{2}\/\d{4})/i)
+  if (m) {
+    const [d, mo, y] = m[1].split('/')
+    return `${y}-${mo}-${d}`
+  }
+  return null
+}
+
+/** Parse crew count from RESOURCES section of docx */
+function parseCrewDocx(text) {
+  const block = text.match(/RESOURCES[\s\S]*?(?:ADDITIONAL INFORMATION|COMPLETED BY)/i)
+  if (!block) return null
+  const names = (block[0].match(/\b[A-Z][a-z]+ [A-Z][a-z]+/g) ?? [])
+    .filter(n => !['Site Manager','Tommy Golden','Andy Lee','Additional Information'].includes(n))
+  // Count named workers (rough heuristic — count non-header name-like entries)
+  const rows = block[0].split('\n').filter(l => /[A-Z][a-z]+ [A-Z][a-z]+/.test(l) && !/Manager|Engineer|Supervisor|Operator|Labourer|Competence/i.test(l))
+  return rows.length || null
+}
+
+/** Parse weather from docx */
+function parseWeatherDocx(text) {
+  const m = text.match(/Weather:\s*([^\n]+)/i)
+  return m ? m[1].trim() : null
 }
 
 /** Extract a ZIP using the built-in Node AdmZip (install if needed) or shell */
@@ -140,16 +209,43 @@ async function main() {
     process.stdout.write(`\n[${pdfs.indexOf(filePath) + 1}/${pdfs.length}] ${fileName} … `)
 
     try {
-      // Extract text
-      const buf     = fs.readFileSync(filePath)
-      const parsed  = await pdf(buf)
-      const text    = parsed.text
+      const isDocx = filePath.toLowerCase().endsWith('.docx')
 
-      // Parse structured fields
-      const rawDate   = extractField(text, 'Date')
-      const diaryDate = parseDate(rawDate)
+      // Extract text
+      const text = await extractTextFromFile(filePath)
+
+      // Parse structured fields — format differs between PDF (IPE-SF-OPS-055) and DOCX (OCU shift report)
+      let diaryDate, weather, crewCount, worksText, productionRows
+
+      if (isDocx) {
+        // OCU daily shift report format
+        diaryDate = parseDateDocx(text)
+        // Fallback: filename like "Daily Shift Report - OCU - TG - 02.02.26.docx"
+        if (!diaryDate) {
+          const fm = fileName.match(/(\d{2})\.(\d{2})\.(\d{2})\.docx$/i)
+          if (fm) diaryDate = `20${fm[3]}-${fm[2]}-${fm[1]}`
+        }
+        weather    = parseWeatherDocx(text)
+        crewCount  = parseCrewDocx(text)
+        productionRows = parseProductionTable(text)
+        worksText  = productionRows.map(r => `${r.task}: ${r.pct}% complete. ${r.comment}`).join('\n') || '(not recorded)'
+      } else {
+        // PDF IPE-SF-OPS-055 format
+        const dateMatch = text.match(/(?:^|\n)\s*Date\s*\n\s*(\d{1,2}[-\/][A-Za-z0-9]{2,3}[-\/]\d{4})/i)
+                       ?? text.match(/(?:^|\n)\s*Date[:\s]+(\d{1,2}[-\/][A-Za-z0-9]{2,3}[-\/]\d{4})/i)
+        const rawDate  = dateMatch ? dateMatch[1] : null
+        const fileDate = fileName.match(/-(\d{1,2}-[A-Za-z]{3}-\d{4})-/)
+        diaryDate  = parseDate(rawDate) ?? parseDate(fileDate ? fileDate[1] : null)
+        weather    = extractField(text, 'Weather')
+        crewCount  = parseCrew(text)
+        const actualWork  = parseActualWorks(text)
+        const plannedWork = parsePlannedWorks(text)
+        worksText  = (actualWork && actualWork.length > 3) ? actualWork : plannedWork
+        productionRows = []
+      }
+
       if (!diaryDate) {
-        console.log(`⚠️  Could not parse date (raw: "${rawDate}") — skipped`)
+        console.log(`⚠️  Could not parse date — skipped`)
         skipped++; continue
       }
 
@@ -167,12 +263,10 @@ async function main() {
         skipped++; continue
       }
 
-      const weather    = extractField(text, 'Weather')
-      const tempRaw    = extractField(text, 'Temperature')
-      const tempC      = tempRaw ? parseInt(tempRaw) : null
-      const crewCount  = parseCrew(text)
-      const actualWork = parseActualWorks(text)
-      const plannedWork = parsePlannedWorks(text)
+      // Claude: map works → civils activities
+      const productionContext = productionRows.length
+        ? `\nPRODUCTION TABLE (task name | reported % complete | comment):\n${productionRows.map(r => `  ${r.task} | ${r.pct}% | ${r.comment || '-'}`).join('\n')}\n`
+        : ''
 
       // Claude: map actual works → civils activities
       const prompt = `You are analysing an OCU Group daily site report for a Battery Energy Storage System (BESS) construction project in Dyce, Aberdeen.
@@ -181,23 +275,19 @@ CURRENT CIVILS ACTIVITY REGISTER:
 ${activityList}
 
 DIARY DATE: ${diaryDate}
-WEATHER: ${weather ?? 'not recorded'}, ${tempC ?? '?'}°C
+WEATHER: ${weather ?? 'not recorded'}
 CREW ON SITE: ${crewCount ?? 'not recorded'}
+${productionContext}
+WORKS NARRATIVE:
+${worksText || '(not recorded)'}
 
-PLANNED WORKS FOR THE DAY:
-${plannedWork || '(not recorded)'}
-
-ACTUAL WORKS COMPLETED TODAY:
-${actualWork || '(not recorded)'}
-
-Your task: identify any civils activities from the register that were worked on today, and estimate progress.
+Your task: identify any civils activities from the register that were worked on today, and estimate their OVERALL project progress_pct.
 
 Important notes:
-- "% Actual works completed" in the diary refers to the DAY's completion against planned works, NOT the overall project percentage — do not use it as an overall progress figure
-- Only update civils activities — electrical/cable/commissioning work (glanding, terminating, jointing, Sungrow testing, IDNO) should be ignored for civils tracking
-- Excavations, foundations, drainage, fencing, masonry walls, troughs, access road, concrete works ARE civils
-- Be conservative — only update progress if there is clear evidence; estimate based on context
-- Never reduce an activity below its current progress_pct
+- If a production table is provided, the percentages in it are the REPORTED COMPLETION for that specific task — use these as strong evidence for progress_pct
+- Only update civils activities — electrical/cable/commissioning work (glanding, terminating, jointing, Sungrow, IDNO, MV/LV) should be ignored
+- Civils = excavations, foundations, drainage, fencing, masonry walls, troughs, access road, concrete, blackjacking, piling
+- Be conservative — only update if clearly evidenced; never reduce below current progress_pct
 
 Return a JSON object:
 {
@@ -206,7 +296,7 @@ Return a JSON object:
   "ai_crew_count": ${crewCount ?? null},
   "ai_activities": [
     {
-      "activity_group": "exact name from register",
+      "activity_group": "exact name from register — do NOT append [Below Ground] or [Above Ground]",
       "progress_pct": 0-100,
       "status": "Not Started|In Progress|Complete|Blocked",
       "note": "brief note"
@@ -253,8 +343,10 @@ Only include activities in ai_activities if genuinely evidenced. Return valid JS
       // Apply activity updates
       let updatedCount = 0
       for (const update of (aiData.ai_activities ?? [])) {
+        // Strip any " [Category]" suffix Claude may append, then match
+        const cleanName = (update.activity_group ?? '').replace(/\s*\[.*?\]\s*$/, '').toLowerCase()
         const act = (activities ?? []).find(a =>
-          a.activity_group.toLowerCase() === (update.activity_group ?? '').toLowerCase()
+          a.activity_group.toLowerCase() === cleanName
         )
         if (!act) continue
         const newPct = Math.max(act.progress_pct, update.progress_pct ?? 0)

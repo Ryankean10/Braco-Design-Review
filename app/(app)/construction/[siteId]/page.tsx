@@ -7,6 +7,7 @@ import CableRegister from '@/components/construction/CableRegister'
 import SiteDashboard from '@/components/construction/SiteDashboard'
 import ProgrammePanel from '@/components/construction/ProgrammePanel'
 import CivilsPanel from '@/components/construction/CivilsPanel'
+import CollapsibleSection from '@/components/construction/CollapsibleSection'
 
 export default async function ConstructionSitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
@@ -150,12 +151,14 @@ export default async function ConstructionSitePage({ params }: { params: Promise
       />
 
       {/* Unified cable register */}
-      <CableRegister
-        siteId={siteId}
-        initialCables={cables ?? []}
-        packages={(site as any).construction_packages ?? []}
-        canEdit={canEdit}
-      />
+      <CollapsibleSection title="Cable Schedule" badge={(cables ?? []).length}>
+        <CableRegister
+          siteId={siteId}
+          initialCables={cables ?? []}
+          packages={(site as any).construction_packages ?? []}
+          canEdit={canEdit}
+        />
+      </CollapsibleSection>
     </div>
   )
 }
