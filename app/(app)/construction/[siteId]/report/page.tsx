@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import ProgressReport from '@/components/construction/ProgressReport'
+import ProgressReportDoc from '@/components/construction/ProgressReportDoc'
 
 export default async function ConstructionReportPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
@@ -43,27 +43,42 @@ export default async function ConstructionReportPage({ params }: { params: Promi
       .order('sort_order'),
   ])
 
-  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-4">
-      {/* Back button — hidden on print */}
-      <div className="flex items-center gap-3 print:hidden">
+    <div className="print-report">
+      {/* Back + print controls — hidden on print */}
+      <div className="print:hidden flex items-center justify-between px-6 py-3 border-b sticky top-0 z-10"
+        style={{ borderColor: 'var(--border)', background: 'var(--bg-base)' }}>
         <Link href={`/construction/${siteId}`}
           className="flex items-center gap-1.5 text-sm hover:opacity-70 transition-opacity"
           style={{ color: 'var(--text-muted)' }}>
           <ArrowLeft size={15} /> Back to site
         </Link>
+        <button
+          onClick={() => {}}
+          id="print-btn"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+          style={{ background: 'var(--accent)' }}>
+          Print / Save as PDF
+        </button>
       </div>
 
-      <ProgressReport
-        siteName={site.name}
-        client={site.client ?? ''}
-        cables={cables ?? []}
-        allLogs={allLogs ?? []}
-        civilsActivities={civilsActivities ?? []}
-        reportDate={today}
-      />
+      {/* Report content */}
+      <div className="p-6 max-w-5xl mx-auto">
+        <ProgressReportDoc
+          siteName={site.name}
+          client={site.client ?? ''}
+          location={site.location ?? ''}
+          voltageKv={site.voltage_kv ?? null}
+          cables={cables ?? []}
+          allLogs={allLogs ?? []}
+          civilsActivities={civilsActivities ?? []}
+        />
+      </div>
+
+      {/* Print button wiring — client side only */}
+      <script dangerouslySetInnerHTML={{ __html: `
+        document.getElementById('print-btn')?.addEventListener('click', () => window.print());
+      `}} />
     </div>
   )
 }
