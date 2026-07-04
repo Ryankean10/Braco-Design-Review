@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, Users, HardHat, ClipboardList } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, Users, HardHat, ClipboardList, UsersRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 
@@ -12,6 +12,7 @@ const NAV = [
   { href: '/construction',       label: 'Construction',     icon: HardHat,         roles: ['admin', 'engineer', 'project_manager', 'operative'] },
   { href: '/reference-library', label: 'Reference Library',icon: BookOpen,        roles: null },
   { href: '/planning',           label: 'Work Planner',     icon: ClipboardList,   roles: ['admin', 'engineer', 'project_manager'] },
+  { href: '/team',              label: 'Team',             icon: UsersRound,      roles: ['admin', 'engineer', 'project_manager'] },
   { href: '/users',             label: 'Users',            icon: Users,           roles: ['admin'] },
 ]
 
