@@ -10,6 +10,7 @@ import InternalCommentPanel from '@/components/InternalCommentPanel'
 import ProjectStageTracker from '@/components/ProjectStageTracker'
 import ClientAccessPanel from '@/components/ClientAccessPanel'
 import { makeDefaultStages, STAGE_ORDER as STAGE_NAMES } from '@/lib/stageDefaults'
+import ProjectITPUpload from '@/components/ProjectITPUpload'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -116,6 +117,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     { data: allHs },
     { data: allLessons },
     { data: allOps },
+    { data: projectItps },
   ] = await Promise.all([
     supabase.from('client_comments')
       .select('*, comment_attachments(*)')
@@ -139,6 +141,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     supabase.from('hs_references').select('*').order('category').order('ref'),
     supabase.from('lessons_learned').select('*').order('severity').order('category'),
     supabase.from('operator_rules').select('*').order('operator').order('category'),
+    supabase.from('project_itps').select('*').eq('project_id', id).order('uploaded_at', { ascending: false }),
   ])
 
   const linkedStandards = (linkedStandardRows ?? []).map((r: any) => r.standards).filter(Boolean)
@@ -221,6 +224,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           projectId={id}
         />
       </div>
+
+      {/* ITP upload */}
+      {role !== 'client' && (
+        <div className="mb-6">
+          <ProjectITPUpload
+            projectId={id}
+            initialItps={(projectItps ?? []) as any}
+            canEdit={canEdit}
+          />
+        </div>
+      )}
 
       {/* Feature panels */}
       <div className="grid grid-cols-2 gap-4 mb-6">
