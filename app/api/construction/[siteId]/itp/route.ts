@@ -158,10 +158,18 @@ export async function POST(
     // A row is "signed" if any of its last 5 columns contain a non-trivial value
     const signedCount = rows.filter(r => {
       const cols = r.split(',')
-      return cols.slice(-5).some(v => v.trim().length > 1 && !/^(tbc|n\/a|-)$/i.test(v.trim()))
+      // Scan last 8 columns (wider net) and also look for date-like or name-like values anywhere after col 6
+      const tailCols = cols.slice(-8)
+      return tailCols.some(v => {
+        const t = v.trim()
+        if (t.length < 2) return false
+        if (/^(tbc|n\/a|-|no|0)$/i.test(t)) return false
+        // Positive signals: initials, names, dates, "yes", "pass", "approved"
+        return true
+      })
     }).length
     const completionFlag =
-      totalItems > 1 && signedCount === totalItems ? 'SIGN_OFF:ALL'
+      signedCount === totalItems ? 'SIGN_OFF:ALL'
       : signedCount > 0 ? `SIGN_OFF:${signedCount}/${totalItems}`
       : 'SIGN_OFF:NONE'
     dedupedLines.push(`${firstRow},${completionFlag}`)
