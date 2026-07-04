@@ -131,78 +131,48 @@ export async function POST(
     contentType: file.type || 'application/octet-stream', upsert: false,
   })
 
-  // ── Pre-filter: one representative row per unique activity group ─────────
-  // Column E (index 4) in the ITP holds the discipline code: ECV = Civils, EME = Electrical
-  // We collect ALL rows per group so we can scan for sign-off evidence across detail rows,
-  // then send one summary line per group with a completion flag appended.
-  const allLines = rawText.split('\n')
+  // Send raw text to Claude — truncated to 80k chars to stay within token limits.
+  // Claude handles structure detection; no fragile column-based pre-filtering.
+  // For large Excel files, prefer the ITP sheet content over other sheets.
   const itpSheetStart = rawText.indexOf('=== Sheet:')
-  const header = rawText.slice(itpSheetStart >= 0 ? itpSheetStart : 0, itpSheetStart + 2000)
-  const SKIP = /^(=|,{3,}|project|document|keys|stage|resp|other|discipline|ref|date|status|title|sheet)/i
-
-  // Bucket every activity row by its group name (col1)
-  const groupRows = new Map<string, string[]>()
-  for (const l of allLines) {
-    const col1 = l.split(',')[0].trim()
-    if (col1.length > 4 && /^[A-Z]/.test(col1) && !SKIP.test(col1)) {
-      const bucket = groupRows.get(col1) ?? []
-      bucket.push(l)
-      groupRows.set(col1, bucket)
-    }
-  }
-
-  // For each group: take the first row (has discipline col, ITP ref) and append a
-  // sign-off summary derived by scanning the last 5 columns of every row for non-empty
-  // values (signatures, dates, initials) — these indicate completed inspection items.
-  const dedupedLines: string[] = []
-  for (const [, rows] of groupRows) {
-    const firstRow = rows[0]
-    const totalItems = rows.length
-    // A row is "signed" if any of its last 5 columns contain a non-trivial value
-    const signedCount = rows.filter(r => {
-      const cols = r.split(',').map(v => v.replace(/^"|"$/g, '').trim())
-      // Column H (index 7) is the primary completion indicator — "Yes" = signed off
-      const colH = cols[7] ?? ''
-      if (/^(yes|y|complete[d]?|pass(ed)?)$/i.test(colH)) return true
-      // Date pattern in any column from F onwards = signature/witnessed date
-      if (/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(cols.slice(5).join(','))) return true
-      // Any column from F onwards containing yes/y as an exact value
-      return cols.slice(5).some(v => /^(yes|y)$/i.test(v))
-    }).length
-    const completionFlag =
-      signedCount === totalItems ? 'SIGN_OFF:ALL'
-      : signedCount > 0 ? `SIGN_OFF:${signedCount}/${totalItems}`
-      : 'SIGN_OFF:NONE'
-    dedupedLines.push(`${firstRow},${completionFlag}`)
-  }
-  const filteredText = header + '\n' + dedupedLines.join('\n')
+  const filteredText = rawText.slice(itpSheetStart >= 0 ? itpSheetStart : 0, 80000)
 
   // ── Claude analysis ──────────────────────────────────────────────────────
   const baselineContext = baseline
     ? `\nBASELINE ACTIVITIES:\n${JSON.stringify(baseline.ai_activities, null, 2)}\n`
     : ''
 
-  const prompt = `You are analysing an Inspection and Test Plan (ITP) for a BESS (Battery Energy Storage System) construction project in the UK.
+  const prompt = `You are analysing an Inspection and Test Plan (ITP) for a UK construction project.
 
-The ITP is CSV-formatted. Each row represents one inspection item within an activity group.
-- Column 1 (A): activity group name
-- Column 5 (E): discipline code — READ THIS TO SET DISCIPLINE:
-    ECV = "Civils"
-    EME = "Electrical"   (this includes HV cable, HV switchgear, grid connection — all EME)
-    Any other code not listed: use "Commissioning" for T&C/energisation items, otherwise "Civils"
+The ITP may be in CSV/spreadsheet format or plain text. Your job is to:
+1. Identify the column structure from the header row(s)
+2. Extract every unique ACTIVITY GROUP (the highest-level grouping — often column A)
+3. Determine completion status for each group by reading the actual data values
 
-DO NOT guess discipline from keywords. Use Column E exclusively.
+DISCIPLINE — look for a discipline/trade code column:
+- ECV or "Civils" = "Civils"
+- EME or "Electrical" = "Electrical" (includes HV cable, HV switchgear, grid connection)
+- T&C, commissioning, energisation items = "Commissioning"
+- If no discipline column exists, infer from activity name
 
-Extract UNIQUE activity groups only (deduplicated by Column A).
+COMPLETION — a group is complete when its inspection items show sign-off evidence:
+- "Yes" or "Y" in any check/status/completion column
+- A date value in any sign-off/witnessed column
+- Initials or a name in a signature column
+- A group is partially complete if SOME (not all) items are signed
+- A group is not started if NO items show sign-off
+
+Extract UNIQUE activity groups only (deduplicated).
 
 For each group return:
-- activity_group: exact name from column A
+- activity_group: exact name/title of the group
 - description: one-line summary of what this activity covers
-- discipline: "Civils" | "Electrical" | "Commissioning"  — derived from Column E as above
+- discipline: "Civils" | "Electrical" | "Commissioning"
 - category: Civils only → "Below Ground" (foundations, piling, drainage, ducting, drawpits) or "Above Ground". All others → "N/A"
-- itp_ref: document reference number seen in the row (e.g. "BRC-OCU-XX-XX-QC-C-030001"), or null
-- is_complete: set to true when the SIGN_OFF flag appended to the row is SIGN_OFF:ALL — every inspection item signed off. SIGN_OFF:NONE = not started. SIGN_OFF:x/y = partially complete.
-- completion_evidence: if is_complete, write "All items signed off" or note partial sign-off count; otherwise null
+- itp_ref: document reference number if present, or null
+- is_complete: true if all inspection items in the group are signed off
+- partial_pct: integer 0-99 if partially signed (e.g. 3 of 7 items = 43), else 0
+- completion_evidence: brief note if complete/partial (e.g. "All 5 items signed off", "3/7 items complete"), else null
 - sort_order: Civils below ground 1–49, Civils above ground 50–99, Electrical 100–199, Commissioning 200+
 ${baselineContext}
 ${baseline ? 'Compare against the baseline and set baseline_status for each.' : ''}
@@ -232,7 +202,7 @@ Return valid JSON only — no markdown fences:
 
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 4000,
+    max_tokens: 8000,
     messages: [{ role: 'user', content: prompt }],
   })
 
