@@ -7,6 +7,7 @@ import CableRegister from '@/components/construction/CableRegister'
 import SiteDashboard from '@/components/construction/SiteDashboard'
 import ProgressReport from '@/components/construction/ProgressReport'
 import ProgrammePanel from '@/components/construction/ProgrammePanel'
+import CivilsPanel from '@/components/construction/CivilsPanel'
 
 export default async function ConstructionSitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
@@ -55,6 +56,20 @@ export default async function ConstructionSitePage({ params }: { params: Promise
     .eq('site_id', siteId)
     .eq('status', 'Open')
     .order('created_at', { ascending: false })
+
+  // Fetch civils activities and site diaries
+  const { data: civilsActivities } = await supabase
+    .from('civils_activities')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('sort_order')
+
+  const { data: siteDiaries } = await supabase
+    .from('site_diaries')
+    .select('id, diary_date, file_name, ai_summary, ai_weather, ai_crew_count, ai_analysed_at, uploaded_at')
+    .eq('site_id', siteId)
+    .order('diary_date', { ascending: false })
+    .limit(20)
 
   // Generate signed URLs using service role (bypasses storage RLS)
   const serviceSupabase = createServiceClient(
@@ -124,6 +139,14 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         siteId={siteId}
         initialProgrammes={programmes ?? []}
         signedUrls={signedUrls}
+        canEdit={canEdit}
+      />
+
+      {/* Civils works module */}
+      <CivilsPanel
+        siteId={siteId}
+        initialActivities={civilsActivities ?? []}
+        initialDiaries={siteDiaries ?? []}
         canEdit={canEdit}
       />
 
