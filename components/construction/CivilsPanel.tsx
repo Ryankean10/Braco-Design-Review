@@ -70,6 +70,30 @@ function ProgressBar({ pct, status }: { pct: number; status: string }) {
   )
 }
 
+function VelocityDot({ lastUpdate, status }: { lastUpdate: string | null; status: string }) {
+  if (status === 'Complete') return null
+  if (!lastUpdate) {
+    return (
+      <span className="flex items-center gap-1 text-xs shrink-0" style={{ color: 'var(--text-muted)' }}
+        title="No diary entries yet">
+        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: '#94a3b8' }} />
+        No updates
+      </span>
+    )
+  }
+  const days = Math.floor((Date.now() - new Date(lastUpdate).getTime()) / 86400000)
+  const color = days <= 7 ? '#22c55e' : days <= 14 ? '#fb923c' : '#f87171'
+  const label = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days}d ago`
+  const pulse = days <= 7
+  return (
+    <span className="flex items-center gap-1 text-xs shrink-0" style={{ color }} title={`Last diary update ${label}`}>
+      <span className={`w-1.5 h-1.5 rounded-full inline-block${pulse ? ' animate-pulse' : ''}`}
+        style={{ background: color }} />
+      {label}
+    </span>
+  )
+}
+
 function ActivityRow({ act }: { act: CivilsActivity }) {
   const [expanded, setExpanded] = useState(false)
   return (
@@ -98,6 +122,7 @@ function ActivityRow({ act }: { act: CivilsActivity }) {
         </div>
 
         <div className="flex items-center gap-3 shrink-0 ml-3">
+          <VelocityDot lastUpdate={act.last_diary_update} status={act.status} />
           <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
             {act.progress_pct}%
           </span>

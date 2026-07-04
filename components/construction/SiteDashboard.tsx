@@ -47,6 +47,12 @@ interface DailyLog {
   summary: string | null
 }
 
+interface CivilsActivity {
+  status: string
+  progress_pct: number
+  category: string
+}
+
 interface Props {
   site: any
   siteId: string
@@ -54,6 +60,7 @@ interface Props {
   recentLogs: DailyLog[]
   reviewItemCount: number
   canEdit: boolean
+  civilsActivities?: CivilsActivity[]
 }
 
 const WEATHER_COLOR: Record<string, string> = {
@@ -63,7 +70,7 @@ const IMPACT_COLOR: Record<string, string> = {
   None: '#4ade80', Low: '#facc15', Medium: '#fb923c', High: '#f87171',
 }
 
-export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit }: Props) {
+export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [] }: Props) {
   const [showLogForm, setShowLogForm] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(recentLogs[0]?.id ?? null)
 
@@ -74,7 +81,20 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
   const inProg   = ipeOnly.filter(c => c.overall_status === 'In Progress').length
   const blocked  = ipeOnly.filter(c => c.overall_status === 'Blocked').length
   const flagged  = cables.filter(c => c.flagged && c.scope === 'IPE').length
-  const pct = total > 0 ? Math.round((complete / total) * 100) : 0
+  const cablePct = total > 0 ? Math.round((complete / total) * 100) : 0
+
+  // Civils overall %
+  const civilsPct = civilsActivities.length > 0
+    ? Math.round(civilsActivities.reduce((s, a) => s + a.progress_pct, 0) / civilsActivities.length)
+    : null
+
+  // Blended overall: 50/50 if civils data exists, else cable only
+  const pct = civilsPct !== null
+    ? Math.round((cablePct + civilsPct) / 2)
+    : cablePct
+  const pctLabel = civilsPct !== null
+    ? `${cablePct}% cable · ${civilsPct}% civils`
+    : `${cablePct}% cables`
 
   // Package rollup (IPE only)
   const byPkg: Record<string, { total: number; complete: number; inProg: number }> = {}
@@ -106,7 +126,7 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
     <div className="space-y-4">
       {/* KPI row — each tile links to the relevant data */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Kpi label="Overall progress" value={`${pct}%`} sub={`${complete}/${total} cables`}
+        <Kpi label="Overall progress" value={`${pct}%`} sub={pctLabel}
           color={pct === 100 ? '#4ade80' : 'var(--accent)'}
           href={`?status=all#cable-register`} hint="View all cables" />
         <Kpi label="In progress" value={String(inProg)} sub="cables active" color="#60a5fa"
@@ -227,6 +247,25 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
       <div className="rounded-xl border p-5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
         <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Package progress (IPE scope)</p>
         <div className="space-y-3">
+          {/* Civils row — shown first when data exists */}
+          {civilsPct !== null && (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs font-medium flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                  Civils Works
+                  <span className="text-[10px] px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>
+                    {civilsActivities.filter(a => a.status === 'Complete').length}/{civilsActivities.length} complete
+                  </span>
+                </span>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{civilsPct}%</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                <div className="h-full rounded-full transition-all"
+                  style={{ width: `${civilsPct}%`, background: civilsPct === 100 ? '#4ade80' : '#fb923c' }} />
+              </div>
+            </div>
+          )}
           {Object.entries(byPkg).map(([pkg, stats]) => {
             const p = stats.total > 0 ? (stats.complete / stats.total) * 100 : 0
             return (

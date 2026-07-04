@@ -132,6 +132,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         recentLogs={recentLogs ?? []}
         reviewItemCount={(reviewItems ?? []).length}
         canEdit={canEdit}
+        civilsActivities={civilsActivities ?? []}
       />
 
       {/* P6 Programme */}
