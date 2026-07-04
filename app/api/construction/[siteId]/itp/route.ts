@@ -3,8 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import * as XLSX from 'xlsx'
 
-export const config = { api: { bodyParser: false } }
-export const maxDuration = 60
+export const maxDuration = 120
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -129,6 +128,15 @@ export async function POST(
     contentType: file.type || 'application/octet-stream', upsert: false,
   })
 
+  // ── Pre-filter to civils-relevant lines to reduce tokens sent to Claude ──
+  const CIVILS_KEYWORDS = /civil|foundation|pile|drain|trench|fence|fenc|road|culvert|bund|earthwork|ground|wall|masonry|compound|ducting|trough|drawpit|duct|temporary work|temp work|scaffold|hoarding|gate|cctv|concrete|formwork|reinforce|rebar|shutter/i
+  const allLines = rawText.split('\n')
+  // Grab header rows (first 15 lines of the ITP sheet) + any line matching civils keywords
+  const itpSheetStart = rawText.indexOf('=== Sheet:')
+  const header = rawText.slice(itpSheetStart >= 0 ? itpSheetStart : 0, itpSheetStart + 2000)
+  const civilsLines = allLines.filter(l => CIVILS_KEYWORDS.test(l))
+  const filteredText = header + '\n' + civilsLines.join('\n')
+
   // ── Claude analysis ──────────────────────────────────────────────────────
   const baselineContext = baseline
     ? `\nBASELINE (${baseline.revision}) CIVILS ACTIVITIES:\n${JSON.stringify(baseline.ai_activities, null, 2)}\n`
@@ -140,24 +148,21 @@ Your task: extract all CIVILS scope items from this ITP. Ignore electrical, HV/L
 
 Civils scope includes: piling, pile caps, foundations, drainage, cable troughing, drawpits, masonry walls, fencing (acoustic, palisade, chain-link), access roads, concrete pours, groundworks, temporary works, earthing (where structural), CCTV/gate posts.
 
-For each civils item found, identify:
-- activity_group: concise name (e.g. "Driven Piles", "Drainage Installation", "North Masonry Wall")
-- description: brief scope description from the ITP
-- category: "Below Ground" or "Above Ground"
-- itp_ref: the ITP reference/row number if visible
-- is_complete: true if the ITP shows this item as signed off / inspected / complete (look for tick columns, "Yes", signatures, dates in completion columns)
-- completion_evidence: brief note on what indicates completion (or null if not complete)
-- sort_order: suggested sort order (below ground first, then above ground)
-${baselineContext}
-${baseline ? `Compare against the baseline above. For each activity, note if it is:
-- "new": not in baseline
-- "removed": in baseline but not in this revision
-- "completed": was incomplete in baseline, now signed off
-- "changed": scope has materially changed
-- "unchanged": same as baseline` : ''}
+This ITP uses a grouped format where column 1 is the activity group name (e.g. "Compound & Access Road Formation", "Compound Foundations") and subsequent columns are individual inspection items within that group. Extract the UNIQUE activity groups as the top-level activities.
 
-ITP TEXT:
-${rawText.slice(0, 50000)}
+For each unique civils activity group found, identify:
+- activity_group: the group name from column 1 (e.g. "Compound Foundations", "Fencing Installation")
+- description: brief summary of what the group covers
+- category: "Below Ground" (piles, foundations, drainage, ducting, earthworks) or "Above Ground" (roads, fencing, walls, compound formation, CCTV)
+- itp_ref: first ITP reference number seen for this group (e.g. "BRC-OCU-XX-XX-QC-C-030001")
+- is_complete: true only if ALL items in this group show completion evidence
+- completion_evidence: brief note or null
+- sort_order: below ground first (1-99), above ground second (100+)
+${baselineContext}
+${baseline ? `Compare against the baseline above and set baseline_status for each activity.` : ''}
+
+ITP TEXT (civils-filtered):
+${filteredText.slice(0, 40000)}
 
 Return a JSON object:
 {
