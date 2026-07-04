@@ -12,7 +12,8 @@ export interface CivilsActivity {
   id: string
   activity_group: string
   description: string
-  category: 'Below Ground' | 'Above Ground'
+  discipline: 'Civils' | 'Electrical' | 'HV' | 'Commissioning'
+  category: 'Below Ground' | 'Above Ground' | 'N/A'
   itp_ref: string | null
   status: 'Not Started' | 'In Progress' | 'Complete' | 'Blocked'
   progress_pct: number
@@ -262,8 +263,12 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
     }
   }
 
-  const belowGround = activities.filter(a => a.category === 'Below Ground')
-  const aboveGround = activities.filter(a => a.category === 'Above Ground')
+  const civils      = activities.filter(a => (a.discipline ?? 'Civils') === 'Civils')
+  const electrical  = activities.filter(a => a.discipline === 'Electrical')
+  const hv          = activities.filter(a => a.discipline === 'HV')
+  const commissioning = activities.filter(a => a.discipline === 'Commissioning')
+  const belowGround = civils.filter(a => a.category === 'Below Ground')
+  const aboveGround = civils.filter(a => a.category !== 'Below Ground')
 
   function avgProgress(acts: CivilsActivity[]) {
     if (!acts.length) return 0
@@ -351,6 +356,9 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
         {[
           { label: 'Below Ground', acts: belowGround },
           { label: 'Above Ground', acts: aboveGround },
+          ...(electrical.length > 0 ? [{ label: 'Electrical', acts: electrical }] : []),
+          ...(hv.length > 0 ? [{ label: 'HV', acts: hv }] : []),
+          ...(commissioning.length > 0 ? [{ label: 'Commissioning', acts: commissioning }] : []),
         ].map(({ label, acts }) => {
           const pct = avgProgress(acts)
           const done = acts.filter(a => a.status === 'Complete').length
@@ -405,21 +413,19 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
               </div>
             )}
 
-            {belowGround.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide px-1"
-                  style={{ color: 'var(--text-muted)' }}>Below Ground</h4>
-                {belowGround.map(a => <ActivityRow key={a.id} act={a} />)}
-              </div>
-            )}
-
-            {aboveGround.length > 0 && (
-              <div className="space-y-2">
+            {[
+              { label: 'Civils — Below Ground', acts: belowGround },
+              { label: 'Civils — Above Ground', acts: aboveGround },
+              { label: 'Electrical', acts: electrical },
+              { label: 'HV', acts: hv },
+              { label: 'Commissioning', acts: commissioning },
+            ].filter(s => s.acts.length > 0).map(({ label, acts }) => (
+              <div key={label} className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide px-1 mt-2"
-                  style={{ color: 'var(--text-muted)' }}>Above Ground</h4>
-                {aboveGround.map(a => <ActivityRow key={a.id} act={a} />)}
+                  style={{ color: 'var(--text-muted)' }}>{label}</h4>
+                {acts.map(a => <ActivityRow key={a.id} act={a} />)}
               </div>
-            )}
+            ))}
           </>
         )}
 

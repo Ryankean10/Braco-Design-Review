@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   CheckCircle2, Clock, AlertCircle, CloudRain, Flag, Users,
   ChevronDown, ChevronUp, Plus, Wind, Thermometer, Droplets,
-  AlertTriangle, BarChart2, ChevronRight, HardHat,
+  AlertTriangle, BarChart2, ChevronRight, HardHat, Zap,
 } from 'lucide-react'
 import DailyLogForm from './DailyLogForm'
 
@@ -21,7 +21,7 @@ interface DailyLog {
   weather_lost_hours: number | null; temp_c: number | null; wind_mph: number | null; rain_mm: number | null
   issues: IssueEntry[]; summary: string | null
 }
-interface CivilsActivity { status: string; progress_pct: number; category: string }
+interface CivilsActivity { status: string; progress_pct: number; category: string; discipline?: string }
 
 interface Props {
   site: any; siteId: string; cables: CableItem[]; recentLogs: DailyLog[]
@@ -76,12 +76,31 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
   const flagged   = cables.filter(c => c.flagged && c.scope === 'IPE').length
   const cablePct  = total > 0 ? Math.round((complete / total) * 100) : 0
 
-  // Civils stats
-  const civilsPct = civilsActivities.length > 0
-    ? Math.round(civilsActivities.reduce((s, a) => s + a.progress_pct, 0) / civilsActivities.length)
-    : null
-  const overallPct = civilsPct !== null ? Math.round((cablePct + civilsPct) / 2) : cablePct
-  const pctLabel   = civilsPct !== null ? `${cablePct}% cable · ${civilsPct}% civils` : `${cablePct}% cables`
+  // Activity stats by discipline
+  const avg = (acts: typeof civilsActivities) =>
+    acts.length > 0 ? Math.round(acts.reduce((s, a) => s + a.progress_pct, 0) / acts.length) : null
+
+  const civilsOnly   = civilsActivities.filter(a => !a.discipline || a.discipline === 'Civils')
+  const electricalActs = civilsActivities.filter(a => a.discipline === 'Electrical' || a.discipline === 'HV')
+  const commActs     = civilsActivities.filter(a => a.discipline === 'Commissioning')
+
+  const civilsPct      = avg(civilsOnly)
+  // Use cable register % for electrical if cables exist, otherwise fall back to ITP electrical activities
+  const electricalPct  = total > 0 ? cablePct : avg(electricalActs)
+  const commPct        = avg(commActs)
+
+  // Overall = average of whichever disciplines have data
+  const disciplinePcts = [civilsPct, electricalPct, commPct].filter(p => p !== null) as number[]
+  const overallPct = disciplinePcts.length > 0
+    ? Math.round(disciplinePcts.reduce((s, p) => s + p, 0) / disciplinePcts.length)
+    : 0
+
+  const pctParts = [
+    civilsPct !== null ? `civils ${civilsPct}%` : null,
+    electricalPct !== null ? (total > 0 ? `cables ${electricalPct}%` : `electrical ${electricalPct}%`) : null,
+    commPct !== null ? `commissioning ${commPct}%` : null,
+  ].filter(Boolean)
+  const pctLabel = pctParts.length > 0 ? pctParts.join(' · ') : `${cablePct}% cables`
 
   // Package rollup
   const byPkg: Record<string, { total: number; complete: number; inProg: number }> = {}
@@ -155,10 +174,10 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
 
       {/* ── Progress breakdown — side by side ── */}
       <Section title="Progress breakdown" badge={`${overallPct}% overall`} badgeColor="var(--accent)"
-        summary={civilsPct !== null ? `civils ${civilsPct}% · cables ${cablePct}% · ${complete}/${total} cables done` : `${complete}/${total} cables · ${inProg} active · ${blocked} blocked`}>
+        summary={pctLabel + (complete > 0 || total > 0 ? ` · ${complete}/${total} cables` : '')}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-          {/* Civils package */}
+          {/* Civils card */}
           {civilsPct !== null && (
             <Link href={`/construction/${siteId}#civils`}
               className="rounded-lg border p-4 hover:opacity-80 transition-opacity block"
@@ -171,8 +190,9 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
               </div>
               <div className="space-y-2">
                 {(['Below Ground', 'Above Ground'] as const).map(cat => {
-                  const acts = civilsActivities.filter(a => a.category === cat)
-                  const p = acts.length > 0 ? Math.round(acts.reduce((s, a) => s + a.progress_pct, 0) / acts.length) : 0
+                  const acts = civilsOnly.filter(a => a.category === cat)
+                  if (!acts.length) return null
+                  const p = Math.round(acts.reduce((s, a) => s + a.progress_pct, 0) / acts.length)
                   const done = acts.filter(a => a.status === 'Complete').length
                   return (
                     <div key={cat}>
@@ -181,15 +201,50 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
                         <span style={{ color: 'var(--text-muted)' }}>{done}/{acts.length} · {p}%</span>
                       </div>
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
-                        <div className="h-full rounded-full"
-                          style={{ width: `${p}%`, background: p === 100 ? '#4ade80' : '#fb923c' }} />
+                        <div className="h-full rounded-full" style={{ width: `${p}%`, background: p === 100 ? '#4ade80' : '#fb923c' }} />
                       </div>
                     </div>
                   )
                 })}
               </div>
               <p className="text-[10px] mt-2.5" style={{ color: 'var(--text-muted)' }}>
-                {civilsActivities.filter(a => a.status === 'Complete').length}/{civilsActivities.length} activities complete · click to view register
+                {civilsOnly.filter(a => a.status === 'Complete').length}/{civilsOnly.length} activities complete · click to view register
+              </p>
+            </Link>
+          )}
+
+          {/* Electrical card — driven by ITP activities until cable register exists */}
+          {electricalActs.length > 0 && total === 0 && (
+            <Link href={`/construction/${siteId}#civils`}
+              className="rounded-lg border p-4 hover:opacity-80 transition-opacity block"
+              style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                  <Zap size={12} style={{ color: 'var(--accent)' }} /> Electrical Works
+                </span>
+                <span className="text-lg font-bold" style={{ color: electricalPct === 100 ? '#4ade80' : 'var(--accent)' }}>{electricalPct ?? 0}%</span>
+              </div>
+              <div className="space-y-2">
+                {['Electrical', 'HV'].map(disc => {
+                  const acts = civilsActivities.filter(a => a.discipline === disc)
+                  if (!acts.length) return null
+                  const p = Math.round(acts.reduce((s, a) => s + a.progress_pct, 0) / acts.length)
+                  const done = acts.filter(a => a.status === 'Complete').length
+                  return (
+                    <div key={disc}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span style={{ color: 'var(--text-muted)' }}>{disc}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{done}/{acts.length} · {p}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${p}%`, background: p === 100 ? '#4ade80' : 'var(--accent)' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] mt-2.5" style={{ color: 'var(--text-muted)' }}>
+                ITP activities · cable register will replace this when added
               </p>
             </Link>
           )}

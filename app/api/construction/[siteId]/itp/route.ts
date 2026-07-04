@@ -128,50 +128,57 @@ export async function POST(
     contentType: file.type || 'application/octet-stream', upsert: false,
   })
 
-  // ── Pre-filter to civils-relevant lines to reduce tokens sent to Claude ──
-  const CIVILS_KEYWORDS = /civil|foundation|pile|drain|trench|fence|fenc|road|culvert|bund|earthwork|ground|wall|masonry|compound|ducting|trough|drawpit|duct|temporary work|temp work|scaffold|hoarding|gate|cctv|concrete|formwork|reinforce|rebar|shutter/i
+  // ── Pre-filter: grab ITP sheet header + all activity rows ────────────────
   const allLines = rawText.split('\n')
-  // Grab header rows (first 15 lines of the ITP sheet) + any line matching civils keywords
   const itpSheetStart = rawText.indexOf('=== Sheet:')
   const header = rawText.slice(itpSheetStart >= 0 ? itpSheetStart : 0, itpSheetStart + 2000)
-  const civilsLines = allLines.filter(l => CIVILS_KEYWORDS.test(l))
-  const filteredText = header + '\n' + civilsLines.join('\n')
+  // Keep rows where column 1 looks like an activity group name (starts with a capital, not a code)
+  const SKIP = /^(=|,{3,}|project|document|keys|stage|resp|other|discipline|ref|date|status|title|sheet)/i
+  const activityLines = allLines.filter(l => {
+    const col1 = l.split(',')[0].trim()
+    return col1.length > 4 && /^[A-Z]/.test(col1) && !SKIP.test(col1)
+  })
+  const filteredText = header + '\n' + activityLines.join('\n')
 
   // ── Claude analysis ──────────────────────────────────────────────────────
   const baselineContext = baseline
-    ? `\nBASELINE (${baseline.revision}) CIVILS ACTIVITIES:\n${JSON.stringify(baseline.ai_activities, null, 2)}\n`
+    ? `\nBASELINE ACTIVITIES:\n${JSON.stringify(baseline.ai_activities, null, 2)}\n`
     : ''
 
   const prompt = `You are analysing an Inspection and Test Plan (ITP) for a BESS (Battery Energy Storage System) construction project in the UK.
 
-Your task: extract all CIVILS scope items from this ITP. Ignore electrical, HV/LV cable, commissioning, and instrumentation activities.
+Extract ALL construction scope activity groups from this ITP, covering every discipline. Assign each a discipline:
+- "Civils": piling, foundations, drainage, ducting, cable troughing, drawpits, fencing, access roads, concrete, earthworks, temporary works, compound formation, CCTV posts
+- "Electrical": LV/DC cable install, panel wiring, electrical installation, earthing (electrical), containment, battery connections, inverter/transformer installation, metering
+- "HV": 33kV/11kV cable, HV switchgear, DNO connection, grid connection, HV testing
+- "Commissioning": FAT, SAT, SIT, system integration, protection settings, G99 testing, energisation steps
 
-Civils scope includes: piling, pile caps, foundations, drainage, cable troughing, drawpits, masonry walls, fencing (acoustic, palisade, chain-link), access roads, concrete pours, groundworks, temporary works, earthing (where structural), CCTV/gate posts.
+This ITP uses a grouped format: column 1 is the activity group name, subsequent columns are individual inspection items. Extract UNIQUE activity groups only.
 
-This ITP uses a grouped format where column 1 is the activity group name (e.g. "Compound & Access Road Formation", "Compound Foundations") and subsequent columns are individual inspection items within that group. Extract the UNIQUE activity groups as the top-level activities.
-
-For each unique civils activity group found, identify:
-- activity_group: the group name from column 1 (e.g. "Compound Foundations", "Fencing Installation")
-- description: brief summary of what the group covers
-- category: "Below Ground" (piles, foundations, drainage, ducting, earthworks) or "Above Ground" (roads, fencing, walls, compound formation, CCTV)
-- itp_ref: first ITP reference number seen for this group (e.g. "BRC-OCU-XX-XX-QC-C-030001")
-- is_complete: true only if ALL items in this group show completion evidence
+For each group:
+- activity_group: exact name from column 1
+- description: brief summary of scope
+- discipline: "Civils" | "Electrical" | "HV" | "Commissioning"
+- category: for Civils only — "Below Ground" or "Above Ground". For others use "N/A"
+- itp_ref: first reference number seen (e.g. "BRC-OCU-XX-XX-QC-C-030001")
+- is_complete: true only if all items in group show sign-off evidence
 - completion_evidence: brief note or null
-- sort_order: below ground first (1-99), above ground second (100+)
+- sort_order: Civils below ground 1-49, Civils above ground 50-99, Electrical 100-149, HV 150-199, Commissioning 200+
 ${baselineContext}
-${baseline ? `Compare against the baseline above and set baseline_status for each activity.` : ''}
+${baseline ? `Compare against the baseline and set baseline_status for each.` : ''}
 
-ITP TEXT (civils-filtered):
+ITP TEXT:
 ${filteredText.slice(0, 40000)}
 
-Return a JSON object:
+Return valid JSON only:
 {
-  "revision_summary": "1-2 sentence summary of this ITP revision",
+  "revision_summary": "string",
   "activities": [
     {
       "activity_group": "string",
       "description": "string",
-      "category": "Below Ground" | "Above Ground",
+      "discipline": "Civils" | "Electrical" | "HV" | "Commissioning",
+      "category": "Below Ground" | "Above Ground" | "N/A",
       "itp_ref": "string or null",
       "is_complete": boolean,
       "completion_evidence": "string or null",
@@ -179,15 +186,8 @@ Return a JSON object:
       "baseline_status": "new" | "removed" | "completed" | "changed" | "unchanged" | null
     }
   ],
-  "diff_summary": {
-    "added": ["activity names"],
-    "removed": ["activity names"],
-    "completed": ["activity names"],
-    "changed": ["activity names"]
-  }
-}
-
-Return valid JSON only.`
+  "diff_summary": { "added": [], "removed": [], "completed": [], "changed": [] }
+}`
 
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
@@ -235,7 +235,8 @@ Return valid JSON only.`
         site_id:        siteId,
         activity_group: a.activity_group,
         description:    a.description ?? null,
-        category:       a.category ?? 'Above Ground',
+        discipline:     a.discipline ?? 'Civils',
+        category:       a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground'),
         itp_ref:        a.itp_ref ?? null,
         status:         a.is_complete ? 'Complete' : 'Not Started',
         progress_pct:   a.is_complete ? 100 : 0,
@@ -275,7 +276,8 @@ Return valid JSON only.`
           site_id:        siteId,
           activity_group: a.activity_group,
           description:    a.description ?? null,
-          category:       a.category ?? 'Above Ground',
+          discipline:     a.discipline ?? 'Civils',
+          category:       a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground'),
           itp_ref:        a.itp_ref ?? null,
           status:         a.is_complete ? 'Complete' : 'Not Started',
           progress_pct:   a.is_complete ? 100 : 0,
