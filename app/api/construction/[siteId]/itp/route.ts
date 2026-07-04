@@ -104,8 +104,17 @@ export async function POST(
 
   if (existingErr) return NextResponse.json({ error: existingErr.message }, { status: 500 })
 
-  const isFirstRevision = !existing || existing.length === 0
-  const baseline = existing?.find(r => r.is_baseline)
+  const existingBaseline = existing?.find(r => r.is_baseline)
+  const baselineHasActivities = (existingBaseline?.ai_activities as any[] | null)?.length ?? 0
+  // Treat as first revision if no records exist, or if the existing baseline extracted 0 activities
+  const isFirstRevision = !existing || existing.length === 0 || baselineHasActivities === 0
+  const baseline = isFirstRevision ? null : existingBaseline
+
+  // If re-baselining, clear out the old empty records and any stale civils_activities
+  if (isFirstRevision && existing && existing.length > 0) {
+    await supabase.from('itp_revisions').delete().eq('site_id', siteId)
+    await supabase.from('civils_activities').delete().eq('site_id', siteId)
+  }
 
   // Load current civils activities for context
   const { data: currentActivities } = await supabase
