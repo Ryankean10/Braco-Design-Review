@@ -308,7 +308,7 @@ function AppointModal({ person, projects, sites, currentUserId, onClose, onSaved
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function TeamClient({ people: init, appointments: initAppts, projects, sites, canEdit }: Props) {
+export default function TeamClient({ people: init, appointments: initAppts, projects, sites, currentUserId, canEdit }: Props) {
   const supabase = createClient()
   const [tab, setTab] = useState<'library' | 'teams'>('library')
   const [people, setPeople] = useState(init)
