@@ -130,20 +130,41 @@ export async function POST(
 
   // ── Pre-filter: one representative row per unique activity group ─────────
   // Column E (index 4) in the ITP holds the discipline code: ECV = Civils, EME = Electrical
-  // Deduplicate by col1 group name — one row per group so the payload stays tiny
+  // We collect ALL rows per group so we can scan for sign-off evidence across detail rows,
+  // then send one summary line per group with a completion flag appended.
   const allLines = rawText.split('\n')
   const itpSheetStart = rawText.indexOf('=== Sheet:')
   const header = rawText.slice(itpSheetStart >= 0 ? itpSheetStart : 0, itpSheetStart + 2000)
   const SKIP = /^(=|,{3,}|project|document|keys|stage|resp|other|discipline|ref|date|status|title|sheet)/i
-  const seenGroups = new Set<string>()
-  const dedupedLines: string[] = []
+
+  // Bucket every activity row by its group name (col1)
+  const groupRows = new Map<string, string[]>()
   for (const l of allLines) {
-    const cols = l.split(',')
-    const col1 = cols[0].trim()
-    if (col1.length > 4 && /^[A-Z]/.test(col1) && !SKIP.test(col1) && !seenGroups.has(col1)) {
-      seenGroups.add(col1)
-      dedupedLines.push(l)
+    const col1 = l.split(',')[0].trim()
+    if (col1.length > 4 && /^[A-Z]/.test(col1) && !SKIP.test(col1)) {
+      const bucket = groupRows.get(col1) ?? []
+      bucket.push(l)
+      groupRows.set(col1, bucket)
     }
+  }
+
+  // For each group: take the first row (has discipline col, ITP ref) and append a
+  // sign-off summary derived by scanning the last 5 columns of every row for non-empty
+  // values (signatures, dates, initials) — these indicate completed inspection items.
+  const dedupedLines: string[] = []
+  for (const [, rows] of groupRows) {
+    const firstRow = rows[0]
+    const totalItems = rows.length
+    // A row is "signed" if any of its last 5 columns contain a non-trivial value
+    const signedCount = rows.filter(r => {
+      const cols = r.split(',')
+      return cols.slice(-5).some(v => v.trim().length > 1 && !/^(tbc|n\/a|-)$/i.test(v.trim()))
+    }).length
+    const completionFlag =
+      totalItems > 1 && signedCount === totalItems ? 'SIGN_OFF:ALL'
+      : signedCount > 0 ? `SIGN_OFF:${signedCount}/${totalItems}`
+      : 'SIGN_OFF:NONE'
+    dedupedLines.push(`${firstRow},${completionFlag}`)
   }
   const filteredText = header + '\n' + dedupedLines.join('\n')
 
@@ -171,8 +192,8 @@ For each group return:
 - discipline: "Civils" | "Electrical" | "Commissioning"  — derived from Column E as above
 - category: Civils only → "Below Ground" (foundations, piling, drainage, ducting, drawpits) or "Above Ground". All others → "N/A"
 - itp_ref: document reference number seen in the row (e.g. "BRC-OCU-XX-XX-QC-C-030001"), or null
-- is_complete: true only if sign-off evidence visible in this row
-- completion_evidence: brief note or null
+- is_complete: set to true when the last column in the row contains SIGN_OFF:ALL — this means every inspection item in the group has been signed off. Set to false for SIGN_OFF:NONE or partial (e.g. SIGN_OFF:3/7)
+- completion_evidence: if is_complete, write "All items signed off" or note partial sign-off count; otherwise null
 - sort_order: Civils below ground 1–49, Civils above ground 50–99, Electrical 100–199, Commissioning 200+
 ${baselineContext}
 ${baseline ? 'Compare against the baseline and set baseline_status for each.' : ''}
@@ -191,6 +212,7 @@ Return valid JSON only — no markdown fences:
       "category": "Below Ground" | "Above Ground" | "N/A",
       "itp_ref": "string or null",
       "is_complete": boolean,
+      "partial_pct": "integer 0-99 derived from SIGN_OFF ratio when partially signed (e.g. SIGN_OFF:3/7 → 43), else 0",
       "completion_evidence": "string or null",
       "sort_order": number,
       "baseline_status": "new" | "removed" | "completed" | "changed" | "unchanged" | null
@@ -249,8 +271,8 @@ Return valid JSON only — no markdown fences:
         // category only meaningful for Civils; Electrical/Commissioning → 'Above Ground' as neutral default
         category:       (a.discipline === 'Civils') ? (a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground')) : 'Above Ground',
         itp_ref:        a.itp_ref ?? null,
-        status:         a.is_complete ? 'Complete' : 'Not Started',
-        progress_pct:   a.is_complete ? 100 : 0,
+        status:         a.is_complete ? 'Complete' : (a.completion_evidence ? 'In Progress' : 'Not Started'),
+        progress_pct:   a.is_complete ? 100 : (a.partial_pct ?? 0),
         progress_note:  a.completion_evidence ?? null,
         sort_order:     a.sort_order ?? (i + 1),
       }))
