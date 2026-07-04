@@ -3,11 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import * as XLSX from 'xlsx'
 
+export const config = { api: { bodyParser: false } }
+export const maxDuration = 60
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-async function extractText(file: File): Promise<string> {
-  const buf = Buffer.from(await file.arrayBuffer())
-  const ext = file.name.split('.').pop()?.toLowerCase()
+async function extractTextFromBuffer(buf: Buffer, fileName: string): Promise<string> {
+  const ext = fileName.split('.').pop()?.toLowerCase()
 
   if (ext === 'pdf') {
     const pdf = (await import('pdf-parse')).default
@@ -76,20 +78,25 @@ export async function POST(
 
   if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
 
+  // Read buffer once — reuse for both extraction and storage
+  const fileBuf = Buffer.from(await file.arrayBuffer())
+
   // Extract text
   let rawText: string
   try {
-    rawText = await extractText(file)
+    rawText = await extractTextFromBuffer(fileBuf, file.name)
   } catch (e: any) {
     return NextResponse.json({ error: `Text extraction failed: ${e.message}` }, { status: 422 })
   }
 
   // Load existing revisions to determine baseline
-  const { data: existing } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from('itp_revisions')
     .select('id,revision,is_baseline,ai_activities')
     .eq('site_id', siteId)
     .order('uploaded_at', { ascending: true })
+
+  if (existingErr) return NextResponse.json({ error: existingErr.message }, { status: 500 })
 
   const isFirstRevision = !existing || existing.length === 0
   const baseline = existing?.find(r => r.is_baseline)
@@ -101,10 +108,10 @@ export async function POST(
     .eq('site_id', siteId)
     .order('sort_order')
 
-  // Upload file to storage
+  // Upload file to storage (non-fatal if bucket missing)
   const storagePath = `itp/${siteId}/${Date.now()}_${file.name}`
-  await supabase.storage.from('documents').upload(storagePath, Buffer.from(await file.arrayBuffer()), {
-    contentType: file.type, upsert: false,
+  await supabase.storage.from('documents').upload(storagePath, fileBuf, {
+    contentType: file.type || 'application/octet-stream', upsert: false,
   })
 
   // ── Claude analysis ──────────────────────────────────────────────────────
