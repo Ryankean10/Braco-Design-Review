@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, HardHat, BookOpen, FileBarChart2 } from 'lucide-react'
@@ -142,28 +144,57 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         canEdit={canEdit}
       />
 
-      {/* Civils works module */}
-      <CollapsibleSection
-        title="Civils Works"
-        badge={(civilsActivities ?? []).length > 0 ? `${Math.round((civilsActivities ?? []).reduce((s, a) => s + a.progress_pct, 0) / Math.max((civilsActivities ?? []).length, 1))}%` : undefined}
-        summary={(() => {
-          const acts = civilsActivities ?? []
-          if (!acts.length) return 'no activities'
-          const complete = acts.filter(a => a.status === 'Complete').length
-          const blocked  = acts.filter(a => a.is_blocker).length
-          const avg = Math.round(acts.reduce((s, a) => s + a.progress_pct, 0) / acts.length)
-          const bg  = Math.round(acts.filter(a => a.category === 'Below Ground').reduce((s, a) => s + a.progress_pct, 0) / Math.max(acts.filter(a => a.category === 'Below Ground').length, 1))
-          const ag  = Math.round(acts.filter(a => a.category === 'Above Ground').reduce((s, a) => s + a.progress_pct, 0) / Math.max(acts.filter(a => a.category === 'Above Ground').length, 1))
-          return `below ground ${bg}% · above ground ${ag}% · ${complete}/${acts.length} complete${blocked > 0 ? ` · ${blocked} blocking` : ''}`
-        })()}
-      >
-        <CivilsPanel
-          siteId={siteId}
-          initialActivities={civilsActivities ?? []}
-          initialDiaries={siteDiaries ?? []}
-          canEdit={canEdit}
-        />
-      </CollapsibleSection>
+      {/* Civils Works (ECV) */}
+      {(() => {
+        const acts = (civilsActivities ?? []).filter(a => !a.discipline || a.discipline === 'Civils')
+        const bg   = acts.filter(a => a.category === 'Below Ground')
+        const ag   = acts.filter(a => a.category !== 'Below Ground')
+        const complete = acts.filter(a => a.status === 'Complete').length
+        const bgPct = bg.length ? Math.round(bg.reduce((s,a)=>s+a.progress_pct,0)/bg.length) : 0
+        const agPct = ag.length ? Math.round(ag.reduce((s,a)=>s+a.progress_pct,0)/ag.length) : 0
+        const pct   = acts.length ? Math.round(acts.reduce((s,a)=>s+a.progress_pct,0)/acts.length) : 0
+        return (
+          <CollapsibleSection
+            title="Civils Works (ECV)"
+            badge={acts.length > 0 ? `${pct}%` : undefined}
+            summary={acts.length ? `below ground ${bgPct}% · above ground ${agPct}% · ${complete}/${acts.length} complete` : 'no activities seeded'}
+          >
+            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Civils" />
+          </CollapsibleSection>
+        )
+      })()}
+
+      {/* Electrical Works (EME) */}
+      {(() => {
+        const acts = (civilsActivities ?? []).filter(a => a.discipline === 'Electrical' || a.discipline === 'HV')
+        const complete = acts.filter(a => a.status === 'Complete').length
+        const pct = acts.length ? Math.round(acts.reduce((s,a)=>s+a.progress_pct,0)/acts.length) : 0
+        return (
+          <CollapsibleSection
+            title="Electrical Works (EME)"
+            badge={acts.length > 0 ? `${pct}%` : undefined}
+            summary={acts.length ? `${complete}/${acts.length} activities complete · ITP assurance driven` : 'no activities seeded'}
+          >
+            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Electrical" />
+          </CollapsibleSection>
+        )
+      })()}
+
+      {/* Test & Commissioning */}
+      {(() => {
+        const acts = (civilsActivities ?? []).filter(a => a.discipline === 'Commissioning')
+        const complete = acts.filter(a => a.status === 'Complete').length
+        const pct = acts.length ? Math.round(acts.reduce((s,a)=>s+a.progress_pct,0)/acts.length) : 0
+        return (
+          <CollapsibleSection
+            title="Test & Commissioning"
+            badge={acts.length > 0 ? `${pct}%` : undefined}
+            summary={acts.length ? `${complete}/${acts.length} activities complete · G99 / ITP sign-off driven` : 'no activities seeded'}
+          >
+            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Commissioning" />
+          </CollapsibleSection>
+        )
+      })()}
 
       {/* Unified cable register */}
       <CollapsibleSection

@@ -40,6 +40,7 @@ interface Props {
   initialActivities: CivilsActivity[]
   initialDiaries: SiteDiary[]
   canEdit: boolean
+  disciplineFilter?: 'Civils' | 'Electrical' | 'Commissioning'
 }
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
@@ -195,7 +196,7 @@ interface ItpRevision {
   ai_activities: any[] | null
 }
 
-export default function CivilsPanel({ siteId, initialActivities, initialDiaries, canEdit }: Props) {
+export default function CivilsPanel({ siteId, initialActivities, initialDiaries, canEdit, disciplineFilter }: Props) {
   const [activities, setActivities] = useState(initialActivities)
   const [diaries, setDiaries] = useState(initialDiaries)
   const [tab, setTab] = useState<'register' | 'diaries' | 'itp'>('register')
@@ -263,10 +264,19 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
     }
   }
 
-  const civils      = activities.filter(a => (a.discipline ?? 'Civils') === 'Civils')
+  // When disciplineFilter is set, scope all views to that discipline only
+  const visibleActivities = disciplineFilter
+    ? activities.filter(a => {
+        if (disciplineFilter === 'Electrical') return a.discipline === 'Electrical' || a.discipline === 'HV'
+        if (disciplineFilter === 'Civils') return (a.discipline ?? 'Civils') === 'Civils'
+        return a.discipline === disciplineFilter
+      })
+    : activities
+
+  const civils        = visibleActivities.filter(a => (a.discipline ?? 'Civils') === 'Civils')
   // HV is an EME sub-type — grouped under Electrical
-  const electrical  = activities.filter(a => a.discipline === 'Electrical' || a.discipline === 'HV')
-  const commissioning = activities.filter(a => a.discipline === 'Commissioning')
+  const electrical    = visibleActivities.filter(a => a.discipline === 'Electrical' || a.discipline === 'HV')
+  const commissioning = visibleActivities.filter(a => a.discipline === 'Commissioning')
   const belowGround = civils.filter(a => a.category === 'Below Ground')
   const aboveGround = civils.filter(a => a.category !== 'Below Ground')
 
@@ -275,9 +285,9 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
     return Math.round(acts.reduce((s, a) => s + a.progress_pct, 0) / acts.length)
   }
 
-  const completeCount = activities.filter(a => a.status === 'Complete').length
-  const blockerCount = activities.filter(a => a.is_blocker && a.status !== 'Complete').length
-  const wipCount = activities.filter(a => a.status === 'In Progress').length
+  const completeCount = visibleActivities.filter(a => a.status === 'Complete').length
+  const blockerCount = visibleActivities.filter(a => a.is_blocker && a.status !== 'Complete').length
+  const wipCount = visibleActivities.filter(a => a.status === 'In Progress').length
 
   async function submitDiary(file?: File) {
     setUploading(true)
@@ -325,16 +335,22 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
       <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
         <HardHat size={16} style={{ color: 'var(--accent)' }} />
         <div className="flex-1">
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Civils Works</h3>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {disciplineFilter === 'Electrical' ? 'Electrical Works (EME)'
+              : disciplineFilter === 'Commissioning' ? 'Test & Commissioning'
+              : 'Civils Works (ECV)'}
+          </h3>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            Below & above ground civil construction — progress from site diaries
+            {disciplineFilter === 'Electrical' ? 'Electrical installation — ITP assurance & cable schedule progress'
+              : disciplineFilter === 'Commissioning' ? 'T&C, G99 testing, energisation — progress from ITP sign-off'
+              : 'Below & above ground civil construction — progress from site diaries'}
           </p>
         </div>
         {/* KPI chips */}
         <div className="flex items-center gap-2">
           <span className="text-xs px-2 py-1 rounded-full"
             style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
-            {completeCount}/{activities.length} complete
+            {completeCount}/{visibleActivities.length} complete
           </span>
           {wipCount > 0 && (
             <span className="text-xs px-2 py-1 rounded-full"
@@ -353,12 +369,17 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
 
       {/* Progress overview */}
       <div className="grid grid-cols-2 gap-px border-b" style={{ borderColor: 'var(--border)', background: 'var(--border)' }}>
-        {[
-          { label: 'Below Ground', acts: belowGround },
-          { label: 'Above Ground', acts: aboveGround },
-          ...(electrical.length > 0 ? [{ label: 'Electrical (EME)', acts: electrical }] : []),
-          ...(commissioning.length > 0 ? [{ label: 'Commissioning', acts: commissioning }] : []),
-        ].map(({ label, acts }) => {
+        {(disciplineFilter === 'Electrical'
+          ? [{ label: 'Electrical (EME)', acts: electrical }]
+          : disciplineFilter === 'Commissioning'
+          ? [{ label: 'Commissioning', acts: commissioning }]
+          : [
+              { label: 'Below Ground (ECV)', acts: belowGround },
+              { label: 'Above Ground (ECV)', acts: aboveGround },
+              ...(electrical.length > 0 ? [{ label: 'Electrical (EME)', acts: electrical }] : []),
+              ...(commissioning.length > 0 ? [{ label: 'Commissioning', acts: commissioning }] : []),
+            ]
+        ).map(({ label, acts }) => {
           const pct = avgProgress(acts)
           const done = acts.filter(a => a.status === 'Complete').length
           return (
@@ -378,12 +399,14 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
         })}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — Diaries & ITP are site-wide, only shown on unfiltered (Civils) panel */}
       <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
         {([
           { key: 'register', label: 'Activity Register' },
-          { key: 'diaries',  label: `Site Diaries${diaries.length ? ` (${diaries.length})` : ''}` },
-          { key: 'itp',      label: `ITP${itpRevisions.length ? ` (${itpRevisions.length})` : ''}` },
+          ...((!disciplineFilter || disciplineFilter === 'Civils') ? [
+            { key: 'diaries', label: `Site Diaries${diaries.length ? ` (${diaries.length})` : ''}` },
+            { key: 'itp',     label: `ITP${itpRevisions.length ? ` (${itpRevisions.length})` : ''}` },
+          ] : []),
         ] as { key: 'register' | 'diaries' | 'itp'; label: string }[]).map(({ key, label }) => (
           <button key={key}
             onClick={() => setTab(key)}
@@ -400,24 +423,24 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
       <div className="p-4 space-y-4">
         {tab === 'register' && (
           <>
-            {activities.length === 0 && (
+            {visibleActivities.length === 0 && (
               <div className="text-center py-8">
                 <HardHat size={28} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  No civils activities seeded yet.
-                </p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  Run migration 028 in Supabase to load the Dyce activity register.
+                  No activities seeded yet — upload an ITP from the project page.
                 </p>
               </div>
             )}
 
-            {[
-              { label: 'Civils — Below Ground (ECV)', acts: belowGround },
-              { label: 'Civils — Above Ground (ECV)', acts: aboveGround },
-              { label: 'Electrical (EME)', acts: electrical },
-              { label: 'Commissioning', acts: commissioning },
-            ].filter(s => s.acts.length > 0).map(({ label, acts }) => (
+            {(disciplineFilter === 'Electrical'
+              ? [{ label: 'Electrical (EME)', acts: electrical }]
+              : disciplineFilter === 'Commissioning'
+              ? [{ label: 'Commissioning', acts: commissioning }]
+              : [
+                  { label: 'Below Ground (ECV)', acts: belowGround },
+                  { label: 'Above Ground (ECV)', acts: aboveGround },
+                ]
+            ).filter(s => s.acts.length > 0).map(({ label, acts }) => (
               <div key={label} className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide px-1 mt-2"
                   style={{ color: 'var(--text-muted)' }}>{label}</h4>
