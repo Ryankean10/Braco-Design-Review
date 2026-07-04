@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import * as XLSX from 'xlsx'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -19,7 +20,6 @@ async function extractText(file: File): Promise<string> {
     return result.value
   }
   if (ext === 'xlsx' || ext === 'xlsb' || ext === 'xls' || ext === 'xlsm') {
-    const XLSX = await import('xlsx')
     const wb = XLSX.read(buf, { type: 'buffer', cellText: true, cellDates: true })
     const lines: string[] = []
     for (const sheetName of wb.SheetNames) {
