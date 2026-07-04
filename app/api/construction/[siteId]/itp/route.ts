@@ -128,17 +128,22 @@ export async function POST(
     contentType: file.type || 'application/octet-stream', upsert: false,
   })
 
-  // ── Pre-filter: grab ITP sheet header + all activity rows ────────────────
+  // ── Pre-filter: one representative row per unique activity group ─────────
   const allLines = rawText.split('\n')
   const itpSheetStart = rawText.indexOf('=== Sheet:')
   const header = rawText.slice(itpSheetStart >= 0 ? itpSheetStart : 0, itpSheetStart + 2000)
-  // Keep rows where column 1 looks like an activity group name (starts with a capital, not a code)
   const SKIP = /^(=|,{3,}|project|document|keys|stage|resp|other|discipline|ref|date|status|title|sheet)/i
-  const activityLines = allLines.filter(l => {
+  // Deduplicate by column-1 group name — one sample row per group keeps tokens tiny
+  const seenGroups = new Set<string>()
+  const dedupedLines: string[] = []
+  for (const l of allLines) {
     const col1 = l.split(',')[0].trim()
-    return col1.length > 4 && /^[A-Z]/.test(col1) && !SKIP.test(col1)
-  })
-  const filteredText = header + '\n' + activityLines.join('\n')
+    if (col1.length > 4 && /^[A-Z]/.test(col1) && !SKIP.test(col1) && !seenGroups.has(col1)) {
+      seenGroups.add(col1)
+      dedupedLines.push(l)
+    }
+  }
+  const filteredText = header + '\n' + dedupedLines.join('\n')
 
   // ── Claude analysis ──────────────────────────────────────────────────────
   const baselineContext = baseline
@@ -168,7 +173,7 @@ ${baselineContext}
 ${baseline ? `Compare against the baseline and set baseline_status for each.` : ''}
 
 ITP TEXT:
-${filteredText.slice(0, 40000)}
+${filteredText}
 
 Return valid JSON only:
 {

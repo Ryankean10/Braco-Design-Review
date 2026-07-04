@@ -119,7 +119,7 @@ export default function ProjectITPUpload({ projectId, siteId, initialItps, canEd
           {siteId && (
             <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
               style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8' }}>
-              <Zap size={9} /> AI civils seeding enabled
+              <Zap size={9} /> AI seeding enabled
             </span>
           )}
         </div>
