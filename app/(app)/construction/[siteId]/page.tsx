@@ -143,15 +143,40 @@ export default async function ConstructionSitePage({ params }: { params: Promise
       />
 
       {/* Civils works module */}
-      <CivilsPanel
-        siteId={siteId}
-        initialActivities={civilsActivities ?? []}
-        initialDiaries={siteDiaries ?? []}
-        canEdit={canEdit}
-      />
+      <CollapsibleSection
+        title="Civils Works"
+        badge={(civilsActivities ?? []).length > 0 ? `${Math.round((civilsActivities ?? []).reduce((s, a) => s + a.progress_pct, 0) / Math.max((civilsActivities ?? []).length, 1))}%` : undefined}
+        summary={(() => {
+          const acts = civilsActivities ?? []
+          if (!acts.length) return 'no activities'
+          const complete = acts.filter(a => a.status === 'Complete').length
+          const blocked  = acts.filter(a => a.is_blocker).length
+          const avg = Math.round(acts.reduce((s, a) => s + a.progress_pct, 0) / acts.length)
+          const bg  = Math.round(acts.filter(a => a.category === 'Below Ground').reduce((s, a) => s + a.progress_pct, 0) / Math.max(acts.filter(a => a.category === 'Below Ground').length, 1))
+          const ag  = Math.round(acts.filter(a => a.category === 'Above Ground').reduce((s, a) => s + a.progress_pct, 0) / Math.max(acts.filter(a => a.category === 'Above Ground').length, 1))
+          return `below ground ${bg}% · above ground ${ag}% · ${complete}/${acts.length} complete${blocked > 0 ? ` · ${blocked} blocking` : ''}`
+        })()}
+      >
+        <CivilsPanel
+          siteId={siteId}
+          initialActivities={civilsActivities ?? []}
+          initialDiaries={siteDiaries ?? []}
+          canEdit={canEdit}
+        />
+      </CollapsibleSection>
 
       {/* Unified cable register */}
-      <CollapsibleSection title="Cable Schedule" badge={(cables ?? []).length}>
+      <CollapsibleSection
+        title="Cable Schedule"
+        badge={(cables ?? []).length}
+        summary={(() => {
+          const cs = cables ?? []
+          const complete = cs.filter(c => c.overall_status === 'Complete').length
+          const blocked  = cs.filter(c => c.overall_status === 'Blocked').length
+          const pct      = cs.length > 0 ? Math.round((complete / cs.length) * 100) : 0
+          return `${pct}% complete · ${complete}/${cs.length} cables${blocked > 0 ? ` · ${blocked} blocked` : ''}`
+        })()}
+      >
         <CableRegister
           siteId={siteId}
           initialCables={cables ?? []}

@@ -31,9 +31,9 @@ interface Props {
 const WEATHER_COLOR: Record<string, string> = { Good: '#4ade80', Fair: '#facc15', Poor: '#f87171' }
 const IMPACT_COLOR: Record<string, string> = { None: '#4ade80', Low: '#facc15', Medium: '#fb923c', High: '#f87171' }
 
-function Section({ title, badge, badgeColor, defaultOpen = false, children }: {
+function Section({ title, badge, badgeColor, summary, defaultOpen = false, children }: {
   title: string; badge?: string | number; badgeColor?: string
-  defaultOpen?: boolean; children: React.ReactNode
+  summary?: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -42,18 +42,21 @@ function Section({ title, badge, badgeColor, defaultOpen = false, children }: {
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-5 py-3.5 hover:opacity-80 transition-opacity"
       >
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{title}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-semibold uppercase tracking-wider shrink-0" style={{ color: 'var(--text-muted)' }}>{title}</span>
           {badge !== undefined && (
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
               style={{ background: badgeColor ? badgeColor + '22' : 'var(--bg-elevated)', color: badgeColor ?? 'var(--text-muted)' }}>
               {badge}
             </span>
           )}
+          {!open && summary && (
+            <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{summary}</span>
+          )}
         </div>
         {open
-          ? <ChevronUp size={14} style={{ color: 'var(--text-muted)' }} />
-          : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
+          ? <ChevronUp size={14} className="shrink-0" style={{ color: 'var(--text-muted)' }} />
+          : <ChevronRight size={14} className="shrink-0" style={{ color: 'var(--text-muted)' }} />}
       </button>
       {open && <div className="border-t px-5 py-4" style={{ borderColor: 'var(--border)' }}>{children}</div>}
     </div>
@@ -150,7 +153,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
       )}
 
       {/* ── Progress breakdown — side by side ── */}
-      <Section title="Progress breakdown" badge={`${overallPct}% overall`} badgeColor="var(--accent)">
+      <Section title="Progress breakdown" badge={`${overallPct}% overall`} badgeColor="var(--accent)"
+        summary={civilsPct !== null ? `civils ${civilsPct}% · cables ${cablePct}% · ${complete}/${total} cables done` : `${complete}/${total} cables · ${inProg} active · ${blocked} blocked`}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Civils package */}
@@ -220,7 +224,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
 
       {/* ── MVS grid ── */}
       {Object.keys(byMvs).length > 0 && (
-        <Section title="MVS status — AC battery cables">
+        <Section title="MVS status — AC battery cables"
+          summary={`${Object.values(byMvs).filter(m => m.complete === m.total && m.total > 0).length}/${Object.keys(byMvs).length} MVS complete · ${Object.values(byMvs).reduce((s, m) => s + m.complete, 0)}/${Object.values(byMvs).reduce((s, m) => s + m.total, 0)} cables`}>
           <div className="grid grid-cols-4 md:grid-cols-7 gap-3">
             {Object.entries(byMvs).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).map(([mvs, stats]) => {
               const p = stats.total > 0 ? (stats.complete / stats.total) * 100 : 0
@@ -247,7 +252,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
       {/* ── Weather & Personnel ── */}
       {latestLog && (
         <Section title="Weather & personnel"
-          badge={new Date(latestLog.log_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}>
+          badge={new Date(latestLog.log_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+          summary={[latestLog.weather_conditions, latestLog.temp_c != null ? `${latestLog.temp_c}°C` : null, latestLog.personnel?.length ? `${latestLog.personnel.length} on site · ${latestLog.total_manhours ?? 0}h` : null].filter(Boolean).join(' · ')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Weather */}
             <div>
@@ -313,7 +319,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
       )}
 
       {/* ── Daily logs ── */}
-      <Section title="Daily logs" badge={recentLogs.length > 0 ? recentLogs.length : undefined}>
+      <Section title="Daily logs" badge={recentLogs.length > 0 ? recentLogs.length : undefined}
+        summary={latestLog ? `last: ${new Date(latestLog.log_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}${openIssues.length > 0 ? ` · ${openIssues.length} open issue${openIssues.length > 1 ? 's' : ''}` : ''}` : 'no logs yet'}>
         <div className="space-y-0 -mx-5 -mb-4">
           {canEdit && (
             <div className="px-5 pb-4">
