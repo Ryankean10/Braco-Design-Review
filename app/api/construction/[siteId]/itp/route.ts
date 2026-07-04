@@ -103,24 +103,27 @@ export async function POST(
 
   if (existingErr) return NextResponse.json({ error: existingErr.message }, { status: 500 })
 
-  const existingBaseline = existing?.find(r => r.is_baseline)
-  const baselineHasActivities = (existingBaseline?.ai_activities as any[] | null)?.length ?? 0
-  // Treat as first revision if no records exist, or if the existing baseline extracted 0 activities
-  const isFirstRevision = !existing || existing.length === 0 || baselineHasActivities === 0
-  const baseline = isFirstRevision ? null : existingBaseline
-
-  // If re-baselining, clear out the old empty records and any stale civils_activities
-  if (isFirstRevision && existing && existing.length > 0) {
-    await supabase.from('itp_revisions').delete().eq('site_id', siteId)
-    await supabase.from('civils_activities').delete().eq('site_id', siteId)
-  }
-
-  // Load current civils activities for context
+  // Load current civils activities before baseline determination
   const { data: currentActivities } = await supabase
     .from('civils_activities')
     .select('id,activity_group,category,status,progress_pct,itp_ref,sort_order')
     .eq('site_id', siteId)
     .order('sort_order')
+
+  const existingBaseline = existing?.find(r => r.is_baseline)
+  const baselineHasActivities = (existingBaseline?.ai_activities as any[] | null)?.length ?? 0
+  // Re-baseline if: no prior records, prior baseline had 0 activities, or all seeded activities
+  // have progress_pct=0 (indicating the first upload produced no completions — allow re-seed with fixes)
+  const allZeroProgress = (currentActivities ?? []).length > 0 &&
+    (currentActivities ?? []).every(a => a.progress_pct === 0)
+  const isFirstRevision = !existing || existing.length === 0 || baselineHasActivities === 0 || allZeroProgress
+  const baseline = isFirstRevision ? null : existingBaseline
+
+  // If re-baselining, clear out the old records so we start fresh
+  if (isFirstRevision && existing && existing.length > 0) {
+    await supabase.from('itp_revisions').delete().eq('site_id', siteId)
+    await supabase.from('civils_activities').delete().eq('site_id', siteId)
+  }
 
   // Upload file to storage (non-fatal if bucket missing)
   const storagePath = `itp/${siteId}/${Date.now()}_${file.name}`
@@ -157,15 +160,15 @@ export async function POST(
     const totalItems = rows.length
     // A row is "signed" if any of its last 5 columns contain a non-trivial value
     const signedCount = rows.filter(r => {
+      // Dates anywhere in the row = strong sign-off signal (e.g. 23/04/2026, 23-04-26, Apr 2026)
+      if (/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(r)) return true
+      // Completion keywords anywhere
+      if (/\b(complete[d]?|pass(ed)?|approved|accepted|yes|done|sign(ed)?|issued|submitted|witness(ed)?|verified)\b/i.test(r)) return true
+      // Fallback: non-trivial value in any of the last 8 columns
       const cols = r.split(',')
-      // Scan last 8 columns (wider net) and also look for date-like or name-like values anywhere after col 6
-      const tailCols = cols.slice(-8)
-      return tailCols.some(v => {
+      return cols.slice(-8).some(v => {
         const t = v.trim()
-        if (t.length < 2) return false
-        if (/^(tbc|n\/a|-|no|0)$/i.test(t)) return false
-        // Positive signals: initials, names, dates, "yes", "pass", "approved"
-        return true
+        return t.length > 1 && !/^(tbc|n\/a|-|no|0|hold|witness|review|w\/h|w\/r|h|w|r)$/i.test(t)
       })
     }).length
     const completionFlag =
