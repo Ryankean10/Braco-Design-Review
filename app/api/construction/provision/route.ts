@@ -72,5 +72,8 @@ export async function POST(request: NextRequest) {
     DEFAULT_PACKAGES.map(p => ({ ...p, site_id: site.id }))
   )
 
+  // Civils activities are NOT auto-seeded — they are created from the project ITP
+  // once received, to ensure the register reflects the actual scope of works.
+
   return NextResponse.json({ siteId: site.id, already_existed: false })
 }
