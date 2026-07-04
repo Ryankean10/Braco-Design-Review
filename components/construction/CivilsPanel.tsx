@@ -12,7 +12,7 @@ export interface CivilsActivity {
   id: string
   activity_group: string
   description: string
-  discipline: 'Civils' | 'Electrical' | 'HV' | 'Commissioning'
+  discipline: 'Civils' | 'Electrical' | 'HV' | 'Commissioning'  // HV is an EME sub-type, treated as Electrical
   category: 'Below Ground' | 'Above Ground' | 'N/A'
   itp_ref: string | null
   status: 'Not Started' | 'In Progress' | 'Complete' | 'Blocked'
@@ -264,8 +264,8 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
   }
 
   const civils      = activities.filter(a => (a.discipline ?? 'Civils') === 'Civils')
-  const electrical  = activities.filter(a => a.discipline === 'Electrical')
-  const hv          = activities.filter(a => a.discipline === 'HV')
+  // HV is an EME sub-type — grouped under Electrical
+  const electrical  = activities.filter(a => a.discipline === 'Electrical' || a.discipline === 'HV')
   const commissioning = activities.filter(a => a.discipline === 'Commissioning')
   const belowGround = civils.filter(a => a.category === 'Below Ground')
   const aboveGround = civils.filter(a => a.category !== 'Below Ground')
@@ -356,8 +356,7 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
         {[
           { label: 'Below Ground', acts: belowGround },
           { label: 'Above Ground', acts: aboveGround },
-          ...(electrical.length > 0 ? [{ label: 'Electrical', acts: electrical }] : []),
-          ...(hv.length > 0 ? [{ label: 'HV', acts: hv }] : []),
+          ...(electrical.length > 0 ? [{ label: 'Electrical (EME)', acts: electrical }] : []),
           ...(commissioning.length > 0 ? [{ label: 'Commissioning', acts: commissioning }] : []),
         ].map(({ label, acts }) => {
           const pct = avgProgress(acts)
@@ -414,10 +413,9 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
             )}
 
             {[
-              { label: 'Civils — Below Ground', acts: belowGround },
-              { label: 'Civils — Above Ground', acts: aboveGround },
-              { label: 'Electrical', acts: electrical },
-              { label: 'HV', acts: hv },
+              { label: 'Civils — Below Ground (ECV)', acts: belowGround },
+              { label: 'Civils — Above Ground (ECV)', acts: aboveGround },
+              { label: 'Electrical (EME)', acts: electrical },
               { label: 'Commissioning', acts: commissioning },
             ].filter(s => s.acts.length > 0).map(({ label, acts }) => (
               <div key={label} className="space-y-2">

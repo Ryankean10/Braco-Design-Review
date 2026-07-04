@@ -129,15 +129,17 @@ export async function POST(
   })
 
   // ── Pre-filter: one representative row per unique activity group ─────────
+  // Column E (index 4) in the ITP holds the discipline code: ECV = Civils, EME = Electrical
+  // Deduplicate by col1 group name — one row per group so the payload stays tiny
   const allLines = rawText.split('\n')
   const itpSheetStart = rawText.indexOf('=== Sheet:')
   const header = rawText.slice(itpSheetStart >= 0 ? itpSheetStart : 0, itpSheetStart + 2000)
   const SKIP = /^(=|,{3,}|project|document|keys|stage|resp|other|discipline|ref|date|status|title|sheet)/i
-  // Deduplicate by column-1 group name — one sample row per group keeps tokens tiny
   const seenGroups = new Set<string>()
   const dedupedLines: string[] = []
   for (const l of allLines) {
-    const col1 = l.split(',')[0].trim()
+    const cols = l.split(',')
+    const col1 = cols[0].trim()
     if (col1.length > 4 && /^[A-Z]/.test(col1) && !SKIP.test(col1) && !seenGroups.has(col1)) {
       seenGroups.add(col1)
       dedupedLines.push(l)
@@ -152,37 +154,40 @@ export async function POST(
 
   const prompt = `You are analysing an Inspection and Test Plan (ITP) for a BESS (Battery Energy Storage System) construction project in the UK.
 
-Extract ALL construction scope activity groups from this ITP, covering every discipline. Assign each a discipline:
-- "Civils": piling, foundations, drainage, ducting, cable troughing, drawpits, fencing, access roads, concrete, earthworks, temporary works, compound formation, CCTV posts
-- "Electrical": LV/DC cable install, panel wiring, electrical installation, earthing (electrical), containment, battery connections, inverter/transformer installation, metering
-- "HV": 33kV/11kV cable, HV switchgear, DNO connection, grid connection, HV testing
-- "Commissioning": FAT, SAT, SIT, system integration, protection settings, G99 testing, energisation steps
+The ITP is CSV-formatted. Each row represents one inspection item within an activity group.
+- Column 1 (A): activity group name
+- Column 5 (E): discipline code — READ THIS TO SET DISCIPLINE:
+    ECV = "Civils"
+    EME = "Electrical"   (this includes HV cable, HV switchgear, grid connection — all EME)
+    Any other code not listed: use "Commissioning" for T&C/energisation items, otherwise "Civils"
 
-This ITP uses a grouped format: column 1 is the activity group name, subsequent columns are individual inspection items. Extract UNIQUE activity groups only.
+DO NOT guess discipline from keywords. Use Column E exclusively.
 
-For each group:
-- activity_group: exact name from column 1
-- description: brief summary of scope
-- discipline: "Civils" | "Electrical" | "HV" | "Commissioning"
-- category: for Civils only — "Below Ground" or "Above Ground". For others use "N/A"
-- itp_ref: first reference number seen (e.g. "BRC-OCU-XX-XX-QC-C-030001")
-- is_complete: true only if all items in group show sign-off evidence
+Extract UNIQUE activity groups only (deduplicated by Column A).
+
+For each group return:
+- activity_group: exact name from column A
+- description: one-line summary of what this activity covers
+- discipline: "Civils" | "Electrical" | "Commissioning"  — derived from Column E as above
+- category: Civils only → "Below Ground" (foundations, piling, drainage, ducting, drawpits) or "Above Ground". All others → "N/A"
+- itp_ref: document reference number seen in the row (e.g. "BRC-OCU-XX-XX-QC-C-030001"), or null
+- is_complete: true only if sign-off evidence visible in this row
 - completion_evidence: brief note or null
-- sort_order: Civils below ground 1-49, Civils above ground 50-99, Electrical 100-149, HV 150-199, Commissioning 200+
+- sort_order: Civils below ground 1–49, Civils above ground 50–99, Electrical 100–199, Commissioning 200+
 ${baselineContext}
-${baseline ? `Compare against the baseline and set baseline_status for each.` : ''}
+${baseline ? 'Compare against the baseline and set baseline_status for each.' : ''}
 
 ITP TEXT:
 ${filteredText}
 
-Return valid JSON only:
+Return valid JSON only — no markdown fences:
 {
   "revision_summary": "string",
   "activities": [
     {
       "activity_group": "string",
       "description": "string",
-      "discipline": "Civils" | "Electrical" | "HV" | "Commissioning",
+      "discipline": "Civils" | "Electrical" | "Commissioning",
       "category": "Below Ground" | "Above Ground" | "N/A",
       "itp_ref": "string or null",
       "is_complete": boolean,
@@ -241,7 +246,8 @@ Return valid JSON only:
         activity_group: a.activity_group,
         description:    a.description ?? null,
         discipline:     a.discipline ?? 'Civils',
-        category:       a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground'),
+        // category only meaningful for Civils; Electrical/Commissioning → 'Above Ground' as neutral default
+        category:       (a.discipline === 'Civils') ? (a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground')) : 'Above Ground',
         itp_ref:        a.itp_ref ?? null,
         status:         a.is_complete ? 'Complete' : 'Not Started',
         progress_pct:   a.is_complete ? 100 : 0,
@@ -282,7 +288,7 @@ Return valid JSON only:
           activity_group: a.activity_group,
           description:    a.description ?? null,
           discipline:     a.discipline ?? 'Civils',
-          category:       a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground'),
+          category:       (a.discipline === 'Civils') ? (a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground')) : 'Above Ground',
           itp_ref:        a.itp_ref ?? null,
           status:         a.is_complete ? 'Complete' : 'Not Started',
           progress_pct:   a.is_complete ? 100 : 0,
