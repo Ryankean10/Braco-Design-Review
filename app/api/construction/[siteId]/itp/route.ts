@@ -170,7 +170,8 @@ Return valid JSON only.`
 
   let aiResult: any = { activities: [], diff_summary: { added: [], removed: [], completed: [], changed: [] } }
   try {
-    const match = msg.content[0].text.match(/\{[\s\S]*\}/)
+    const block = msg.content.find(b => b.type === 'text')
+    const match = block && 'text' in block ? block.text.match(/\{[\s\S]*\}/) : null
     if (match) aiResult = JSON.parse(match[0])
   } catch { /* use defaults */ }
 
