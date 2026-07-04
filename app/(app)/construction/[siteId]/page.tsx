@@ -1,11 +1,10 @@
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, HardHat, BookOpen } from 'lucide-react'
+import { ArrowLeft, HardHat, BookOpen, FileBarChart2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import CableRegister from '@/components/construction/CableRegister'
 import SiteDashboard from '@/components/construction/SiteDashboard'
-import ProgressReport from '@/components/construction/ProgressReport'
 import ProgrammePanel from '@/components/construction/ProgrammePanel'
 import CivilsPanel from '@/components/construction/CivilsPanel'
 
@@ -107,22 +106,21 @@ export default async function ConstructionSitePage({ params }: { params: Promise
             {site.client}{site.location ? ` · ${site.location}` : ''}{site.voltage_kv ? ` · ${site.voltage_kv}kV` : ''}
           </p>
         </div>
-        {site.project_id && (
-          <Link href={`/projects/${site.project_id}`}
+        <div className="flex items-center gap-2">
+          <Link href={`/construction/${siteId}/report`}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border hover:opacity-80"
-            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            <BookOpen size={12} /> Design module
+            style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}>
+            <FileBarChart2 size={12} /> Progress Report
           </Link>
-        )}
+          {site.project_id && (
+            <Link href={`/projects/${site.project_id}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border hover:opacity-80"
+              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+              <BookOpen size={12} /> Design module
+            </Link>
+          )}
+        </div>
       </div>
-
-      {/* Progress report — screengrab-ready */}
-      <ProgressReport
-        siteName={site.name}
-        client={site.client ?? ''}
-        cables={cables ?? []}
-        allLogs={allLogs ?? []}
-      />
 
       {/* Dashboard rollup */}
       <SiteDashboard

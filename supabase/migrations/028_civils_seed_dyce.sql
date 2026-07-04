@@ -2,7 +2,7 @@
 -- Derived from ITP 35753-OCU-BE-DY-PL-PM-0001, ECV discipline rows (civils only — HV/LV cable excluded)
 -- Progress seeded from ITP completion snapshot; going forward driven by site diaries
 
-DO $$
+DO $body$
 DECLARE
   v_site_id uuid;
 BEGIN
@@ -65,4 +65,4 @@ BEGIN
      '2.4m palisade security fencing — steel pale panels, posts and anti-climb topping around site perimeter',
      'Above Ground', 'ECV-PF', 'In Progress', 0, false, NULL, 120);
 
-END $$;
+END $body$;
