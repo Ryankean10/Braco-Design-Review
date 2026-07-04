@@ -237,6 +237,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             siteId={(constructionSite as any)?.id ?? null}
             initialItps={(projectItps ?? []) as any}
             canEdit={canEdit}
+            userRole={role}
           />
         </div>
       )}
