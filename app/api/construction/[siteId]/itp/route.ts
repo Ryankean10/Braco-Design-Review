@@ -18,6 +18,20 @@ async function extractText(file: File): Promise<string> {
     const result = await mammoth.extractRawText({ buffer: buf })
     return result.value
   }
+  if (ext === 'xlsx' || ext === 'xlsb' || ext === 'xls' || ext === 'xlsm') {
+    const XLSX = await import('xlsx')
+    const wb = XLSX.read(buf, { type: 'buffer', cellText: true, cellDates: true })
+    const lines: string[] = []
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName]
+      const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
+      if (csv.trim()) {
+        lines.push(`=== Sheet: ${sheetName} ===`)
+        lines.push(csv)
+      }
+    }
+    return lines.join('\n')
+  }
   // Plain text / CSV fallback
   return buf.toString('utf-8')
 }

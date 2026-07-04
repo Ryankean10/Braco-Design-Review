@@ -467,7 +467,7 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
                         ? <><Loader2 size={14} className="animate-spin" />Analysing…</>
                         : <><Upload size={14} />Upload ITP</>}
                     </button>
-                    <input ref={itpFileRef} type="file" accept=".pdf,.docx,.csv,.txt" className="hidden"
+                    <input ref={itpFileRef} type="file" accept=".pdf,.docx,.xlsx,.xlsb,.xls,.xlsm,.csv,.txt" className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadItp(f); if (itpFileRef.current) itpFileRef.current.value = '' }} />
                   </div>
                 </div>
