@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import ProgressReportDoc from '@/components/construction/ProgressReportDoc'
+import PrintButton from '@/components/construction/PrintButton'
 
 export default async function ConstructionReportPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
@@ -45,7 +46,7 @@ export default async function ConstructionReportPage({ params }: { params: Promi
 
   return (
     <div className="print-report">
-      {/* Back + print controls — hidden on print */}
+      {/* Controls bar — hidden on print */}
       <div className="print:hidden flex items-center justify-between px-6 py-3 border-b sticky top-0 z-10"
         style={{ borderColor: 'var(--border)', background: 'var(--bg-base)' }}>
         <Link href={`/construction/${siteId}`}
@@ -53,13 +54,7 @@ export default async function ConstructionReportPage({ params }: { params: Promi
           style={{ color: 'var(--text-muted)' }}>
           <ArrowLeft size={15} /> Back to site
         </Link>
-        <button
-          onClick={() => {}}
-          id="print-btn"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
-          style={{ background: 'var(--accent)' }}>
-          Print / Save as PDF
-        </button>
+        <PrintButton />
       </div>
 
       {/* Report content */}
@@ -74,11 +69,6 @@ export default async function ConstructionReportPage({ params }: { params: Promi
           civilsActivities={civilsActivities ?? []}
         />
       </div>
-
-      {/* Print button wiring — client side only */}
-      <script dangerouslySetInnerHTML={{ __html: `
-        document.getElementById('print-btn')?.addEventListener('click', () => window.print());
-      `}} />
     </div>
   )
 }
