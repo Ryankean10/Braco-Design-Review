@@ -23,8 +23,14 @@ async function extractTextFromBuffer(buf: Buffer, fileName: string): Promise<str
   }
   if (ext === 'xlsx' || ext === 'xlsb' || ext === 'xls' || ext === 'xlsm') {
     const wb = XLSX.read(buf, { type: 'buffer', cellText: true, cellDates: true })
+    // Prefer sheets whose name looks like "ITP" — send that first and in full
+    const itpFirst = [...wb.SheetNames].sort((a, b) => {
+      const aItp = /itp/i.test(a) ? 0 : 1
+      const bItp = /itp/i.test(b) ? 0 : 1
+      return aItp - bItp
+    })
     const lines: string[] = []
-    for (const sheetName of wb.SheetNames) {
+    for (const sheetName of itpFirst) {
       const ws = wb.Sheets[sheetName]
       const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
       if (csv.trim()) {
@@ -142,7 +148,7 @@ ${baseline ? `Compare against the baseline above. For each activity, note if it 
 - "unchanged": same as baseline` : ''}
 
 ITP TEXT:
-${rawText.slice(0, 12000)}
+${rawText.slice(0, 50000)}
 
 Return a JSON object:
 {

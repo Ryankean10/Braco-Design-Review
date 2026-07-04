@@ -210,6 +210,7 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
   const [itpRevisions, setItpRevisions] = useState<ItpRevision[]>([])
   const [itpLoading, setItpLoading] = useState(false)
   const [itpUploading, setItpUploading] = useState(false)
+  const [itpStage, setItpStage] = useState('')
   const [itpError, setItpError] = useState('')
   const [itpSuccess, setItpSuccess] = useState('')
   const [itpRevLabel, setItpRevLabel] = useState('Rev 1')
@@ -227,14 +228,17 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
   }, [tab, siteId])
 
   async function uploadItp(file: File) {
-    setItpUploading(true); setItpError(''); setItpSuccess('')
+    setItpUploading(true); setItpError(''); setItpSuccess(''); setItpStage('Uploading file…')
     const form = new FormData()
     form.set('file', file)
     form.set('revision', itpRevLabel.trim() || 'Rev 1')
     try {
+      setItpStage('Extracting ITP content…')
       const res = await fetch(`/api/construction/${siteId}/itp`, { method: 'POST', body: form })
+      setItpStage('AI analysing civils scope…')
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Upload failed')
+      setItpStage('Seeding activity register…')
 
       const parts = [
         data.isBaseline ? 'Baseline set' : `${data.revision} analysed`,
@@ -254,7 +258,7 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
     } catch (e: unknown) {
       setItpError(e instanceof Error ? e.message : 'Upload failed')
     } finally {
-      setItpUploading(false)
+      setItpUploading(false); setItpStage('')
     }
   }
 
@@ -464,7 +468,7 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 transition-opacity"
                       style={{ background: 'var(--accent)' }}>
                       {itpUploading
-                        ? <><Loader2 size={14} className="animate-spin" />Analysing…</>
+                        ? <><Loader2 size={14} className="animate-spin" />{itpStage || 'Processing…'}</>
                         : <><Upload size={14} />Upload ITP</>}
                     </button>
                     <input ref={itpFileRef} type="file" accept="*/*" className="hidden"
@@ -472,6 +476,14 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
                   </div>
                 </div>
 
+                {itpUploading && (
+                  <div className="space-y-1.5">
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                      <div className="h-full rounded-full animate-pulse" style={{ width: '100%', background: 'var(--accent)', opacity: 0.7 }} />
+                    </div>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{itpStage}</p>
+                  </div>
+                )}
                 {itpError && <p className="text-xs" style={{ color: 'var(--critical)' }}>{itpError}</p>}
                 {itpSuccess && (
                   <p className="flex items-center gap-1.5 text-xs" style={{ color: '#22c55e' }}>
