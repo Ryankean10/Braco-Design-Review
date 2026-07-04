@@ -97,7 +97,7 @@ export async function POST(
   // Load current civils activities for context
   const { data: currentActivities } = await supabase
     .from('civils_activities')
-    .select('id,activity_group,category,status,progress_pct,itp_ref')
+    .select('id,activity_group,category,status,progress_pct,itp_ref,sort_order')
     .eq('site_id', siteId)
     .order('sort_order')
 
