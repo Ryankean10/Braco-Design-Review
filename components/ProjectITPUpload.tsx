@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, FileText, Download, Trash2, Loader2, ClipboardList, CheckCircle2, Zap } from 'lucide-react'
+import Link from 'next/link'
+import { Upload, FileText, Download, Trash2, Loader2, ClipboardList, CheckCircle2, Zap, Lock, ArrowRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface ITP {
@@ -123,7 +124,8 @@ export default function ProjectITPUpload({ projectId, siteId, initialItps, canEd
             </span>
           )}
         </div>
-        {canEdit && (
+        {/* Only show upload button if no baseline has been set yet */}
+        {canEdit && itps.length === 0 && (
           <button onClick={() => setShowForm(v => !v)}
             className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border hover:opacity-80 transition-opacity"
             style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
@@ -132,13 +134,14 @@ export default function ProjectITPUpload({ projectId, siteId, initialItps, canEd
         )}
       </div>
 
-      {showForm && canEdit && (
+      {/* Upload form — only visible before baseline is locked */}
+      {showForm && canEdit && itps.length === 0 && (
         <div className="rounded-lg border p-4 mb-4 space-y-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[140px]">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Description (optional)</label>
               <input type="text" value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="e.g. Civils ITP Rev 2 — Braco BESS"
+                placeholder="e.g. Civils ITP Rev 1"
                 className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
             </div>
@@ -178,10 +181,39 @@ export default function ProjectITPUpload({ projectId, siteId, initialItps, canEd
         </div>
       )}
 
-      {success && !showForm && (
+      {success && !showForm && itps.length === 0 && (
         <p className="flex items-center gap-1.5 text-xs mb-3" style={{ color: '#22c55e' }}>
           <CheckCircle2 size={13} /> {success}
         </p>
+      )}
+
+      {/* Baseline locked banner — shown once an ITP has been uploaded */}
+      {itps.length > 0 && siteId && (
+        <div className="flex items-start gap-3 rounded-lg px-3 py-2.5 mb-3"
+          style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)' }}>
+          <Lock size={13} className="mt-0.5 shrink-0" style={{ color: '#22c55e' }} />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium" style={{ color: '#22c55e' }}>Baseline locked</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              The baseline ITP is set. Upload revised ITPs in the construction module to track changes against this baseline.
+            </p>
+          </div>
+          <Link href={`/construction/${siteId}#itp`}
+            className="flex items-center gap-1 text-xs font-medium shrink-0 hover:opacity-80 transition-opacity"
+            style={{ color: 'var(--accent)' }}>
+            Go to ITP <ArrowRight size={11} />
+          </Link>
+        </div>
+      )}
+
+      {itps.length > 0 && !siteId && (
+        <div className="flex items-center gap-2 rounded-lg px-3 py-2 mb-3"
+          style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)' }}>
+          <Lock size={12} style={{ color: '#22c55e' }} />
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Baseline locked. Link a construction site to manage revisions.
+          </p>
+        </div>
       )}
 
       {itps.length === 0 && !showForm && (
