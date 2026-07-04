@@ -160,16 +160,14 @@ export async function POST(
     const totalItems = rows.length
     // A row is "signed" if any of its last 5 columns contain a non-trivial value
     const signedCount = rows.filter(r => {
-      // Dates anywhere in the row = strong sign-off signal (e.g. 23/04/2026, 23-04-26, Apr 2026)
-      if (/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(r)) return true
-      // Completion keywords anywhere
-      if (/\b(complete[d]?|pass(ed)?|approved|accepted|yes|done|sign(ed)?|issued|submitted|witness(ed)?|verified)\b/i.test(r)) return true
-      // Fallback: non-trivial value in any of the last 8 columns
-      const cols = r.split(',')
-      return cols.slice(-8).some(v => {
-        const t = v.trim()
-        return t.length > 1 && !/^(tbc|n\/a|-|no|0|hold|witness|review|w\/h|w\/r|h|w|r)$/i.test(t)
-      })
+      const cols = r.split(',').map(v => v.replace(/^"|"$/g, '').trim())
+      // Column H (index 7) is the primary completion indicator — "Yes" = signed off
+      const colH = cols[7] ?? ''
+      if (/^(yes|y|complete[d]?|pass(ed)?)$/i.test(colH)) return true
+      // Date pattern in any column from F onwards = signature/witnessed date
+      if (/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(cols.slice(5).join(','))) return true
+      // Any column from F onwards containing yes/y as an exact value
+      return cols.slice(5).some(v => /^(yes|y)$/i.test(v))
     }).length
     const completionFlag =
       signedCount === totalItems ? 'SIGN_OFF:ALL'
@@ -203,7 +201,7 @@ For each group return:
 - discipline: "Civils" | "Electrical" | "Commissioning"  — derived from Column E as above
 - category: Civils only → "Below Ground" (foundations, piling, drainage, ducting, drawpits) or "Above Ground". All others → "N/A"
 - itp_ref: document reference number seen in the row (e.g. "BRC-OCU-XX-XX-QC-C-030001"), or null
-- is_complete: set to true when the last column in the row contains SIGN_OFF:ALL — this means every inspection item in the group has been signed off. Set to false for SIGN_OFF:NONE or partial (e.g. SIGN_OFF:3/7)
+- is_complete: set to true when the SIGN_OFF flag appended to the row is SIGN_OFF:ALL — every inspection item signed off. SIGN_OFF:NONE = not started. SIGN_OFF:x/y = partially complete.
 - completion_evidence: if is_complete, write "All items signed off" or note partial sign-off count; otherwise null
 - sort_order: Civils below ground 1–49, Civils above ground 50–99, Electrical 100–199, Commissioning 200+
 ${baselineContext}
