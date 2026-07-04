@@ -118,6 +118,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     { data: allLessons },
     { data: allOps },
     { data: projectItps },
+    { data: constructionSite },
   ] = await Promise.all([
     supabase.from('client_comments')
       .select('*, comment_attachments(*)')
@@ -142,6 +143,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     supabase.from('lessons_learned').select('*').order('severity').order('category'),
     supabase.from('operator_rules').select('*').order('operator').order('category'),
     supabase.from('project_itps').select('*').eq('project_id', id).order('uploaded_at', { ascending: false }),
+    supabase.from('construction_sites').select('id').eq('project_id', id).maybeSingle(),
   ])
 
   const linkedStandards = (linkedStandardRows ?? []).map((r: any) => r.standards).filter(Boolean)
@@ -230,6 +232,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <div className="mb-6">
           <ProjectITPUpload
             projectId={id}
+            siteId={(constructionSite as any)?.id ?? null}
             initialItps={(projectItps ?? []) as any}
             canEdit={canEdit}
           />
