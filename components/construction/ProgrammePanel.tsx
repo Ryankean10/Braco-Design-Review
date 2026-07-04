@@ -67,7 +67,7 @@ function daysSince(iso: string) {
 export default function ProgrammePanel({ siteId, initialProgrammes, signedUrls: initialUrls, canEdit }: Props) {
   const [programmes, setProgrammes] = useState<Programme[]>(initialProgrammes)
   const [urls, setUrls] = useState<Record<string, string>>(initialUrls)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const [viewing, setViewing] = useState<string | null>(initialProgrammes[0]?.id ?? null)
   const [showHistory, setShowHistory] = useState(false)
   const [showUpload, setShowUpload] = useState(false)

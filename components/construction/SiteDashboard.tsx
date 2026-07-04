@@ -133,7 +133,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
 
       {/* ── Open issues — starts open only if there are issues ── */}
       {openIssues.length > 0 && (
-        <Section title="Open issues" badge={openIssues.length} badgeColor="#fb923c" defaultOpen={true}>
+        <Section title="Open issues" badge={openIssues.length} badgeColor="#fb923c"
+          summary={openIssues.map(i => i.impact).join(' · ')}>
           <div className="space-y-2">
             {openIssues.map((issue: IssueEntry, i: number) => (
               <div key={i} className="flex items-start gap-3 text-xs rounded-lg p-2.5"
