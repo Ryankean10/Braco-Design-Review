@@ -1010,12 +1010,16 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
             return Array.from(grouped.entries())
               .filter(([, members]) => members.length > 0)
               .map(([groupName, members]) => {
-                const appointedInGroup = members.filter(p => appointments.some(a => a.person_id === p.id)).length
+                const _today = new Date().toISOString().slice(0, 10)
+                const isActiveAppt = (a: Appointment) => a.person_id && (!a.end_date || a.end_date >= _today)
+                const appointedInGroup = members.filter(p => appointments.some(a => a.person_id === p.id && isActiveAppt(a))).length
                 return (
                 <GroupSection key={groupName} title={groupName} count={members.length} appointed={appointedInGroup}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {members.map(p => {
-                      const jobCount = appointments.filter(a => a.person_id === p.id).length
+                      const activeAppts = appointments.filter(a => a.person_id === p.id && isActiveAppt(a))
+                      const historyCount = appointments.filter(a => a.person_id === p.id && a.end_date && a.end_date < _today).length
+                      const jobCount = activeAppts.length
                       return (
                         <div key={p.id} className="rounded-xl border p-4 space-y-3"
                           style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
@@ -1055,11 +1059,16 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                           )}
                           {p.notes && <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>{p.notes}</p>}
                           <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
-                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            <button onClick={() => setViewingPerson(p)}
+                              className="flex items-center gap-1.5 text-xs hover:opacity-80 transition-opacity"
+                              style={{ color: 'var(--accent)' }}>
+                              <History size={11} />
                               {jobCount > 0
-                                ? <span style={{ color: 'var(--accent)' }}>{jobCount} job{jobCount > 1 ? 's' : ''} appointed</span>
-                                : 'Not appointed'}
-                            </span>
+                                ? <>{jobCount} active{historyCount > 0 ? ` · ${historyCount} history` : ''}</>
+                                : historyCount > 0
+                                  ? <span style={{ color: 'var(--text-muted)' }}>Unassigned · {historyCount} history</span>
+                                  : <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}
+                            </button>
                             <div className="flex items-center gap-1">
                               {canEdit && (
                                 <>
@@ -1156,7 +1165,10 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
       {/* ── My Teams tab ────────────────────────────────────────────────────── */}
       {tab === 'teams' && (() => {
         // People with no appointments at all
-        const appointedIds = new Set(appointments.map(a => a.person_id))
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const appointedIds = new Set(
+          appointments.filter(a => !a.end_date || a.end_date >= todayStr).map(a => a.person_id)
+        )
         const unassigned = activePeople.filter(p => !appointedIds.has(p.id))
 
         return (
