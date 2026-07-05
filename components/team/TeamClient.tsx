@@ -369,8 +369,6 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
   const [addingPerson, setAddingPerson] = useState(false)
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [appointingPerson, setAppointingPerson] = useState<Person | null>(null)
-  const [expandedJob, setExpandedJob] = useState<string | null>(null)
-
   const activePeople   = people.filter(p => p.is_active !== false)
   const inactivePeople = people.filter(p => p.is_active === false)
 
@@ -644,73 +642,68 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
       )}
 
       {/* ── My Teams tab ────────────────────────────────────────────────────── */}
-      {tab === 'teams' && (
-        <div className="space-y-3">
-          {Object.keys(byJob).length === 0 && (
-            <div className="text-center py-16 rounded-xl border"
-              style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-              <Briefcase size={32} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                No appointments yet. Go to the People Library and use the briefcase icon to appoint someone.
-              </p>
-            </div>
-          )}
+      {tab === 'teams' && (() => {
+        // People with no appointments at all
+        const appointedIds = new Set(appointments.map(a => a.person_id))
+        const unassigned = activePeople.filter(p => !appointedIds.has(p.id))
 
-          {Object.entries(byJob).map(([jobKey, { label, type, appts }]) => {
-            const open = expandedJob === jobKey
-            const manager = appts.find(a => a.is_manager)
-            const notAppointed = activePeople.length - appts.length
-            return (
-              <div key={jobKey} className="rounded-xl border overflow-hidden"
+        return (
+          <div className="space-y-4">
+            {Object.keys(byJob).length === 0 && unassigned.length === 0 && (
+              <div className="text-center py-16 rounded-xl border"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-                <button
-                  onClick={() => setExpandedJob(open ? null : jobKey)}
-                  className="w-full flex items-start gap-4 px-6 py-5 hover:opacity-90 transition-opacity text-left">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-                    style={{ background: type === 'site' ? 'rgba(251,146,60,0.15)' : 'rgba(108,114,245,0.15)' }}>
-                    {type === 'site'
-                      ? <HardHat size={18} style={{ color: '#fb923c' }} />
-                      : <Briefcase size={18} style={{ color: 'var(--accent)' }} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {type === 'site' ? 'Construction site' : 'Design project'}
-                      {manager ? ` · Manager: ${manager.person?.name}` : ''}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2">
+                <Briefcase size={32} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  No appointments yet. Go to the People Library and appoint someone.
+                </p>
+              </div>
+            )}
+
+            {/* Site / project cards */}
+            {Object.entries(byJob).map(([jobKey, { label, type, appts }]) => {
+              const manager = appts.find(a => a.is_manager)
+              const accentColor = type === 'site' ? '#fb923c' : 'var(--accent)'
+              const accentBg   = type === 'site' ? 'rgba(251,146,60,0.12)' : 'rgba(108,114,245,0.12)'
+              return (
+                <div key={jobKey} className="rounded-xl border overflow-hidden"
+                  style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+
+                  {/* Card header */}
+                  <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: accentBg }}>
+                      {type === 'site'
+                        ? <HardHat size={16} style={{ color: accentColor }} />
+                        : <Briefcase size={16} style={{ color: accentColor }} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {type === 'site' ? 'Construction site' : 'Design project'}
+                        {manager ? ` · ${manager.person?.name} (Manager)` : ' · No manager assigned'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs font-medium px-2.5 py-1 rounded-full"
                         style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
                         {appts.length} appointed
                       </span>
-                      {notAppointed > 0 && (
-                        <span className="text-xs px-2.5 py-1 rounded-full"
-                          style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
-                          {notAppointed} not yet from library
-                        </span>
+                      {canEdit && (
+                        <button onClick={() => setTab('library')}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border hover:opacity-80"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                          <Plus size={11} /> Add
+                        </button>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 mt-1">
-                    {manager && (
-                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
-                        style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15' }}>
-                        <Star size={9} /> Manager set
-                      </span>
-                    )}
-                    {open ? <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
-                      : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
-                  </div>
-                </button>
 
-                {open && (
-                  <div className="border-t px-5 py-4 space-y-2" style={{ borderColor: 'var(--border)' }}>
+                  {/* Appointed people rows */}
+                  <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
                     {appts.map(a => (
-                      <div key={a.id} className="flex items-center gap-3 rounded-lg px-3 py-2.5 border"
-                        style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
-                        <Avatar name={a.person?.name ?? '?'} size={30} />
+                      <div key={a.id} className="flex items-center gap-3 px-5 py-3">
+                        <Avatar name={a.person?.name ?? '?'} size={32} />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                               {a.person?.name}
                             </p>
@@ -724,8 +717,8 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                           </div>
                           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                             {a.role_on_job ?? a.person?.role ?? '—'}
-                            {a.start_date ? ` · From ${new Date(a.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}
-                            {a.end_date ? ` to ${new Date(a.end_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}
+                            {a.start_date ? ` · From ${new Date(a.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                            {a.end_date ? ` – ${new Date(a.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
                           </p>
                         </div>
                         {canEdit && (
@@ -736,21 +729,60 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                         )}
                       </div>
                     ))}
-
-                    {canEdit && (
-                      <button
-                        onClick={() => { setTab('library'); }}
-                        className="flex items-center gap-1.5 text-xs mt-1" style={{ color: 'var(--accent)' }}>
-                        <Plus size={11} /> Add more people from library
-                      </button>
-                    )}
                   </div>
-                )}
+                </div>
+              )
+            })}
+
+            {/* Unassigned active staff */}
+            {unassigned.length > 0 && (
+              <div className="rounded-xl border overflow-hidden"
+                style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'var(--bg-surface)' }}>
+                <div className="flex items-center gap-3 px-5 py-4 border-b"
+                  style={{ borderColor: 'rgba(248,113,113,0.2)', background: 'rgba(248,113,113,0.06)' }}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: 'rgba(248,113,113,0.12)' }}>
+                    <UsersRound size={16} style={{ color: '#f87171' }} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Unassigned</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Active staff with no job appointments
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium px-2.5 py-1 rounded-full"
+                    style={{ background: 'rgba(248,113,113,0.12)', color: '#f87171' }}>
+                    {unassigned.length} staff
+                  </span>
+                </div>
+                <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                  {unassigned.map(p => (
+                    <div key={p.id} className="flex items-center gap-3 px-5 py-3">
+                      <Avatar name={p.name} size={32} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                          {p.discipline && <DisciplineBadge d={p.discipline} />}
+                        </div>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {p.role ?? '—'}{p.company ? ` · ${p.company}` : ''}
+                        </p>
+                      </div>
+                      {canEdit && (
+                        <button onClick={() => setAppointingPerson(p)}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border hover:opacity-80"
+                          style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
+                          <Briefcase size={11} /> Appoint
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            )
-          })}
-        </div>
-      )}
+            )}
+          </div>
+        )
+      })()}
 
       {/* Modals */}
       {(addingPerson || editingPerson) && (
