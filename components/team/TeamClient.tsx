@@ -378,13 +378,14 @@ function AppointModal({ person, projects, sites, currentUserId, onClose, onSaved
 }
 
 // ── Person profile modal ──────────────────────────────────────────────────────
-function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt, onEditPerson }: {
+function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt, onEditPerson, onNotesSaved }: {
   person: Person
   appointments: Appointment[]
   canEdit: boolean
   onClose: () => void
   onEditAppt: (a: Appointment) => void
   onEditPerson: (p: Person) => void
+  onNotesSaved: (apptId: string, notes: string | null) => void
 }) {
   const today = new Date().toISOString().slice(0, 10)
   const mine = appointments.filter(a => a.person_id === person.id)
@@ -417,12 +418,14 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
 
   async function saveNotes(apptId: string) {
     setSavingNotes(true)
+    const saved = notesDraft || null
     await fetch(`/api/team/appointments/${apptId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes: notesDraft || null }),
+      body: JSON.stringify({ notes: saved }),
     })
-    setLocalNotes(prev => ({ ...prev, [apptId]: notesDraft || null }))
+    setLocalNotes(prev => ({ ...prev, [apptId]: saved }))
+    onNotesSaved(apptId, saved)
     setSavingNotes(false)
     setEditingNotes(null)
   }
@@ -1297,6 +1300,9 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
           onClose={() => setViewingPerson(null)}
           onEditAppt={a => { setViewingPerson(null); setEditingAppointment(a) }}
           onEditPerson={p => setEditingPerson(p)}
+          onNotesSaved={(apptId, notes) =>
+            setAppointments(prev => prev.map(a => a.id === apptId ? { ...a, notes } : a))
+          }
         />
       )}
     </div>
