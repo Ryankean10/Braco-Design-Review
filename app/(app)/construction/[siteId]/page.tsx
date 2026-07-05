@@ -11,6 +11,7 @@ import ProgrammePanel from '@/components/construction/ProgrammePanel'
 import CivilsPanel from '@/components/construction/CivilsPanel'
 import ItpPanel from '@/components/construction/ItpPanel'
 import CollapsibleSection from '@/components/construction/CollapsibleSection'
+import PersonnelMatchPanel from '@/components/construction/PersonnelMatchPanel'
 
 export default async function ConstructionSitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
@@ -125,6 +126,13 @@ export default async function ConstructionSitePage({ params }: { params: Promise
     if (data?.signedUrl) signedUrls[prog.id] = data.signedUrl
   }
 
+  // Fetch people for personnel matching dropdown
+  const { data: allPeople } = await supabase
+    .from('people')
+    .select('id, name, role, company')
+    .eq('is_active', true)
+    .order('name')
+
   const canEdit = ['admin', 'engineer'].includes(role)
 
   return (
@@ -168,6 +176,15 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         civilsActivities={civilsActivities ?? []}
         unmatchedPersonnel={unmatchedPersonnel}
       />
+
+      {/* Personnel matching */}
+      <CollapsibleSection
+        title="Diary Personnel Matching"
+        badge={undefined}
+        summary="Match free-text diary names to people in the staff library"
+      >
+        <PersonnelMatchPanel siteId={siteId} people={(allPeople ?? []) as any} />
+      </CollapsibleSection>
 
       {/* ITP — top-level, anchored so project page link lands here */}
       <div id="itp" style={{ scrollMarginTop: '80px' }}>
