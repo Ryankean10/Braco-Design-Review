@@ -427,13 +427,13 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
     setEditingNotes(null)
   }
 
-  function JobRow({ a, dim }: { a: Appointment; dim?: boolean }) {
+  function renderJobRow(a: Appointment, dim?: boolean) {
     const jobName = a.site?.name ?? a.project?.name ?? 'Unknown'
     const client  = a.site?.client ?? a.project?.client
     const notes   = localNotes[a.id]
     const isEditing = editingNotes === a.id
     return (
-      <div className="rounded-xl border p-4 space-y-2"
+      <div key={a.id} className="rounded-xl border p-4 space-y-2"
         style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)', opacity: dim ? 0.7 : 1 }}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -486,6 +486,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
         {isEditing ? (
           <div className="space-y-2">
             <textarea
+              autoFocus
               value={notesDraft}
               onChange={e => setNotesDraft(e.target.value)}
               rows={3}
@@ -509,7 +510,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
           </div>
         ) : (
           <div
-            onClick={() => canEdit ? (setEditingNotes(a.id), setNotesDraft(notes ?? '')) : null}
+            onClick={() => canEdit ? (setEditingNotes(a.id), setNotesDraft(notes ?? '')) : undefined}
             className={`rounded-lg px-3 py-2 text-xs ${canEdit ? 'cursor-text hover:opacity-80' : ''}`}
             style={{ background: 'var(--bg-surface)', color: notes ? 'var(--text-primary)' : 'var(--text-muted)', minHeight: 32 }}>
             {notes ?? (canEdit ? 'Click to add manager notes…' : 'No notes')}
@@ -598,7 +599,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
               <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Current appointments
               </p>
-              {active.map(a => <JobRow key={a.id} a={a} />)}
+              {active.map(a => renderJobRow(a))}
             </div>
           )}
 
@@ -608,7 +609,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
               <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 History
               </p>
-              {expired.map(a => <JobRow key={a.id} a={a} dim />)}
+              {expired.map(a => renderJobRow(a, true))}
             </div>
           )}
 
