@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Upload, FileText, Loader2, ClipboardList, CheckCircle2,
-  ChevronDown, ChevronRight, Star, Plus, Minus, GitBranch,
+  ChevronDown, ChevronRight, Star, Plus, Minus, GitBranch, Calendar,
 } from 'lucide-react'
 
 interface ItpRevision {
@@ -31,6 +31,8 @@ export default function ItpPanel({ siteId, canEdit }: Props) {
   const [success, setSuccess] = useState('')
   const [revLabel, setRevLabel] = useState('Rev 1')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [seedingP6, setSeedingP6] = useState(false)
+  const [p6Result, setP6Result] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -66,6 +68,20 @@ export default function ItpPanel({ siteId, canEdit }: Props) {
       setError(e instanceof Error ? e.message : 'Upload failed')
     } finally {
       setUploading(false); setStage('')
+    }
+  }
+
+  async function seedFromP6() {
+    setSeedingP6(true); setP6Result('')
+    try {
+      const res = await fetch(`/api/construction/${siteId}/seed-from-p6`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Seeding failed')
+      setP6Result(`${data.seeded} activities seeded from ${data.source}`)
+    } catch (e: unknown) {
+      setP6Result(e instanceof Error ? e.message : 'Failed')
+    } finally {
+      setSeedingP6(false)
     }
   }
 
@@ -139,12 +155,30 @@ export default function ItpPanel({ siteId, canEdit }: Props) {
       )}
 
       {!loading && revisions.length === 0 && (
-        <div className="text-center py-8">
-          <ClipboardList size={28} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
+        <div className="text-center py-6 space-y-3">
+          <ClipboardList size={28} className="mx-auto opacity-20" style={{ color: 'var(--text-muted)' }} />
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No ITP uploaded yet.</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Upload the project ITP to auto-populate the activity register.
-          </p>
+          {canEdit && (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No ITP available? Seed the activity register from the uploaded P6 programme instead.
+              </p>
+              <button onClick={seedFromP6} disabled={seedingP6}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border disabled:opacity-50 transition-opacity hover:opacity-80"
+                style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
+                {seedingP6
+                  ? <><Loader2 size={14} className="animate-spin" />Extracting from P6…</>
+                  : <><Calendar size={14} />Seed from P6 programme</>}
+              </button>
+              {p6Result && (
+                <p className="text-xs flex items-center gap-1.5"
+                  style={{ color: p6Result.includes('activities') ? '#22c55e' : 'var(--critical)' }}>
+                  {p6Result.includes('activities') && <CheckCircle2 size={12} />}
+                  {p6Result}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

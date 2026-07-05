@@ -153,14 +153,9 @@ export default async function ConstructionIndexPage() {
                   </div>
                 )}
                 {!site.hasActivities && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] w-14 text-right shrink-0" style={{ color: 'var(--text-muted)' }}>Cables</span>
-                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
-                      <div className="h-full rounded-full transition-all"
-                        style={{ width: `${site.cablePct}%`, background: site.cablePct === 100 ? '#4ade80' : 'var(--accent)' }} />
-                    </div>
-                    <span className="text-[10px] w-7 shrink-0 tabular-nums" style={{ color: 'var(--text-muted)' }}>{site.cablePct}%</span>
-                  </div>
+                  <p className="text-[10px] italic" style={{ color: 'var(--text-muted)' }}>
+                    No ITP or P6 activities seeded yet
+                  </p>
                 )}
               </div>
 
