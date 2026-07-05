@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   UsersRound, Plus, Search, X, ChevronDown, ChevronRight,
-  Briefcase, HardHat, Star, User, Mail, Phone, Building2,
+  Briefcase, HardHat, Star, Mail, Phone, Building2,
   Loader2, CheckCircle2, Trash2, Edit2,
 } from 'lucide-react'
 
@@ -12,7 +12,7 @@ import {
 interface Person {
   id: string; name: string; role: string | null; discipline: string | null
   company: string | null; email: string | null; phone: string | null; notes: string | null
-  person_group: string | null
+  person_group: string | null; is_active: boolean
 }
 
 const PERSON_GROUPS = [
@@ -104,6 +104,7 @@ function PersonModal({ person, onClose, onSaved }: {
     name: person?.name ?? '', role: person?.role ?? '', discipline: person?.discipline ?? '',
     company: person?.company ?? '', email: person?.email ?? '', phone: person?.phone ?? '',
     notes: person?.notes ?? '', person_group: person?.person_group ?? '',
+    is_active: person?.is_active ?? true,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -116,6 +117,7 @@ function PersonModal({ person, onClose, onSaved }: {
       name: form.name.trim(), role: form.role || null, discipline: form.discipline || null,
       company: form.company || null, email: form.email || null, phone: form.phone || null,
       notes: form.notes || null, person_group: form.person_group || null,
+      is_active: form.is_active,
     }
     const q = person
       ? supabase.from('people').update(payload).eq('id', person.id).select().single()
@@ -363,13 +365,17 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
   const [appointments, setAppointments] = useState(initAppts)
   const [search, setSearch] = useState('')
   const [discFilter, setDiscFilter] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
   const [addingPerson, setAddingPerson] = useState(false)
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [appointingPerson, setAppointingPerson] = useState<Person | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
 
-  // Filtered library
-  const filtered = people.filter(p => {
+  const activePeople   = people.filter(p => p.is_active !== false)
+  const inactivePeople = people.filter(p => p.is_active === false)
+
+  // Filtered library — always against active people (inactive shown separately)
+  const filtered = activePeople.filter(p => {
     const q = search.toLowerCase()
     const matchesSearch = !q || p.name.toLowerCase().includes(q) || (p.role ?? '').toLowerCase().includes(q) || (p.company ?? '').toLowerCase().includes(q)
     const matchesDisc = !discFilter || p.discipline === discFilter
@@ -383,6 +389,12 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
     const label = a.site?.name ?? a.project?.name ?? 'Unknown job'
     if (!byJob[key]) byJob[key] = { label, type: a.site_id ? 'site' : 'project', appts: [] }
     byJob[key].appts.push(a)
+  }
+
+  async function toggleActive(person: Person) {
+    const newVal = !person.is_active
+    await supabase.from('people').update({ is_active: newVal }).eq('id', person.id)
+    setPeople(prev => prev.map(p => p.id === person.id ? { ...p, is_active: newVal } : p))
   }
 
   async function deletePerson(id: string) {
@@ -404,7 +416,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
           <div>
             <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Team</h1>
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              People library · {people.length} in library · {appointments.length} active appointments
+              {activePeople.length} active · {inactivePeople.length} inactive · {appointments.length} appointments
             </p>
           </div>
         </div>
@@ -553,6 +565,12 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                                     className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
                                     <Edit2 size={13} />
                                   </button>
+                                  <button onClick={() => toggleActive(p)}
+                                    title="Mark inactive — moves to inactive section"
+                                    className="px-2 py-0.5 rounded-full text-[10px] border font-medium hover:opacity-80 transition-opacity"
+                                    style={{ borderColor: '#4ade80', color: '#4ade80', background: 'rgba(74,222,128,0.08)' }}>
+                                    Active
+                                  </button>
                                   <button onClick={() => deletePerson(p.id)} title="Remove from library"
                                     className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
                                     <Trash2 size={13} />
@@ -568,6 +586,60 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                 </GroupSection>
               ))
           })()}
+
+          {/* Inactive section */}
+          {inactivePeople.length > 0 && (
+            <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+              <button onClick={() => setShowInactive(v => !v)}
+                className="flex items-center gap-2 w-full text-left py-1 hover:opacity-80 transition-opacity mb-3">
+                {showInactive
+                  ? <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />
+                  : <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />}
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Inactive Staff
+                </span>
+                <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+                  {inactivePeople.length}
+                </span>
+              </button>
+              {showInactive && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 opacity-60">
+                  {inactivePeople.map(p => (
+                    <div key={p.id} className="rounded-xl border p-4 space-y-3"
+                      style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+                      <div className="flex items-start gap-3">
+                        <Avatar name={p.name} size={36} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                            {p.discipline && <DisciplineBadge d={p.discipline} />}
+                          </div>
+                          {p.role && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.role}</p>}
+                          {p.company && (
+                            <p className="flex items-center gap-1 text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                              <Building2 size={10} /> {p.company}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border" style={{ borderColor: 'var(--text-muted)', color: 'var(--text-muted)' }}>
+                          Inactive
+                        </span>
+                        {canEdit && (
+                          <button onClick={() => toggleActive(p)}
+                            className="px-2 py-0.5 rounded-full text-[10px] border font-medium hover:opacity-80 transition-opacity"
+                            style={{ borderColor: 'var(--text-muted)', color: 'var(--text-muted)', background: 'transparent' }}>
+                            Reactivate
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -587,26 +659,39 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
           {Object.entries(byJob).map(([jobKey, { label, type, appts }]) => {
             const open = expandedJob === jobKey
             const manager = appts.find(a => a.is_manager)
+            const notAppointed = activePeople.length - appts.length
             return (
               <div key={jobKey} className="rounded-xl border overflow-hidden"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
                 <button
                   onClick={() => setExpandedJob(open ? null : jobKey)}
-                  className="w-full flex items-center gap-3 px-5 py-3.5 hover:opacity-80 transition-opacity text-left">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ background: type === 'site' ? 'rgba(251,146,60,0.12)' : 'rgba(108,114,245,0.12)' }}>
+                  className="w-full flex items-start gap-4 px-6 py-5 hover:opacity-90 transition-opacity text-left">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                    style={{ background: type === 'site' ? 'rgba(251,146,60,0.15)' : 'rgba(108,114,245,0.15)' }}>
                     {type === 'site'
-                      ? <HardHat size={14} style={{ color: '#fb923c' }} />
-                      : <Briefcase size={14} style={{ color: 'var(--accent)' }} />}
+                      ? <HardHat size={18} style={{ color: '#fb923c' }} />
+                      : <Briefcase size={18} style={{ color: 'var(--accent)' }} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{label}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {appts.length} member{appts.length > 1 ? 's' : ''}
-                      {manager ? ` · Manager: ${manager.person?.name}` : ' · No manager assigned'}
+                    <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {type === 'site' ? 'Construction site' : 'Design project'}
+                      {manager ? ` · Manager: ${manager.person?.name}` : ''}
                     </p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-xs font-medium px-2.5 py-1 rounded-full"
+                        style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
+                        {appts.length} appointed
+                      </span>
+                      {notAppointed > 0 && (
+                        <span className="text-xs px-2.5 py-1 rounded-full"
+                          style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+                          {notAppointed} not yet from library
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 mt-1">
                     {manager && (
                       <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
                         style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15' }}>
