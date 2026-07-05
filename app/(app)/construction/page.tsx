@@ -27,7 +27,7 @@ export default async function ConstructionIndexPage() {
       supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
       supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id).eq('overall_status', 'Complete'),
       supabase.from('cable_items').select('id', { count: 'exact', head: true }).eq('site_id', site.id).eq('overall_status', 'Blocked'),
-      supabase.from('civils_activities').select('progress_pct, status').eq('site_id', site.id),
+      supabase.from('civils_activities').select('progress_pct, status, discipline').eq('site_id', site.id),
     ])
 
     const cableTotal    = total    ?? 0
@@ -35,14 +35,22 @@ export default async function ConstructionIndexPage() {
     const cableBlocked  = blocked  ?? 0
     const cablePct = cableTotal > 0 ? Math.round((cableComplete / cableTotal) * 100) : 0
 
-    const civilsRows = civils ?? []
-    const civilsPct = civilsRows.length > 0
-      ? Math.round(civilsRows.reduce((s: number, a: any) => s + (a.progress_pct ?? 0), 0) / civilsRows.length)
+    const allActs = civils ?? []
+    const avg = (rows: any[]) => rows.length > 0
+      ? Math.round(rows.reduce((s: number, a: any) => s + (a.progress_pct ?? 0), 0) / rows.length)
       : null
-    const civilsComplete = civilsRows.filter((a: any) => a.status === 'Complete').length
 
-    const overallPct = civilsPct !== null
-      ? Math.round((cablePct + civilsPct) / 2)
+    const civilsRows   = allActs.filter((a: any) => !a.discipline || a.discipline === 'Civils')
+    const electricalRows = allActs.filter((a: any) => a.discipline === 'Electrical' || a.discipline === 'HV')
+    const commRows     = allActs.filter((a: any) => a.discipline === 'Commissioning')
+
+    const civilsPct      = avg(civilsRows)
+    const electricalPct  = avg(electricalRows)
+    const commPct        = avg(commRows)
+
+    const disciplinePcts = [civilsPct, electricalPct, commPct].filter(p => p !== null) as number[]
+    const overallPct = disciplinePcts.length > 0
+      ? Math.round(disciplinePcts.reduce((s, p) => s + p, 0) / disciplinePcts.length)
       : cablePct
 
     return {
@@ -52,9 +60,14 @@ export default async function ConstructionIndexPage() {
       blocked: cableBlocked,
       cablePct,
       civilsPct,
+      electricalPct,
+      commPct,
       civilsTotal: civilsRows.length,
-      civilsComplete,
+      civilsComplete: civilsRows.filter((a: any) => a.status === 'Complete').length,
+      electricalTotal: electricalRows.length,
+      electricalComplete: electricalRows.filter((a: any) => a.status === 'Complete').length,
       overallPct,
+      hasActivities: allActs.length > 0,
     }
   }))
 
@@ -107,11 +120,11 @@ export default async function ConstructionIndexPage() {
                 </div>
               </div>
 
-              {/* Split progress bars */}
+              {/* Discipline progress bars */}
               <div className="mt-3 space-y-1.5">
                 {site.civilsPct !== null && (
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] w-12 text-right shrink-0" style={{ color: '#fb923c' }}>Civils</span>
+                    <span className="text-[10px] w-14 text-right shrink-0" style={{ color: '#fb923c' }}>Civils</span>
                     <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
                       <div className="h-full rounded-full transition-all"
                         style={{ width: `${site.civilsPct}%`, background: site.civilsPct === 100 ? '#4ade80' : '#fb923c' }} />
@@ -119,26 +132,56 @@ export default async function ConstructionIndexPage() {
                     <span className="text-[10px] w-7 shrink-0 tabular-nums" style={{ color: '#fb923c' }}>{site.civilsPct}%</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] w-12 text-right shrink-0" style={{ color: 'var(--accent)' }}>Cable</span>
-                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
-                    <div className="h-full rounded-full transition-all"
-                      style={{ width: `${site.cablePct}%`, background: site.cablePct === 100 ? '#4ade80' : 'var(--accent)' }} />
+                {site.electricalPct !== null && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] w-14 text-right shrink-0" style={{ color: 'var(--accent)' }}>Electrical</span>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${site.electricalPct}%`, background: site.electricalPct === 100 ? '#4ade80' : 'var(--accent)' }} />
+                    </div>
+                    <span className="text-[10px] w-7 shrink-0 tabular-nums" style={{ color: 'var(--accent)' }}>{site.electricalPct}%</span>
                   </div>
-                  <span className="text-[10px] w-7 shrink-0 tabular-nums" style={{ color: 'var(--accent)' }}>{site.cablePct}%</span>
-                </div>
+                )}
+                {site.commPct !== null && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] w-14 text-right shrink-0" style={{ color: '#a78bfa' }}>T&amp;C</span>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${site.commPct}%`, background: site.commPct === 100 ? '#4ade80' : '#a78bfa' }} />
+                    </div>
+                    <span className="text-[10px] w-7 shrink-0 tabular-nums" style={{ color: '#a78bfa' }}>{site.commPct}%</span>
+                  </div>
+                )}
+                {!site.hasActivities && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] w-14 text-right shrink-0" style={{ color: 'var(--text-muted)' }}>Cables</span>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${site.cablePct}%`, background: site.cablePct === 100 ? '#4ade80' : 'var(--accent)' }} />
+                    </div>
+                    <span className="text-[10px] w-7 shrink-0 tabular-nums" style={{ color: 'var(--text-muted)' }}>{site.cablePct}%</span>
+                  </div>
+                )}
               </div>
 
               {/* Stat chips */}
               <div className="flex items-center gap-4 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 size={11} style={{ color: '#4ade80' }} />
-                  {site.complete}/{site.total} cables
-                </span>
                 {site.civilsPct !== null && (
                   <span className="flex items-center gap-1">
                     <CheckCircle2 size={11} style={{ color: '#fb923c' }} />
                     {site.civilsComplete}/{site.civilsTotal} civils
+                  </span>
+                )}
+                {site.electricalPct !== null && (
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 size={11} style={{ color: 'var(--accent)' }} />
+                    {site.electricalComplete}/{site.electricalTotal} electrical
+                  </span>
+                )}
+                {site.total > 0 && (
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 size={11} style={{ color: '#4ade80' }} />
+                    {site.complete}/{site.total} cables
                   </span>
                 )}
                 {site.blocked > 0 && (
