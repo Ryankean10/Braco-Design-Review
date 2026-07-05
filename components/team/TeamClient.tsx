@@ -6,6 +6,7 @@ import {
   UsersRound, Plus, Search, X, ChevronDown, ChevronRight,
   Briefcase, HardHat, Star, Mail, Phone, Building2,
   Loader2, CheckCircle2, Trash2, Edit2, History, Calendar,
+  ClipboardList, MapPin, Clock,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -376,6 +377,253 @@ function AppointModal({ person, projects, sites, currentUserId, onClose, onSaved
   )
 }
 
+// ── Person profile modal ──────────────────────────────────────────────────────
+function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt, onEditPerson }: {
+  person: Person
+  appointments: Appointment[]
+  canEdit: boolean
+  onClose: () => void
+  onEditAppt: (a: Appointment) => void
+  onEditPerson: (p: Person) => void
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const mine = appointments.filter(a => a.person_id === person.id)
+  const active  = mine.filter(a => !a.end_date || a.end_date >= today)
+  const expired = mine.filter(a => a.end_date && a.end_date < today)
+    .sort((a, b) => (b.end_date ?? '').localeCompare(a.end_date ?? ''))
+
+  const [editingNotes, setEditingNotes] = useState<string | null>(null)
+  const [notesDraft, setNotesDraft] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
+  const [localNotes, setLocalNotes] = useState<Record<string, string | null>>(
+    Object.fromEntries(mine.map(a => [a.id, a.notes]))
+  )
+
+  function fmtDate(d: string) {
+    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  function duration(start: string | null, end: string | null): string {
+    if (!start) return ''
+    const s = new Date(start)
+    const e = end ? new Date(end) : new Date()
+    const days = Math.round((e.getTime() - s.getTime()) / 86_400_000)
+    if (days < 7) return `${days}d`
+    if (days < 31) return `${Math.round(days / 7)}w`
+    const months = Math.round(days / 30.5)
+    if (months < 12) return `${months}mo`
+    return `${(days / 365).toFixed(1)}yr`
+  }
+
+  async function saveNotes(apptId: string) {
+    setSavingNotes(true)
+    await fetch(`/api/team/appointments/${apptId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: notesDraft || null }),
+    })
+    setLocalNotes(prev => ({ ...prev, [apptId]: notesDraft || null }))
+    setSavingNotes(false)
+    setEditingNotes(null)
+  }
+
+  function JobRow({ a, dim }: { a: Appointment; dim?: boolean }) {
+    const jobName = a.site?.name ?? a.project?.name ?? 'Unknown'
+    const client  = a.site?.client ?? a.project?.client
+    const notes   = localNotes[a.id]
+    const isEditing = editingNotes === a.id
+    return (
+      <div className="rounded-xl border p-4 space-y-2"
+        style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)', opacity: dim ? 0.7 : 1 }}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{jobName}</p>
+              {a.is_manager && (
+                <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15' }}>
+                  <Star size={8} /> Manager
+                </span>
+              )}
+              {dim && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{ background: 'rgba(148,163,184,0.1)', color: '#94a3b8' }}>
+                  Ended
+                </span>
+              )}
+            </div>
+            {client && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{client}</p>}
+          </div>
+          {canEdit && (
+            <button onClick={() => onEditAppt(a)} title="Edit appointment"
+              className="p-1.5 rounded hover:opacity-80 shrink-0" style={{ color: 'var(--text-muted)' }}>
+              <Edit2 size={13} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+          {a.role_on_job && (
+            <span className="flex items-center gap-1">
+              <Briefcase size={10} /> {a.role_on_job}
+            </span>
+          )}
+          {(a.start_date || a.end_date) && (
+            <span className="flex items-center gap-1">
+              <Calendar size={10} />
+              {a.start_date ? fmtDate(a.start_date) : '?'}
+              {a.end_date ? ` – ${fmtDate(a.end_date)}` : ' – present'}
+            </span>
+          )}
+          {a.start_date && (
+            <span className="flex items-center gap-1">
+              <Clock size={10} /> {duration(a.start_date, a.end_date)}
+            </span>
+          )}
+        </div>
+
+        {/* Notes */}
+        {isEditing ? (
+          <div className="space-y-2">
+            <textarea
+              value={notesDraft}
+              onChange={e => setNotesDraft(e.target.value)}
+              rows={3}
+              placeholder="Add manager notes about this appointment…"
+              className="w-full rounded-lg px-3 py-2 text-xs border focus:outline-none resize-none"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            />
+            <div className="flex gap-2">
+              <button onClick={() => saveNotes(a.id)} disabled={savingNotes}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                style={{ background: 'var(--accent)' }}>
+                {savingNotes ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                Save
+              </button>
+              <button onClick={() => setEditingNotes(null)}
+                className="px-3 py-1.5 rounded-lg text-xs border"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={() => canEdit ? (setEditingNotes(a.id), setNotesDraft(notes ?? '')) : null}
+            className={`rounded-lg px-3 py-2 text-xs ${canEdit ? 'cursor-text hover:opacity-80' : ''}`}
+            style={{ background: 'var(--bg-surface)', color: notes ? 'var(--text-primary)' : 'var(--text-muted)', minHeight: 32 }}>
+            {notes ?? (canEdit ? 'Click to add manager notes…' : 'No notes')}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.65)' }}>
+      <div className="w-full max-w-lg rounded-2xl border flex flex-col"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', maxHeight: '90vh' }}>
+
+        {/* Header */}
+        <div className="flex items-start gap-4 p-6 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+          <Avatar name={person.name} size={52} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{person.name}</h2>
+              {person.discipline && <DisciplineBadge d={person.discipline} />}
+            </div>
+            {person.role && <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>{person.role}</p>}
+            {person.company && (
+              <p className="flex items-center gap-1.5 text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                <Building2 size={11} /> {person.company}
+              </p>
+            )}
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
+              {person.email && (
+                <a href={`mailto:${person.email}`} className="flex items-center gap-1 text-xs hover:opacity-80"
+                  style={{ color: 'var(--accent)' }}>
+                  <Mail size={11} /> {person.email}
+                </a>
+              )}
+              {person.phone && (
+                <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <Phone size={11} /> {person.phone}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {canEdit && (
+              <button onClick={() => { onClose(); onEditPerson(person) }}
+                className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                <Edit2 size={14} />
+              </button>
+            )}
+            <button onClick={onClose}><X size={16} style={{ color: 'var(--text-muted)' }} /></button>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div className="flex items-center gap-4 px-6 py-3 border-b text-xs shrink-0"
+          style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+          <span className="flex items-center gap-1.5">
+            <MapPin size={11} style={{ color: '#4ade80' }} />
+            <span style={{ color: '#4ade80', fontWeight: 600 }}>{active.length}</span> active {active.length === 1 ? 'job' : 'jobs'}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <History size={11} />
+            {expired.length} previous {expired.length === 1 ? 'job' : 'jobs'}
+          </span>
+          {person.person_group && (
+            <span className="flex items-center gap-1.5">
+              <ClipboardList size={11} />
+              {person.person_group}
+            </span>
+          )}
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+          {person.notes && (
+            <div className="rounded-xl p-3 text-xs italic"
+              style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              {person.notes}
+            </div>
+          )}
+
+          {/* Active appointments */}
+          {active.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Current appointments
+              </p>
+              {active.map(a => <JobRow key={a.id} a={a} />)}
+            </div>
+          )}
+
+          {/* History */}
+          {expired.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                History
+              </p>
+              {expired.map(a => <JobRow key={a.id} a={a} dim />)}
+            </div>
+          )}
+
+          {mine.length === 0 && (
+            <div className="text-center py-8">
+              <Briefcase size={24} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No appointments recorded yet.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Job card (Teams tab) ──────────────────────────────────────────────────────
 function JobCard({ label, type, active, expired, manager, accentColor, accentBg, canEdit, onAdd, onEdit, onRemove }: {
   label: string; type: 'site' | 'project'
@@ -620,6 +868,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
   const [showInactive, setShowInactive] = useState(false)
   const [addingPerson, setAddingPerson] = useState(false)
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
+  const [viewingPerson, setViewingPerson] = useState<Person | null>(null)
   const [appointingPerson, setAppointingPerson] = useState<Person | null>(null)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const activePeople   = people.filter(p => p.is_active !== false)
@@ -771,10 +1020,14 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                         <div key={p.id} className="rounded-xl border p-4 space-y-3"
                           style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
                           <div className="flex items-start gap-3">
-                            <Avatar name={p.name} size={36} />
+                            <button onClick={() => setViewingPerson(p)} className="shrink-0 hover:opacity-80 transition-opacity">
+                              <Avatar name={p.name} size={36} />
+                            </button>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                                <button onClick={() => setViewingPerson(p)}
+                                  className="text-sm font-semibold truncate hover:opacity-80 transition-opacity text-left"
+                                  style={{ color: 'var(--text-primary)' }}>{p.name}</button>
                                 {p.discipline && <DisciplineBadge d={p.discipline} />}
                               </div>
                               {p.role && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.role}</p>}
@@ -1021,6 +1274,16 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
             setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a))
             setEditingAppointment(null)
           }}
+        />
+      )}
+      {viewingPerson && (
+        <PersonProfileModal
+          person={viewingPerson}
+          appointments={appointments}
+          canEdit={canEdit}
+          onClose={() => setViewingPerson(null)}
+          onEditAppt={a => { setViewingPerson(null); setEditingAppointment(a) }}
+          onEditPerson={p => setEditingPerson(p)}
         />
       )}
     </div>
