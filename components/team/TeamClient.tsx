@@ -74,19 +74,32 @@ function Avatar({ name, size = 32 }: { name: string; size?: number }) {
 }
 
 // ── Collapsible group section ─────────────────────────────────────────────────
-function GroupSection({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+function GroupSection({ title, count, appointed, children }: {
+  title: string; count: number; appointed: number; children: React.ReactNode
+}) {
   const [open, setOpen] = useState(true)
+  const notAppointed = count - appointed
   return (
     <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
       <button onClick={() => setOpen(v => !v)}
         className="flex items-center gap-3 w-full text-left px-4 py-3.5 hover:opacity-90 transition-opacity"
         style={{ background: 'var(--bg-elevated)' }}>
-        <div className="flex-1 flex items-center gap-3">
+        <div className="flex-1 flex items-center gap-3 flex-wrap">
           <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</span>
           <span className="text-xs font-medium px-2 py-0.5 rounded-full"
             style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
             {count}
           </span>
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+            style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>
+            {appointed} appointed
+          </span>
+          {notAppointed > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
+              {notAppointed} not appointed
+            </span>
+          )}
         </div>
         {open
           ? <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
@@ -513,8 +526,10 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
             }
             return Array.from(grouped.entries())
               .filter(([, members]) => members.length > 0)
-              .map(([groupName, members]) => (
-                <GroupSection key={groupName} title={groupName} count={members.length}>
+              .map(([groupName, members]) => {
+                const appointedInGroup = members.filter(p => appointments.some(a => a.person_id === p.id)).length
+                return (
+                <GroupSection key={groupName} title={groupName} count={members.length} appointed={appointedInGroup}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {members.map(p => {
                       const jobCount = appointments.filter(a => a.person_id === p.id).length
@@ -588,7 +603,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                     })}
                   </div>
                 </GroupSection>
-              ))
+              )})
           })()}
 
           {/* Inactive section */}
