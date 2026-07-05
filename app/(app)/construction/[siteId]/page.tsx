@@ -69,10 +69,28 @@ export default async function ConstructionSitePage({ params }: { params: Promise
 
   const { data: siteDiaries } = await supabase
     .from('site_diaries')
-    .select('id, diary_date, file_name, ai_summary, ai_weather, ai_crew_count, ai_analysed_at, uploaded_at')
+    .select('id, diary_date, file_name, ai_summary, ai_weather, ai_crew_count, ai_analysed_at, uploaded_at, ai_personnel')
     .eq('site_id', siteId)
     .order('diary_date', { ascending: false })
     .limit(20)
+
+  // Fetch people appointed to this site for personnel matching
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: siteAppointments } = await supabase
+    .from('appointments')
+    .select('person_id, end_date, people(full_name)')
+    .eq('site_id', siteId)
+    .or(`end_date.is.null,end_date.gte.${today}`)
+
+  const appointedNames = (siteAppointments ?? []).map((a: any) => (a.people?.full_name ?? '').toLowerCase())
+
+  // Collect diary personnel from last 7 days, find names not matched to appointed staff
+  const recentDiaries = (siteDiaries ?? []).slice(0, 7)
+  const diaryNames = [...new Set(recentDiaries.flatMap((d: any) => d.ai_personnel ?? []) as string[])]
+  const unmatchedPersonnel: string[] = diaryNames.filter(name => {
+    const n = name.toLowerCase()
+    return !appointedNames.some(a => a.includes(n) || n.includes(a.split(' ').pop() ?? ''))
+  })
 
   // Generate signed URLs using service role (bypasses storage RLS)
   const serviceSupabase = createServiceClient(
@@ -135,6 +153,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         reviewItemCount={(reviewItems ?? []).length}
         canEdit={canEdit}
         civilsActivities={civilsActivities ?? []}
+        unmatchedPersonnel={unmatchedPersonnel}
       />
 
       {/* ITP — top-level, anchored so project page link lands here */}

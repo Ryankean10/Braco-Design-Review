@@ -95,6 +95,7 @@ Analyse the diary and return a JSON object with this exact structure:
   "ai_summary": "2-3 sentence summary of the day's civils work",
   "ai_weather": "weather conditions if mentioned, else null",
   "ai_crew_count": integer crew count if mentioned, else null,
+  "ai_personnel": ["Full Name or initial+surname as written in diary"],
   "ai_activities": [
     {
       "activity_group": "exact name matching the register above",
@@ -111,7 +112,7 @@ Analyse the diary and return a JSON object with this exact structure:
   ]
 }
 
-Only include activities in ai_activities if the diary explicitly mentions them or provides evidence of progress. If an activity is not mentioned, omit it. Be conservative — only update progress if there is clear evidence. Return valid JSON only.`
+Only include activities in ai_activities if the diary explicitly mentions them. Be conservative on progress. For ai_personnel, extract every individual person name mentioned on site that day — include supervisors, operatives, visitors. Write names exactly as they appear. Return valid JSON only.`
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
   const message = await anthropic.messages.create({
@@ -144,6 +145,7 @@ Only include activities in ai_activities if the diary explicitly mentions them o
       ai_crew_count: (parsed.ai_crew_count as number) ?? null,
       ai_activities: parsed.ai_activities ?? [],
       ai_blockers: parsed.ai_blockers ?? [],
+      ai_personnel: parsed.ai_personnel ?? [],
       ai_analysed_at: new Date().toISOString(),
     })
     .select()

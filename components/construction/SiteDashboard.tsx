@@ -26,6 +26,7 @@ interface CivilsActivity { status: string; progress_pct: number; category: strin
 interface Props {
   site: any; siteId: string; cables: CableItem[]; recentLogs: DailyLog[]
   reviewItemCount: number; canEdit: boolean; civilsActivities?: CivilsActivity[]
+  unmatchedPersonnel?: string[]
 }
 
 const WEATHER_COLOR: Record<string, string> = { Good: '#4ade80', Fair: '#facc15', Poor: '#f87171' }
@@ -63,7 +64,7 @@ function Section({ title, badge, badgeColor, summary, defaultOpen = false, child
   )
 }
 
-export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [] }: Props) {
+export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [], unmatchedPersonnel = [] }: Props) {
   const [showLogForm, setShowLogForm] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
 
@@ -127,6 +128,21 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
 
   return (
     <div className="space-y-3">
+
+      {/* ── Personnel flag — diary names not matched to appointed staff ── */}
+      {unmatchedPersonnel.length > 0 && (
+        <div className="rounded-xl border px-4 py-3 flex items-start gap-3"
+          style={{ borderColor: '#fb923c44', background: '#fb923c11' }}>
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: '#fb923c' }} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold" style={{ color: '#fb923c' }}>Unrecognised site personnel in recent diaries</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              These names appear in diary records but are not matched to appointed staff — check the people library or update diary entries:&nbsp;
+              <span style={{ color: 'var(--text-primary)' }}>{unmatchedPersonnel.join(', ')}</span>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── KPI strip — always visible ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
