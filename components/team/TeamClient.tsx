@@ -77,20 +77,26 @@ function Avatar({ name, size = 32 }: { name: string; size?: number }) {
 function GroupSection({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   const [open, setOpen] = useState(true)
   return (
-    <div className="space-y-2">
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
       <button onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 w-full text-left py-1 hover:opacity-80 transition-opacity">
+        className="flex items-center gap-3 w-full text-left px-4 py-3.5 hover:opacity-90 transition-opacity"
+        style={{ background: 'var(--bg-elevated)' }}>
+        <div className="flex-1 flex items-center gap-3">
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</span>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+            style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+            {count}
+          </span>
+        </div>
         {open
-          ? <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />
-          : <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />}
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-          {title}
-        </span>
-        <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
-          {count}
-        </span>
+          ? <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
+          : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
       </button>
-      {open && children}
+      {open && (
+        <div className="p-4 border-t" style={{ borderColor: 'var(--border)' }}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }
@@ -587,20 +593,23 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
 
           {/* Inactive section */}
           {inactivePeople.length > 0 && (
-            <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
               <button onClick={() => setShowInactive(v => !v)}
-                className="flex items-center gap-2 w-full text-left py-1 hover:opacity-80 transition-opacity mb-3">
+                className="flex items-center gap-3 w-full text-left px-4 py-3.5 hover:opacity-90 transition-opacity"
+                style={{ background: 'var(--bg-elevated)' }}>
+                <div className="flex-1 flex items-center gap-3">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Inactive Staff</span>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                    {inactivePeople.length}
+                  </span>
+                </div>
                 {showInactive
-                  ? <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />
-                  : <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />}
-                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  Inactive Staff
-                </span>
-                <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
-                  {inactivePeople.length}
-                </span>
+                  ? <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
+                  : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
               </button>
               {showInactive && (
+                <div className="p-4 border-t" style={{ borderColor: 'var(--border)' }}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 opacity-60">
                   {inactivePeople.map(p => (
                     <div key={p.id} className="rounded-xl border p-4 space-y-3"
@@ -634,6 +643,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                       </div>
                     </div>
                   ))}
+                </div>
                 </div>
               )}
             </div>
