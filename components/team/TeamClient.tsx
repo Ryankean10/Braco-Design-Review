@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   UsersRound, Plus, Search, X, ChevronDown, ChevronRight,
   Briefcase, HardHat, Star, Mail, Phone, Building2,
   Loader2, CheckCircle2, Trash2, Edit2, History, Calendar,
-  ClipboardList, MapPin, Clock,
+  ClipboardList, MapPin, Clock, ShieldCheck, Upload, FileText,
+  AlertTriangle, ExternalLink,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -393,12 +394,102 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   const expired = mine.filter(a => a.end_date && a.end_date < today)
     .sort((a, b) => (b.end_date ?? '').localeCompare(a.end_date ?? ''))
 
+  const [profileTab, setProfileTab] = useState<'appointments' | 'credentials'>('appointments')
   const [editingNotes, setEditingNotes] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [localNotes, setLocalNotes] = useState<Record<string, string | null>>(
     Object.fromEntries(mine.map(a => [a.id, a.notes]))
   )
+
+  // ── Credentials state ──
+  interface Credential {
+    id: string; person_id: string; credential_type: string; name: string
+    issuer: string | null; reference: string | null; issue_date: string | null
+    expiry_date: string | null; notes: string | null; created_at: string
+    certificates: { id: string; file_name: string; storage_path: string; uploaded_at: string }[]
+  }
+  const [credentials, setCredentials] = useState<Credential[]>([])
+  const [credsLoading, setCredsLoading] = useState(false)
+  const [credsLoaded, setCredsLoaded] = useState(false)
+  const [addingCred, setAddingCred] = useState(false)
+  const [editingCred, setEditingCred] = useState<Credential | null>(null)
+  const [credForm, setCredForm] = useState({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '' })
+  const [savingCred, setSavingCred] = useState(false)
+  const [credError, setCredError] = useState('')
+  const [uploadingCertFor, setUploadingCertFor] = useState<string | null>(null)
+  const certFileRef = useRef<HTMLInputElement | null>(null)
+  const [certCredId, setCertCredId] = useState<string | null>(null)
+
+  async function loadCredentials() {
+    if (credsLoaded) return
+    setCredsLoading(true)
+    const res = await fetch(`/api/team/people/${person.id}/credentials`)
+    if (res.ok) setCredentials(await res.json())
+    setCredsLoaded(true)
+    setCredsLoading(false)
+  }
+
+  function openCredTab() { setProfileTab('credentials'); loadCredentials() }
+
+  function credExpiryStatus(expiry: string | null): 'valid' | 'soon' | 'expired' | 'none' {
+    if (!expiry) return 'none'
+    const days = Math.round((new Date(expiry).getTime() - new Date().getTime()) / 86_400_000)
+    if (days < 0) return 'expired'
+    if (days <= 30) return 'soon'
+    return 'valid'
+  }
+
+  function resetCredForm() {
+    setCredForm({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '' })
+    setCredError(''); setAddingCred(false); setEditingCred(null)
+  }
+
+  async function saveCred() {
+    if (!credForm.name.trim()) { setCredError('Name is required'); return }
+    setSavingCred(true); setCredError('')
+    if (editingCred) {
+      const res = await fetch(`/api/team/credentials/${editingCred.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credForm),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCredError(data.error); setSavingCred(false); return }
+      setCredentials(prev => prev.map(c => c.id === data.id ? data : c))
+    } else {
+      const res = await fetch(`/api/team/people/${person.id}/credentials`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credForm),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCredError(data.error); setSavingCred(false); return }
+      setCredentials(prev => [...prev, data])
+    }
+    setSavingCred(false); resetCredForm()
+  }
+
+  async function deleteCred(id: string) {
+    await fetch(`/api/team/credentials/${id}`, { method: 'DELETE' })
+    setCredentials(prev => prev.filter(c => c.id !== id))
+  }
+
+  async function uploadCert(file: File, credId: string) {
+    setUploadingCertFor(credId)
+    const form = new FormData(); form.set('file', file)
+    const res = await fetch(`/api/team/credentials/${credId}/certificate`, { method: 'POST', body: form })
+    const data = await res.json()
+    if (res.ok) {
+      setCredentials(prev => prev.map(c => c.id === credId
+        ? { ...c, certificates: [...c.certificates, data] } : c))
+    }
+    setUploadingCertFor(null)
+  }
+
+  async function openCert(credId: string, storagePath: string) {
+    const res = await fetch(`/api/team/credentials/${credId}/certificate`)
+    if (!res.ok) return
+    const items = await res.json()
+    const match = items.find((i: any) => i.storage_path === storagePath)
+    if (match?.url) window.open(match.url, '_blank')
+  }
 
   function fmtDate(d: string) {
     return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -568,58 +659,219 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
           </div>
         </div>
 
-        {/* Stats row */}
-        <div className="flex items-center gap-4 px-6 py-3 border-b text-xs shrink-0"
-          style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
-          <span className="flex items-center gap-1.5">
-            <MapPin size={11} style={{ color: '#4ade80' }} />
-            <span style={{ color: '#4ade80', fontWeight: 600 }}>{active.length}</span> active {active.length === 1 ? 'job' : 'jobs'}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <History size={11} />
-            {expired.length} previous {expired.length === 1 ? 'job' : 'jobs'}
-          </span>
-          {person.person_group && (
-            <span className="flex items-center gap-1.5">
-              <ClipboardList size={11} />
-              {person.person_group}
-            </span>
-          )}
+        {/* Tab bar */}
+        <div className="flex border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+          {([
+            { key: 'appointments', label: `Appointments (${mine.length})` },
+            { key: 'credentials',  label: 'Credentials' },
+          ] as const).map(t => (
+            <button key={t.key}
+              onClick={() => t.key === 'credentials' ? openCredTab() : setProfileTab('appointments')}
+              className="px-4 py-2.5 text-xs font-medium border-b-2 transition-colors"
+              style={{
+                borderBottomColor: profileTab === t.key ? 'var(--accent)' : 'transparent',
+                color: profileTab === t.key ? 'var(--accent)' : 'var(--text-muted)',
+              }}>{t.label}</button>
+          ))}
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 p-5 space-y-5">
-          {person.notes && (
-            <div className="rounded-xl p-3 text-xs italic"
-              style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-              {person.notes}
+        <div className="overflow-y-auto flex-1 p-5">
+
+          {/* ── Appointments tab ── */}
+          {profileTab === 'appointments' && (
+            <div className="space-y-5">
+              {person.notes && (
+                <div className="rounded-xl p-3 text-xs italic"
+                  style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                  {person.notes}
+                </div>
+              )}
+              {active.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Current</p>
+                  {active.map(a => renderJobRow(a))}
+                </div>
+              )}
+              {expired.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>History</p>
+                  {expired.map(a => renderJobRow(a, true))}
+                </div>
+              )}
+              {mine.length === 0 && (
+                <div className="text-center py-8">
+                  <Briefcase size={24} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No appointments recorded yet.</p>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Active appointments */}
-          {active.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                Current appointments
-              </p>
-              {active.map(a => renderJobRow(a))}
-            </div>
-          )}
+          {/* ── Credentials tab ── */}
+          {profileTab === 'credentials' && (
+            <div className="space-y-4">
+              {canEdit && !addingCred && !editingCred && (
+                <button onClick={() => setAddingCred(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border hover:opacity-80"
+                  style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
+                  <Plus size={12} /> Add credential
+                </button>
+              )}
 
-          {/* History */}
-          {expired.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                History
-              </p>
-              {expired.map(a => renderJobRow(a, true))}
-            </div>
-          )}
+              {/* Add / edit form */}
+              {(addingCred || editingCred) && (
+                <div className="rounded-xl border p-4 space-y-3"
+                  style={{ borderColor: 'var(--accent)', background: 'rgba(108,114,245,0.05)' }}>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>
+                    {editingCred ? 'Edit credential' : 'New credential'}
+                  </p>
 
-          {mine.length === 0 && (
-            <div className="text-center py-8">
-              <Briefcase size={24} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No appointments recorded yet.</p>
+                  {/* Type pills */}
+                  <div className="flex flex-wrap gap-2">
+                    {(['certification','competency','authorisation','ticket'] as const).map(t => (
+                      <button key={t} onClick={() => setCredForm(f => ({ ...f, credential_type: t }))}
+                        className="px-2.5 py-1 rounded-full text-xs border capitalize transition-all"
+                        style={{
+                          borderColor: credForm.credential_type === t ? 'var(--accent)' : 'var(--border)',
+                          background: credForm.credential_type === t ? 'rgba(108,114,245,0.15)' : 'transparent',
+                          color: credForm.credential_type === t ? 'var(--accent)' : 'var(--text-muted)',
+                        }}>{t}</button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { k: 'name',       label: 'Name *',        span: true  },
+                      { k: 'issuer',     label: 'Issuing body',  span: false },
+                      { k: 'reference',  label: 'Ref / card no', span: false },
+                      { k: 'issue_date', label: 'Issue date',    span: false, type: 'date' },
+                      { k: 'expiry_date',label: 'Expiry date',   span: false, type: 'date' },
+                    ] as { k: string; label: string; span?: boolean; type?: string }[]).map(({ k, label, span, type }) => (
+                      <div key={k} className={span ? 'col-span-2' : ''}>
+                        <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
+                        <input type={type ?? 'text'} value={(credForm as any)[k]}
+                          onChange={e => setCredForm(f => ({ ...f, [k]: e.target.value }))}
+                          className="w-full rounded-lg px-2.5 py-1.5 text-xs border focus:outline-none"
+                          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                        />
+                      </div>
+                    ))}
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Notes</label>
+                      <textarea value={credForm.notes} onChange={e => setCredForm(f => ({ ...f, notes: e.target.value }))}
+                        rows={2} className="w-full rounded-lg px-2.5 py-1.5 text-xs border focus:outline-none resize-none"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+                    </div>
+                  </div>
+
+                  {credError && <p className="text-xs" style={{ color: 'var(--critical)' }}>{credError}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={saveCred} disabled={savingCred}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                      style={{ background: 'var(--accent)' }}>
+                      {savingCred ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                      Save
+                    </button>
+                    <button onClick={resetCredForm} className="px-3 py-1.5 rounded-lg text-xs border"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {credsLoading && (
+                <div className="flex items-center justify-center py-8 gap-2" style={{ color: 'var(--text-muted)' }}>
+                  <Loader2 size={14} className="animate-spin" /><span className="text-xs">Loading…</span>
+                </div>
+              )}
+
+              {!credsLoading && credentials.length === 0 && !addingCred && (
+                <div className="text-center py-8">
+                  <ShieldCheck size={24} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No credentials recorded yet.</p>
+                </div>
+              )}
+
+              {credentials.map(c => {
+                const status = credExpiryStatus(c.expiry_date)
+                const statusColor = status === 'expired' ? '#f87171' : status === 'soon' ? '#fb923c' : status === 'valid' ? '#4ade80' : 'var(--text-muted)'
+                const typeColor: Record<string, string> = { certification: '#60a5fa', competency: '#c084fc', authorisation: '#fb923c', ticket: '#4ade80' }
+                return (
+                  <div key={c.id} className="rounded-xl border p-4 space-y-2"
+                    style={{ borderColor: status === 'expired' ? 'rgba(248,113,113,0.3)' : status === 'soon' ? 'rgba(251,146,60,0.3)' : 'var(--border)', background: 'var(--bg-elevated)' }}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{c.name}</p>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded capitalize"
+                            style={{ background: `${typeColor[c.credential_type] ?? 'var(--accent)'}22`, color: typeColor[c.credential_type] ?? 'var(--accent)' }}>
+                            {c.credential_type}
+                          </span>
+                          {status !== 'none' && (
+                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded"
+                              style={{ background: `${statusColor}18`, color: statusColor }}>
+                              {status === 'expired' ? <AlertTriangle size={9} /> : <ShieldCheck size={9} />}
+                              {status === 'expired' ? 'Expired' : status === 'soon' ? 'Expiring soon' : 'Valid'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-3 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {c.issuer && <span>{c.issuer}</span>}
+                          {c.reference && <span>Ref: {c.reference}</span>}
+                          {c.issue_date && <span>Issued {fmtDate(c.issue_date)}</span>}
+                          {c.expiry_date && (
+                            <span style={{ color: statusColor }}>Expires {fmtDate(c.expiry_date)}</span>
+                          )}
+                        </div>
+                        {c.notes && <p className="text-xs mt-1 italic" style={{ color: 'var(--text-muted)' }}>{c.notes}</p>}
+                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => { setEditingCred(c); setAddingCred(false); setCredForm({ credential_type: c.credential_type, name: c.name, issuer: c.issuer??'', reference: c.reference??'', issue_date: c.issue_date??'', expiry_date: c.expiry_date??'', notes: c.notes??'' }) }}
+                            className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                            <Edit2 size={12} />
+                          </button>
+                          <button onClick={() => deleteCred(c.id)}
+                            className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Certificates */}
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {c.certificates.map(cert => (
+                        <button key={cert.id} onClick={() => openCert(c.id, cert.storage_path)}
+                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border hover:opacity-80"
+                          style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>
+                          <FileText size={10} /> {cert.file_name} <ExternalLink size={9} />
+                        </button>
+                      ))}
+                      {canEdit && (
+                        <button
+                          onClick={() => { setCertCredId(c.id); certFileRef.current?.click() }}
+                          disabled={uploadingCertFor === c.id}
+                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border hover:opacity-80 disabled:opacity-50"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                          {uploadingCertFor === c.id
+                            ? <Loader2 size={10} className="animate-spin" />
+                            : <Upload size={10} />}
+                          Upload cert
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Hidden file input for certificate upload */}
+              <input ref={certFileRef} type="file" accept="*/*" className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f && certCredId) uploadCert(f, certCredId)
+                  if (certFileRef.current) certFileRef.current.value = ''
+                }} />
             </div>
           )}
         </div>
@@ -1148,10 +1400,14 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                     <div key={p.id} className="rounded-xl border p-4 space-y-3"
                       style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
                       <div className="flex items-start gap-3">
-                        <Avatar name={p.name} size={36} />
+                        <button onClick={() => setViewingPerson(p)} className="shrink-0 hover:opacity-80 transition-opacity">
+                          <Avatar name={p.name} size={36} />
+                        </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                            <button onClick={() => setViewingPerson(p)}
+                              className="text-sm font-semibold truncate hover:opacity-80 transition-opacity text-left"
+                              style={{ color: 'var(--text-primary)' }}>{p.name}</button>
                             {p.discipline && <DisciplineBadge d={p.discipline} />}
                           </div>
                           {p.role && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.role}</p>}
