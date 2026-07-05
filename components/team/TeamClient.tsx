@@ -394,7 +394,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   const expired = mine.filter(a => a.end_date && a.end_date < today)
     .sort((a, b) => (b.end_date ?? '').localeCompare(a.end_date ?? ''))
 
-  const [profileTab, setProfileTab] = useState<'appointments' | 'credentials'>('appointments')
+  const [profileTab, setProfileTab] = useState<'appointments' | 'credentials' | 'timesheets'>('appointments')
   const [editingNotes, setEditingNotes] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
@@ -431,6 +431,34 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   }
 
   function openCredTab() { setProfileTab('credentials'); loadCredentials() }
+
+  // ── Timesheets state ──
+  interface TSEntry {
+    id: string; entry_date: string; hours: number | null; role: string | null; notes: string | null
+    site: { id: string; name: string } | null
+    timesheet: { source: string; week_start: string; file_name: string | null } | null
+  }
+  interface TSWeek {
+    week_start: string
+    site_name: string
+    diary_hours: number
+    agency_hours: number
+    entries: TSEntry[]
+  }
+  const [tsWeeks, setTsWeeks] = useState<TSWeek[]>([])
+  const [tsLoading, setTsLoading] = useState(false)
+  const [tsLoaded, setTsLoaded] = useState(false)
+
+  async function loadTimesheets() {
+    if (tsLoaded) return
+    setTsLoading(true)
+    const res = await fetch(`/api/team/people/${person.id}/timesheets`)
+    if (res.ok) setTsWeeks(await res.json())
+    setTsLoaded(true)
+    setTsLoading(false)
+  }
+
+  function openTsTab() { setProfileTab('timesheets'); loadTimesheets() }
 
   function credExpiryStatus(expiry: string | null): 'valid' | 'soon' | 'expired' | 'none' {
     if (!expiry) return 'none'
@@ -664,9 +692,10 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
           {([
             { key: 'appointments', label: `Appointments (${mine.length})` },
             { key: 'credentials',  label: 'Credentials' },
+            { key: 'timesheets',   label: 'Timesheets' },
           ] as const).map(t => (
             <button key={t.key}
-              onClick={() => t.key === 'credentials' ? openCredTab() : setProfileTab('appointments')}
+              onClick={() => t.key === 'credentials' ? openCredTab() : t.key === 'timesheets' ? openTsTab() : setProfileTab('appointments')}
               className="px-4 py-2.5 text-xs font-medium border-b-2 transition-colors"
               style={{
                 borderBottomColor: profileTab === t.key ? 'var(--accent)' : 'transparent',
@@ -872,6 +901,95 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                   if (f && certCredId) uploadCert(f, certCredId)
                   if (certFileRef.current) certFileRef.current.value = ''
                 }} />
+            </div>
+          )}
+
+          {/* ── Timesheets tab ── */}
+          {profileTab === 'timesheets' && (
+            <div className="space-y-4">
+              {tsLoading && (
+                <div className="flex items-center gap-2 py-8 justify-center">
+                  <Loader2 size={16} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading timesheets…</span>
+                </div>
+              )}
+              {tsLoaded && tsWeeks.length === 0 && (
+                <div className="text-center py-8">
+                  <Clock size={24} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No timesheet records yet.</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Hours are populated from diary records and agency timesheet uploads on each site.</p>
+                </div>
+              )}
+              {tsLoaded && tsWeeks.length > 0 && tsWeeks.map(w => {
+                const discrepancy = w.diary_hours > 0 && w.agency_hours > 0 && Math.abs(w.diary_hours - w.agency_hours) > 0.5
+                return (
+                  <div key={`${w.week_start}-${w.site_name}`} className="rounded-xl border overflow-hidden"
+                    style={{ borderColor: discrepancy ? '#f8712244' : 'var(--border)' }}>
+                    <div className="flex items-center justify-between px-4 py-3"
+                      style={{ background: discrepancy ? '#f8712211' : 'var(--bg-elevated)' }}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {discrepancy && <AlertTriangle size={12} style={{ color: '#f87171', flexShrink: 0 }} />}
+                        <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {w.site_name}
+                        </span>
+                        <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
+                          w/c {new Date(w.week_start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-2">
+                        <div className="text-right">
+                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Diary</p>
+                          <p className="text-xs font-semibold" style={{ color: w.diary_hours > 0 ? '#4ade80' : 'var(--text-muted)' }}>
+                            {w.diary_hours > 0 ? `${w.diary_hours}h` : '—'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Agency</p>
+                          <p className="text-xs font-semibold" style={{ color: w.agency_hours > 0 ? '#60a5fa' : 'var(--text-muted)' }}>
+                            {w.agency_hours > 0 ? `${w.agency_hours}h` : '—'}
+                          </p>
+                        </div>
+                        {discrepancy && (
+                          <div className="text-right">
+                            <p className="text-[10px]" style={{ color: '#f87171' }}>Diff</p>
+                            <p className="text-xs font-semibold" style={{ color: '#f87171' }}>
+                              {Math.abs(w.diary_hours - w.agency_hours).toFixed(1)}h
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                      {w.entries.map(e => (
+                        <div key={e.id} className="px-4 py-2 flex items-center gap-3 text-xs"
+                          style={{ background: 'var(--bg-surface)' }}>
+                          <span className="shrink-0 w-20" style={{ color: 'var(--text-muted)' }}>
+                            {new Date(e.entry_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          </span>
+                          <span className="flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
+                            {e.role ?? '—'}
+                          </span>
+                          <span className="shrink-0 font-medium" style={{
+                            color: e.timesheet?.source === 'agency' ? '#60a5fa' : '#4ade80'
+                          }}>
+                            {e.hours != null ? `${e.hours}h` : '—'}
+                          </span>
+                          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded"
+                            style={{
+                              background: e.timesheet?.source === 'agency' ? 'rgba(96,165,250,0.12)' : 'rgba(74,222,128,0.12)',
+                              color: e.timesheet?.source === 'agency' ? '#60a5fa' : '#4ade80',
+                            }}>
+                            {e.timesheet?.source ?? 'diary'}
+                          </span>
+                          {e.notes && (
+                            <span className="truncate max-w-[120px]" style={{ color: 'var(--text-muted)' }}>{e.notes}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
