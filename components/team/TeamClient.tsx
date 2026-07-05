@@ -78,7 +78,7 @@ function Avatar({ name, size = 32 }: { name: string; size?: number }) {
 function GroupSection({ title, count, appointed, children }: {
   title: string; count: number; appointed: number; children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const notAppointed = count - appointed
   return (
     <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
@@ -636,6 +636,7 @@ function JobCard({ label, type, active, expired, manager, accentColor, accentBg,
   accentColor: string; accentBg: string; canEdit: boolean
   onAdd: () => void; onEdit: (a: Appointment) => void; onRemove: (id: string) => void
 }) {
+  const [open, setOpen] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
   function fmtDate(d: string) {
@@ -689,8 +690,10 @@ function JobCard({ label, type, active, expired, manager, accentColor, accentBg,
 
   return (
     <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-      {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+      {/* Header — clicking toggles open */}
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-3 px-5 py-4 hover:opacity-90 transition-opacity text-left"
+        style={{ background: 'var(--bg-elevated)' }}>
         <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: accentBg }}>
           {type === 'site' ? <HardHat size={16} style={{ color: accentColor }} /> : <Briefcase size={16} style={{ color: accentColor }} />}
         </div>
@@ -707,42 +710,57 @@ function JobCard({ label, type, active, expired, manager, accentColor, accentBg,
             {active.length} active
           </span>
           {expired.length > 0 && (
-            <button onClick={() => setShowHistory(v => !v)}
-              className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border hover:opacity-80 transition-opacity"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-              <History size={11} /> {expired.length} history
-            </button>
+            <span className="text-xs px-2.5 py-1 rounded-full"
+              style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              {expired.length} history
+            </span>
           )}
+          {open ? <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
+                : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
+        </div>
+      </button>
+
+      {open && (
+        <>
+          {/* Action row */}
           {canEdit && (
-            <button onClick={onAdd}
-              className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border hover:opacity-80"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-              <Plus size={11} /> Add
-            </button>
+            <div className="px-5 py-2 border-b flex justify-end" style={{ borderColor: 'var(--border)' }}>
+              <button onClick={e => { e.stopPropagation(); onAdd() }}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border hover:opacity-80"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                <Plus size={11} /> Add person
+              </button>
+            </div>
           )}
-        </div>
-      </div>
 
-      {/* Active appointments */}
-      {active.length > 0 && (
-        <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-          {active.map(a => <ApptRow key={a.id} a={a} />)}
-        </div>
-      )}
-      {active.length === 0 && (
-        <p className="px-5 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>No active appointments.</p>
-      )}
+          {/* Active appointments */}
+          {active.length > 0 && (
+            <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+              {active.map(a => <ApptRow key={a.id} a={a} />)}
+            </div>
+          )}
+          {active.length === 0 && (
+            <p className="px-5 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>No active appointments.</p>
+          )}
 
-      {/* History */}
-      {showHistory && expired.length > 0 && (
-        <div className="border-t" style={{ borderColor: 'var(--border)' }}>
-          <p className="px-5 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-            History
-          </p>
-          <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {expired.map(a => <ApptRow key={a.id} a={a} dim />)}
-          </div>
-        </div>
+          {/* History toggle */}
+          {expired.length > 0 && (
+            <div className="border-t" style={{ borderColor: 'var(--border)' }}>
+              <button onClick={() => setShowHistory(v => !v)}
+                className="flex items-center gap-2 w-full px-5 py-2.5 hover:opacity-80 transition-opacity text-left">
+                <History size={12} style={{ color: 'var(--text-muted)' }} />
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {showHistory ? 'Hide' : 'Show'} history ({expired.length})
+                </span>
+              </button>
+              {showHistory && (
+                <div className="divide-y border-t" style={{ borderColor: 'var(--border)' }}>
+                  {expired.map(a => <ApptRow key={a.id} a={a} dim />)}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
