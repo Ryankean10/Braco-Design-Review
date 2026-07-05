@@ -25,8 +25,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }>()
 
   for (const e of entries ?? []) {
-    const ts = e.timesheet as { source: string; week_start: string; file_name: string | null } | null
-    const site = e.site as { id: string; name: string } | null
+    const tsRaw = Array.isArray(e.timesheet) ? e.timesheet[0] : e.timesheet
+    const ts = tsRaw as { source: string; week_start: string; file_name: string | null } | null
+    const siteRaw = Array.isArray(e.site) ? e.site[0] : e.site
+    const site = siteRaw as { id: string; name: string } | null
     const weekStart = ts?.week_start ?? e.entry_date?.slice(0, 10) ?? 'unknown'
     const siteName = site?.name ?? 'Unknown site'
     const key = `${weekStart}__${siteName}`
