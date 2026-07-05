@@ -78,18 +78,31 @@ export default async function ConstructionSitePage({ params }: { params: Promise
   const today = new Date().toISOString().slice(0, 10)
   const { data: siteAppointments } = await supabase
     .from('appointments')
-    .select('person_id, end_date, people(full_name)')
+    .select('person_id, end_date, people(name)')
     .eq('site_id', siteId)
     .or(`end_date.is.null,end_date.gte.${today}`)
 
-  const appointedNames = (siteAppointments ?? []).map((a: any) => (a.people?.full_name ?? '').toLowerCase())
+  const appointedNames = (siteAppointments ?? []).map((a: any) => {
+    const p = Array.isArray(a.people) ? a.people[0] : a.people
+    return (p?.name ?? '').toLowerCase()
+  }).filter(Boolean)
 
   // Collect diary personnel from last 7 days, find names not matched to appointed staff
   const recentDiaries = (siteDiaries ?? []).slice(0, 7)
   const diaryNames = [...new Set(recentDiaries.flatMap((d: any) => d.ai_personnel ?? []) as string[])]
   const unmatchedPersonnel: string[] = diaryNames.filter(name => {
-    const n = name.toLowerCase()
-    return !appointedNames.some(a => a.includes(n) || n.includes(a.split(' ').pop() ?? ''))
+    const n = name.toLowerCase().trim()
+    if (!n) return false
+    return !appointedNames.some(a => {
+      // match on full name, or last name, or initial+surname (e.g. "B. Melrose" vs "Ben Melrose")
+      if (a === n) return true
+      const aParts = a.split(' ')
+      const nParts = n.split(' ')
+      const aLast = aParts[aParts.length - 1]
+      const nLast = nParts[nParts.length - 1]
+      if (aLast && nLast && aLast === nLast) return true
+      return false
+    })
   })
 
   // Generate signed URLs using service role (bypasses storage RLS)
