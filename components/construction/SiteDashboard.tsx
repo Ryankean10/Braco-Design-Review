@@ -85,8 +85,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
   const commActs     = civilsActivities.filter(a => a.discipline === 'Commissioning')
 
   const civilsPct      = avg(civilsOnly)
-  // Use cable register % for electrical if cables exist, otherwise fall back to ITP electrical activities
-  const electricalPct  = total > 0 ? cablePct : avg(electricalActs)
+  // Electrical % always driven by ITP/programme activities — cables are a manpower metric, not a project metric
+  const electricalPct  = avg(electricalActs)
   const commPct        = avg(commActs)
 
   // Overall = average of whichever disciplines have data
@@ -97,10 +97,10 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
 
   const pctParts = [
     civilsPct !== null ? `civils ${civilsPct}%` : null,
-    electricalPct !== null ? (total > 0 ? `cables ${electricalPct}%` : `electrical ${electricalPct}%`) : null,
+    electricalPct !== null ? `electrical ${electricalPct}%` : null,
     commPct !== null ? `commissioning ${commPct}%` : null,
   ].filter(Boolean)
-  const pctLabel = pctParts.length > 0 ? pctParts.join(' · ') : `${cablePct}% cables`
+  const pctLabel = pctParts.length > 0 ? pctParts.join(' · ') : 'no activities seeded'
 
   // Package rollup
   const byPkg: Record<string, { total: number; complete: number; inProg: number }> = {}
@@ -213,8 +213,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
             </Link>
           )}
 
-          {/* Electrical card — driven by ITP activities until cable register exists */}
-          {electricalActs.length > 0 && total === 0 && (
+          {/* Electrical card — always driven by ITP/programme activities */}
+          {electricalActs.length > 0 && (
             <Link href={`/construction/${siteId}#civils`}
               className="rounded-lg border p-4 hover:opacity-80 transition-opacity block"
               style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
@@ -244,7 +244,7 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
                 })}
               </div>
               <p className="text-[10px] mt-2.5" style={{ color: 'var(--text-muted)' }}>
-                ITP activities · cable register will replace this when added
+                {electricalActs.filter(a => a.status === 'Complete').length}/{electricalActs.length} ITP activities complete · click to view register
               </p>
             </Link>
           )}
