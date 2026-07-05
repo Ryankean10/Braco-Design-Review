@@ -12,7 +12,17 @@ import {
 interface Person {
   id: string; name: string; role: string | null; discipline: string | null
   company: string | null; email: string | null; phone: string | null; notes: string | null
+  person_group: string | null
 }
+
+const PERSON_GROUPS = [
+  'Project Staff',
+  'OCU Site Management',
+  'OCU Electrical Staff',
+  'OCU Civils Staff',
+  'Agency Staff',
+  'Subcontractors',
+] as const
 interface Appointment {
   id: string; person_id: string; project_id: string | null; site_id: string | null
   role_on_job: string | null; is_manager: boolean; start_date: string | null
@@ -63,6 +73,28 @@ function Avatar({ name, size = 32 }: { name: string; size?: number }) {
   )
 }
 
+// ── Collapsible group section ─────────────────────────────────────────────────
+function GroupSection({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <div className="space-y-2">
+      <button onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 w-full text-left py-1 hover:opacity-80 transition-opacity">
+        {open
+          ? <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />
+          : <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />}
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          {title}
+        </span>
+        <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+          {count}
+        </span>
+      </button>
+      {open && children}
+    </div>
+  )
+}
+
 // ── Add/Edit Person modal ─────────────────────────────────────────────────────
 function PersonModal({ person, onClose, onSaved }: {
   person?: Person; onClose: () => void; onSaved: (p: Person) => void
@@ -71,7 +103,7 @@ function PersonModal({ person, onClose, onSaved }: {
   const [form, setForm] = useState({
     name: person?.name ?? '', role: person?.role ?? '', discipline: person?.discipline ?? '',
     company: person?.company ?? '', email: person?.email ?? '', phone: person?.phone ?? '',
-    notes: person?.notes ?? '',
+    notes: person?.notes ?? '', person_group: person?.person_group ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -83,7 +115,7 @@ function PersonModal({ person, onClose, onSaved }: {
     const payload = {
       name: form.name.trim(), role: form.role || null, discipline: form.discipline || null,
       company: form.company || null, email: form.email || null, phone: form.phone || null,
-      notes: form.notes || null,
+      notes: form.notes || null, person_group: form.person_group || null,
     }
     const q = person
       ? supabase.from('people').update(payload).eq('id', person.id).select().single()
@@ -135,6 +167,22 @@ function PersonModal({ person, onClose, onSaved }: {
                     background: form.discipline === d ? 'rgba(108,114,245,0.15)' : 'transparent',
                     color: form.discipline === d ? 'var(--accent)' : 'var(--text-muted)',
                   }}>{d}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Group</label>
+            <div className="flex flex-wrap gap-2">
+              {PERSON_GROUPS.map(g => (
+                <button key={g} onClick={() => set('person_group', form.person_group === g ? '' : g)}
+                  type="button"
+                  className="px-2.5 py-1 rounded-full text-xs border transition-all"
+                  style={{
+                    borderColor: form.person_group === g ? 'var(--accent)' : 'var(--border)',
+                    background: form.person_group === g ? 'rgba(108,114,245,0.15)' : 'transparent',
+                    color: form.person_group === g ? 'var(--accent)' : 'var(--text-muted)',
+                  }}>{g}</button>
               ))}
             </div>
           </div>
@@ -438,77 +486,88 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtered.map(p => {
-              const jobCount = appointments.filter(a => a.person_id === p.id).length
-              return (
-                <div key={p.id} className="rounded-xl border p-4 space-y-3"
-                  style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-                  <div className="flex items-start gap-3">
-                    <Avatar name={p.name} size={36} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
-                        {p.discipline && <DisciplineBadge d={p.discipline} />}
-                      </div>
-                      {p.role && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.role}</p>}
-                      {p.company && (
-                        <p className="flex items-center gap-1 text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                          <Building2 size={10} /> {p.company}
-                        </p>
-                      )}
-                    </div>
+          {(() => {
+            // Group people: named groups first in order, then ungrouped under "Other"
+            const grouped = new Map<string, Person[]>()
+            for (const g of PERSON_GROUPS) grouped.set(g, [])
+            grouped.set('Other', [])
+            for (const p of filtered) {
+              const key = p.person_group && PERSON_GROUPS.includes(p.person_group as any) ? p.person_group : 'Other'
+              grouped.get(key)!.push(p)
+            }
+            return Array.from(grouped.entries())
+              .filter(([, members]) => members.length > 0)
+              .map(([groupName, members]) => (
+                <GroupSection key={groupName} title={groupName} count={members.length}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {members.map(p => {
+                      const jobCount = appointments.filter(a => a.person_id === p.id).length
+                      return (
+                        <div key={p.id} className="rounded-xl border p-4 space-y-3"
+                          style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+                          <div className="flex items-start gap-3">
+                            <Avatar name={p.name} size={36} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                                {p.discipline && <DisciplineBadge d={p.discipline} />}
+                              </div>
+                              {p.role && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.role}</p>}
+                              {p.company && (
+                                <p className="flex items-center gap-1 text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                                  <Building2 size={10} /> {p.company}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {(p.email || p.phone) && (
+                            <div className="space-y-1">
+                              {p.email && (
+                                <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 text-xs hover:opacity-80"
+                                  style={{ color: 'var(--accent)' }}>
+                                  <Mail size={10} /> {p.email}
+                                </a>
+                              )}
+                              {p.phone && (
+                                <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                  <Phone size={10} /> {p.phone}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {p.notes && <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>{p.notes}</p>}
+                          <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                              {jobCount > 0
+                                ? <span style={{ color: 'var(--accent)' }}>{jobCount} job{jobCount > 1 ? 's' : ''} appointed</span>
+                                : 'Not appointed'}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {canEdit && (
+                                <>
+                                  <button onClick={() => setAppointingPerson(p)} title="Appoint to job"
+                                    className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--accent)' }}>
+                                    <Briefcase size={13} />
+                                  </button>
+                                  <button onClick={() => setEditingPerson(p)} title="Edit"
+                                    className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                                    <Edit2 size={13} />
+                                  </button>
+                                  <button onClick={() => deletePerson(p.id)} title="Remove from library"
+                                    className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                                    <Trash2 size={13} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-
-                  {(p.email || p.phone) && (
-                    <div className="space-y-1">
-                      {p.email && (
-                        <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 text-xs hover:opacity-80"
-                          style={{ color: 'var(--accent)' }}>
-                          <Mail size={10} /> {p.email}
-                        </a>
-                      )}
-                      {p.phone && (
-                        <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          <Phone size={10} /> {p.phone}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {p.notes && (
-                    <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>{p.notes}</p>
-                  )}
-
-                  <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
-                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {jobCount > 0
-                        ? <span style={{ color: 'var(--accent)' }}>{jobCount} job{jobCount > 1 ? 's' : ''} appointed</span>
-                        : 'Not appointed'}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {canEdit && (
-                        <>
-                          <button onClick={() => setAppointingPerson(p)} title="Appoint to job"
-                            className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--accent)' }}>
-                            <Briefcase size={13} />
-                          </button>
-                          <button onClick={() => setEditingPerson(p)} title="Edit"
-                            className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
-                            <Edit2 size={13} />
-                          </button>
-                          <button onClick={() => deletePerson(p.id)} title="Remove from library"
-                            className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
-                            <Trash2 size={13} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                </GroupSection>
+              ))
+          })()}
         </div>
       )}
 
