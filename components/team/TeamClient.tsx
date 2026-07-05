@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   UsersRound, Plus, Search, X, ChevronDown, ChevronRight,
   Briefcase, HardHat, Star, Mail, Phone, Building2,
-  Loader2, CheckCircle2, Trash2, Edit2,
+  Loader2, CheckCircle2, Trash2, Edit2, History, Calendar,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -376,6 +376,239 @@ function AppointModal({ person, projects, sites, currentUserId, onClose, onSaved
   )
 }
 
+// ── Job card (Teams tab) ──────────────────────────────────────────────────────
+function JobCard({ label, type, active, expired, manager, accentColor, accentBg, canEdit, onAdd, onEdit, onRemove }: {
+  label: string; type: 'site' | 'project'
+  active: Appointment[]; expired: Appointment[]
+  manager: Appointment | undefined
+  accentColor: string; accentBg: string; canEdit: boolean
+  onAdd: () => void; onEdit: (a: Appointment) => void; onRemove: (id: string) => void
+}) {
+  const [showHistory, setShowHistory] = useState(false)
+
+  function fmtDate(d: string) {
+    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  function ApptRow({ a, dim }: { a: Appointment; dim?: boolean }) {
+    return (
+      <div className="flex items-center gap-3 px-5 py-3" style={{ opacity: dim ? 0.6 : 1 }}>
+        <Avatar name={a.person?.name ?? '?'} size={32} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{a.person?.name}</p>
+            {a.is_manager && (
+              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15' }}>
+                <Star size={8} /> Manager
+              </span>
+            )}
+            {dim && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(148,163,184,0.12)', color: '#94a3b8' }}>
+                Ended
+              </span>
+            )}
+            {a.person?.discipline && <DisciplineBadge d={a.person.discipline} />}
+          </div>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {a.role_on_job ?? a.person?.role ?? '—'}
+            {a.start_date ? ` · ${fmtDate(a.start_date)}` : ''}
+            {a.end_date ? ` – ${fmtDate(a.end_date)}` : ''}
+          </p>
+        </div>
+        {canEdit && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={() => onEdit(a)} title="Edit appointment"
+              className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+              <Edit2 size={13} />
+            </button>
+            {!dim && (
+              <button onClick={() => onRemove(a.id)} title="Remove appointment"
+                className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: accentBg }}>
+          {type === 'site' ? <HardHat size={16} style={{ color: accentColor }} /> : <Briefcase size={16} style={{ color: accentColor }} />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {type === 'site' ? 'Construction site' : 'Design project'}
+            {manager ? ` · ${manager.person?.name} (Manager)` : ' · No manager assigned'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full"
+            style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
+            {active.length} active
+          </span>
+          {expired.length > 0 && (
+            <button onClick={() => setShowHistory(v => !v)}
+              className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border hover:opacity-80 transition-opacity"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+              <History size={11} /> {expired.length} history
+            </button>
+          )}
+          {canEdit && (
+            <button onClick={onAdd}
+              className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border hover:opacity-80"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+              <Plus size={11} /> Add
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Active appointments */}
+      {active.length > 0 && (
+        <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+          {active.map(a => <ApptRow key={a.id} a={a} />)}
+        </div>
+      )}
+      {active.length === 0 && (
+        <p className="px-5 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>No active appointments.</p>
+      )}
+
+      {/* History */}
+      {showHistory && expired.length > 0 && (
+        <div className="border-t" style={{ borderColor: 'var(--border)' }}>
+          <p className="px-5 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            History
+          </p>
+          <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+            {expired.map(a => <ApptRow key={a.id} a={a} dim />)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Edit appointment modal ────────────────────────────────────────────────────
+function EditAppointmentModal({ appt, onClose, onSaved }: {
+  appt: Appointment; onClose: () => void; onSaved: (a: Appointment) => void
+}) {
+  const [form, setForm] = useState({
+    role_on_job: appt.role_on_job ?? '',
+    is_manager: appt.is_manager,
+    start_date: appt.start_date ?? '',
+    end_date: appt.end_date ?? '',
+    notes: appt.notes ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
+
+  async function save() {
+    setSaving(true); setError('')
+    const res = await fetch(`/api/team/appointments/${appt.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const data = await res.json()
+    setSaving(false)
+    if (!res.ok) { setError(data.error ?? 'Save failed'); return }
+    onSaved(data as Appointment)
+  }
+
+  const jobName = appt.site?.name ?? appt.project?.name ?? 'this job'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.6)' }}>
+      <div className="w-full max-w-md rounded-2xl border p-6 space-y-4"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Edit appointment
+            </h3>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {appt.person?.name} · {jobName}
+            </p>
+          </div>
+          <button onClick={onClose}><X size={16} style={{ color: 'var(--text-muted)' }} /></button>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Role on this job</label>
+          <input type="text" value={form.role_on_job} onChange={e => set('role_on_job', e.target.value)}
+            placeholder={appt.person?.role ?? 'e.g. Site Foreman'}
+            className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none"
+            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+          />
+        </div>
+
+        <button onClick={() => set('is_manager', !form.is_manager)}
+          className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2.5 border transition-all"
+          style={{
+            borderColor: form.is_manager ? 'var(--accent)' : 'var(--border)',
+            background: form.is_manager ? 'rgba(108,114,245,0.08)' : 'transparent',
+          }}>
+          <Star size={14} style={{ color: form.is_manager ? 'var(--accent)' : 'var(--text-muted)' }} />
+          <p className="text-xs font-medium" style={{ color: form.is_manager ? 'var(--accent)' : 'var(--text-primary)' }}>
+            Appointed as manager
+          </p>
+        </button>
+
+        <div className="grid grid-cols-2 gap-3">
+          {([['start_date', 'Start date'], ['end_date', 'End date']] as const).map(([key, label]) => (
+            <div key={key}>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
+              <input type="date" value={(form as any)[key]} onChange={e => set(key, e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none"
+                style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {form.end_date && (
+          <p className="text-xs flex items-center gap-1.5 px-3 py-2 rounded-lg"
+            style={{ background: 'rgba(251,146,60,0.08)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.2)' }}>
+            <Calendar size={11} />
+            Once the end date passes this appointment will move to history automatically.
+          </p>
+        )}
+
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Notes</label>
+          <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
+            className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none resize-none"
+            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+          />
+        </div>
+
+        {error && <p className="text-xs" style={{ color: 'var(--critical)' }}>{error}</p>}
+
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs border hover:opacity-80"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>Cancel</button>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+            style={{ background: 'var(--accent)' }}>
+            {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+            Save changes
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function TeamClient({ people: init, appointments: initAppts, projects, sites, currentUserId, canEdit }: Props) {
   const supabase = createClient()
@@ -388,6 +621,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
   const [addingPerson, setAddingPerson] = useState(false)
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [appointingPerson, setAppointingPerson] = useState<Person | null>(null)
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const activePeople   = people.filter(p => p.is_active !== false)
   const inactivePeople = people.filter(p => p.is_active === false)
 
@@ -686,76 +920,21 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
 
             {/* Site / project cards */}
             {Object.entries(byJob).map(([jobKey, { label, type, appts }]) => {
-              const manager = appts.find(a => a.is_manager)
+              const today = new Date().toISOString().slice(0, 10)
+              const active  = appts.filter(a => !a.end_date || a.end_date >= today)
+              const expired = appts.filter(a => a.end_date && a.end_date < today)
+              const manager = active.find(a => a.is_manager)
               const accentColor = type === 'site' ? '#fb923c' : 'var(--accent)'
               const accentBg   = type === 'site' ? 'rgba(251,146,60,0.12)' : 'rgba(108,114,245,0.12)'
               return (
-                <div key={jobKey} className="rounded-xl border overflow-hidden"
-                  style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-
-                  {/* Card header */}
-                  <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: accentBg }}>
-                      {type === 'site'
-                        ? <HardHat size={16} style={{ color: accentColor }} />
-                        : <Briefcase size={16} style={{ color: accentColor }} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {type === 'site' ? 'Construction site' : 'Design project'}
-                        {manager ? ` · ${manager.person?.name} (Manager)` : ' · No manager assigned'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-medium px-2.5 py-1 rounded-full"
-                        style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
-                        {appts.length} appointed
-                      </span>
-                      {canEdit && (
-                        <button onClick={() => setTab('library')}
-                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border hover:opacity-80"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                          <Plus size={11} /> Add
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Appointed people rows */}
-                  <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                    {appts.map(a => (
-                      <div key={a.id} className="flex items-center gap-3 px-5 py-3">
-                        <Avatar name={a.person?.name ?? '?'} size={32} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                              {a.person?.name}
-                            </p>
-                            {a.is_manager && (
-                              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full"
-                                style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15' }}>
-                                <Star size={8} /> Manager
-                              </span>
-                            )}
-                            {a.person?.discipline && <DisciplineBadge d={a.person.discipline} />}
-                          </div>
-                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            {a.role_on_job ?? a.person?.role ?? '—'}
-                            {a.start_date ? ` · From ${new Date(a.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
-                            {a.end_date ? ` – ${new Date(a.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
-                          </p>
-                        </div>
-                        {canEdit && (
-                          <button onClick={() => removeAppointment(a.id)} title="Remove appointment"
-                            className="p-1.5 rounded hover:opacity-80 shrink-0" style={{ color: 'var(--text-muted)' }}>
-                            <X size={13} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <JobCard key={jobKey}
+                  label={label} type={type} active={active} expired={expired}
+                  manager={manager} accentColor={accentColor} accentBg={accentBg}
+                  canEdit={canEdit}
+                  onAdd={() => setTab('library')}
+                  onEdit={setEditingAppointment}
+                  onRemove={removeAppointment}
+                />
               )
             })}
 
@@ -831,6 +1010,16 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
             setAppointments(prev => [a, ...prev])
             setAppointingPerson(null)
             setTab('teams')
+          }}
+        />
+      )}
+      {editingAppointment && (
+        <EditAppointmentModal
+          appt={editingAppointment}
+          onClose={() => setEditingAppointment(null)}
+          onSaved={updated => {
+            setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a))
+            setEditingAppointment(null)
           }}
         />
       )}
