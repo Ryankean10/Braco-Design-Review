@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   UsersRound, Plus, Search, X, ChevronDown, ChevronRight,
@@ -1342,6 +1343,7 @@ function EditAppointmentModal({ appt, onClose, onSaved }: {
 // ── Main component ────────────────────────────────────────────────────────────
 export default function TeamClient({ people: init, appointments: initAppts, projects, sites, currentUserId, canEdit }: Props) {
   const supabase = createClient()
+  const searchParams = useSearchParams()
   const [tab, setTab] = useState<'library' | 'teams'>('library')
   const [people, setPeople] = useState(init)
   const [appointments, setAppointments] = useState(initAppts)
@@ -1351,6 +1353,15 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
   const [addingPerson, setAddingPerson] = useState(false)
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [viewingPerson, setViewingPerson] = useState<Person | null>(null)
+
+  // Auto-open person profile from ?person=<id> URL param
+  useEffect(() => {
+    const personId = searchParams.get('person')
+    if (personId) {
+      const match = init.find(p => p.id === personId)
+      if (match) setViewingPerson(match)
+    }
+  }, [searchParams, init])
   const [appointingPerson, setAppointingPerson] = useState<Person | null>(null)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const activePeople   = people.filter(p => p.is_active !== false)

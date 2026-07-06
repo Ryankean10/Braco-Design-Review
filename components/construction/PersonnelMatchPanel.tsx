@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Users, CheckCircle2, XCircle, AlertTriangle, ChevronDown, Loader2, Link2 } from 'lucide-react'
+import Link from 'next/link'
+import { Users, CheckCircle2, XCircle, AlertTriangle, ChevronDown, Loader2, Link2, ExternalLink } from 'lucide-react'
 
 interface Person { id: string; name: string; role: string | null; company: string | null }
 interface NameRow {
@@ -127,8 +128,8 @@ export default function PersonnelMatchPanel({ siteId, people }: { siteId: string
           <button
             disabled={isSaving}
             onClick={() => row.no_match
-              ? save(row.raw_name, null, false)   // un-flag
-              : save(row.raw_name, null, true)    // flag no match
+              ? save(row.raw_name, null, false)
+              : save(row.raw_name, null, true)
             }
             className="text-xs px-2.5 py-1.5 rounded-lg font-medium border disabled:opacity-40"
             style={{
@@ -137,6 +138,15 @@ export default function PersonnelMatchPanel({ siteId, people }: { siteId: string
             }}>
             {row.no_match ? 'Un-flag' : 'No match'}
           </button>
+          {/* View staff card */}
+          {resolvedId && (
+            <Link href={`/team?person=${resolvedId}`}
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border font-medium hover:opacity-80"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+              title="Open staff card">
+              <ExternalLink size={11} /> Profile
+            </Link>
+          )}
         </div>
       </div>
     )

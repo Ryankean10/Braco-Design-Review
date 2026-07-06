@@ -178,6 +178,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
       />
 
       {/* Personnel matching */}
+      <div id="personnel-matching" style={{ scrollMarginTop: '80px' }}>
       <CollapsibleSection
         title="Diary Personnel Matching"
         badge={undefined}
@@ -185,6 +186,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
       >
         <PersonnelMatchPanel siteId={siteId} people={(allPeople ?? []) as any} />
       </CollapsibleSection>
+      </div>
 
       {/* ITP — top-level, anchored so project page link lands here */}
       <div id="itp" style={{ scrollMarginTop: '80px' }}>

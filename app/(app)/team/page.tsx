@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import TeamClient from '@/components/team/TeamClient'
 
@@ -36,13 +37,15 @@ export default async function TeamPage() {
   ])
 
   return (
-    <TeamClient
-      people={people ?? []}
-      appointments={appointments ?? []}
-      projects={projects ?? []}
-      sites={sites ?? []}
-      currentUserId={user.id}
-      canEdit={['admin', 'engineer', 'project_manager'].includes(role)}
-    />
+    <Suspense>
+      <TeamClient
+        people={people ?? []}
+        appointments={appointments ?? []}
+        projects={projects ?? []}
+        sites={sites ?? []}
+        currentUserId={user.id}
+        canEdit={['admin', 'engineer', 'project_manager'].includes(role)}
+      />
+    </Suspense>
   )
 }

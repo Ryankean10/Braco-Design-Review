@@ -137,7 +137,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
           <div className="min-w-0">
             <p className="text-xs font-semibold" style={{ color: '#fb923c' }}>Unrecognised site personnel in recent diaries</p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              These names appear in diary records but are not matched to appointed staff — check the people library or update diary entries:&nbsp;
+              These names appear in diary records but are not matched to appointed staff.{' '}
+              <a href="#personnel-matching" className="underline" style={{ color: '#fb923c' }}>Open matching panel</a> to resolve:&nbsp;
               <span style={{ color: 'var(--text-primary)' }}>{unmatchedPersonnel.join(', ')}</span>
             </p>
           </div>
