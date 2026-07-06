@@ -12,6 +12,7 @@ import CivilsPanel from '@/components/construction/CivilsPanel'
 import ItpPanel from '@/components/construction/ItpPanel'
 import CollapsibleSection from '@/components/construction/CollapsibleSection'
 import PersonnelMatchPanel from '@/components/construction/PersonnelMatchPanel'
+import TimesheetUploadPanel from '@/components/construction/TimesheetUploadPanel'
 
 export default async function ConstructionSitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
@@ -200,6 +201,15 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         <PersonnelMatchPanel siteId={siteId} people={(allPeople ?? []) as any} />
       </CollapsibleSection>
       </div>
+
+      {/* Agency timesheet upload */}
+      <CollapsibleSection
+        title="Agency Timesheets"
+        badge={undefined}
+        summary="Upload agency XLS timesheets — auto-analysed, matched to staff, discrepancies flagged"
+      >
+        <TimesheetUploadPanel siteId={siteId} />
+      </CollapsibleSection>
 
       {/* ITP — top-level, anchored so project page link lands here */}
       <div id="itp" style={{ scrollMarginTop: '80px' }}>
