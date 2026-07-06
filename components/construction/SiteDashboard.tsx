@@ -27,6 +27,7 @@ interface Props {
   site: any; siteId: string; cables: CableItem[]; recentLogs: DailyLog[]
   reviewItemCount: number; canEdit: boolean; civilsActivities?: CivilsActivity[]
   unmatchedPersonnel?: string[]
+  nameToPersonId?: Record<string, string>
 }
 
 const WEATHER_COLOR: Record<string, string> = { Good: '#4ade80', Fair: '#facc15', Poor: '#f87171' }
@@ -64,7 +65,7 @@ function Section({ title, badge, badgeColor, summary, defaultOpen = false, child
   )
 }
 
-export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [], unmatchedPersonnel = [] }: Props) {
+export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [], unmatchedPersonnel = [], nameToPersonId = {} }: Props) {
   const [showLogForm, setShowLogForm] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
 
@@ -375,7 +376,15 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
                         {p.name[0]}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                        {nameToPersonId[p.name] ? (
+                          <Link href={`/team?person=${nameToPersonId[p.name]}`}
+                            className="font-medium truncate hover:underline"
+                            style={{ color: 'var(--accent)' }}>
+                            {p.name}
+                          </Link>
+                        ) : (
+                          <p className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                        )}
                         {p.note && <p className="text-[10px] truncate" style={{ color: '#fb923c' }}>{p.note}</p>}
                       </div>
                     </div>

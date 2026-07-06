@@ -187,6 +187,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         canEdit={canEdit}
         civilsActivities={civilsActivities ?? []}
         unmatchedPersonnel={unmatchedPersonnel}
+        nameToPersonId={nameToPersonId}
       />
 
       {/* Personnel matching */}
