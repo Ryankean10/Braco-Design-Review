@@ -6,6 +6,7 @@ import {
   Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle,
   Loader2, ChevronRight, Users, Clock, RefreshCw,
 } from 'lucide-react'
+import DiscrepancyReviewModal from './DiscrepancyReviewModal'
 
 interface UploadResult {
   weekEnd: string
@@ -35,6 +36,7 @@ export default function TimesheetUploadPanel({ siteId }: { siteId: string }) {
   const [result, setResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [showDiscrepancies, setShowDiscrepancies] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   function setStep(idx: number, status: Step['status']) {
@@ -266,13 +268,24 @@ export default function TimesheetUploadPanel({ siteId }: { siteId: string }) {
                   Agency hours differ from diary records by &gt;0.5h
                 </p>
               </div>
-              <Link href="/team" className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium"
+              <button
+                onClick={() => setShowDiscrepancies(true)}
+                className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium"
                 style={{ background: '#fb923c22', color: '#fb923c' }}>
-                Review on staff cards <ChevronRight size={11} />
-              </Link>
+                Review &amp; sign off <ChevronRight size={11} />
+              </button>
             </div>
           )}
         </div>
+      )}
+
+      {showDiscrepancies && result && (
+        <DiscrepancyReviewModal
+          siteId={siteId}
+          weekStart={result.weekStart}
+          weekEnd={result.weekEnd}
+          onClose={() => setShowDiscrepancies(false)}
+        />
       )}
     </div>
   )
