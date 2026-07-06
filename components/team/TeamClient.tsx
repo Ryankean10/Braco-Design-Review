@@ -435,15 +435,15 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   // ── Timesheets state ──
   interface TSEntry {
     id: string; entry_date: string; hours: number | null; role: string | null; notes: string | null
+    discrepancy_flag: boolean; discrepancy_note: string | null
+    signed_off_by: string | null; signed_off_at: string | null; signed_off_name: string | null
     site: { id: string; name: string } | null
     timesheet: { source: string; week_start: string; file_name: string | null } | null
   }
   interface TSWeek {
-    week_start: string
-    site_name: string
-    diary_hours: number
-    agency_hours: number
-    entries: TSEntry[]
+    week_start: string; site_name: string; site_id: string
+    diary_hours: number; agency_hours: number; discrepancy: number; all_signed_off: boolean
+    diary_entries: TSEntry[]; agency_entries: TSEntry[]
   }
   const [tsWeeks, setTsWeeks] = useState<TSWeek[]>([])
   const [tsLoading, setTsLoading] = useState(false)
@@ -917,26 +917,140 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                 <div className="text-center py-8">
                   <Clock size={24} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
                   <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No timesheet records yet.</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Hours are populated from diary records and agency timesheet uploads on each site.</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Hours are populated from diary records and agency timesheet uploads.</p>
                 </div>
               )}
               {tsLoaded && tsWeeks.length > 0 && tsWeeks.map(w => {
-                const discrepancy = w.diary_hours > 0 && w.agency_hours > 0 && Math.abs(w.diary_hours - w.agency_hours) > 0.5
-                return (
-                  <div key={`${w.week_start}-${w.site_name}`} className="rounded-xl border overflow-hidden"
-                    style={{ borderColor: discrepancy ? '#f8712244' : 'var(--border)' }}>
-                    <div className="flex items-center justify-between px-4 py-3"
-                      style={{ background: discrepancy ? '#f8712211' : 'var(--bg-elevated)' }}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        {discrepancy && <AlertTriangle size={12} style={{ color: '#f87171', flexShrink: 0 }} />}
-                        <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                          {w.site_name}
+                const hasDiscrepancy = w.discrepancy > 0.5
+                const borderColor = hasDiscrepancy ? '#f8712244' : w.all_signed_off ? '#4ade8033' : 'var(--border)'
+                const bgColor = hasDiscrepancy ? '#f8712211' : w.all_signed_off ? '#4ade8009' : 'var(--bg-elevated)'
+
+                function EntryRow({ e }: { e: TSEntry }) {
+                  const [flagging, setFlagging] = useState(false)
+                  const [signingOff, setSigningOff] = useState(false)
+                  const [showFlagInput, setShowFlagInput] = useState(false)
+                  const [flagNote, setFlagNote] = useState(e.discrepancy_note ?? '')
+                  const [localEntry, setLocalEntry] = useState(e)
+
+                  async function doAction(action: string, note?: string) {
+                    if (action === 'flag') setFlagging(true); else setSigningOff(true)
+                    const res = await fetch(`/api/team/timesheet-entries/${e.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action, discrepancy_note: note }),
+                    })
+                    if (res.ok) {
+                      const updated = await res.json()
+                      setLocalEntry(updated)
+                      setTsWeeks(prev => prev.map(wk => ({
+                        ...wk,
+                        diary_entries: wk.diary_entries.map(x => x.id === e.id ? updated : x),
+                        agency_entries: wk.agency_entries.map(x => x.id === e.id ? updated : x),
+                        all_signed_off: [...wk.diary_entries, ...wk.agency_entries]
+                          .map(x => x.id === e.id ? updated : x)
+                          .every(x => x.signed_off_at),
+                      })))
+                    }
+                    setFlagging(false); setSigningOff(false); setShowFlagInput(false)
+                  }
+
+                  const src = (Array.isArray(localEntry.timesheet) ? localEntry.timesheet[0] : localEntry.timesheet) as any
+                  const isAgency = src?.source === 'agency'
+                  return (
+                    <div className="border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
+                      <div className="px-4 py-2.5 flex items-center gap-2 flex-wrap text-xs"
+                        style={{ background: localEntry.discrepancy_flag ? '#f8712208' : 'var(--bg-surface)' }}>
+                        {/* Date */}
+                        <span className="shrink-0 w-[72px]" style={{ color: 'var(--text-muted)' }}>
+                          {new Date(localEntry.entry_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                         </span>
+                        {/* Source badge */}
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium"
+                          style={{
+                            background: isAgency ? 'rgba(96,165,250,0.15)' : 'rgba(74,222,128,0.15)',
+                            color: isAgency ? '#60a5fa' : '#4ade80',
+                          }}>{isAgency ? 'Agency' : 'Diary'}</span>
+                        {/* Hours */}
+                        <span className="shrink-0 font-semibold w-10 text-right"
+                          style={{ color: isAgency ? '#60a5fa' : '#4ade80' }}>
+                          {localEntry.hours != null ? `${localEntry.hours}h` : '—'}
+                        </span>
+                        {/* Role */}
+                        {localEntry.role && <span className="flex-1 truncate" style={{ color: 'var(--text-muted)' }}>{localEntry.role}</span>}
+                        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                          {/* Discrepancy flag */}
+                          {localEntry.discrepancy_flag
+                            ? <button onClick={() => doAction('unflag')} disabled={flagging}
+                                className="text-[10px] px-2 py-1 rounded border font-medium"
+                                style={{ borderColor: '#f87171', color: '#f87171' }}>
+                                {flagging ? '…' : '⚑ Flagged'}
+                              </button>
+                            : canEdit && <button onClick={() => setShowFlagInput(v => !v)} disabled={flagging}
+                                className="text-[10px] px-2 py-1 rounded border font-medium hover:opacity-80"
+                                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                                Flag
+                              </button>
+                          }
+                          {/* Sign-off */}
+                          {localEntry.signed_off_at
+                            ? <span className="text-[10px] px-2 py-1 rounded font-medium flex items-center gap-1"
+                                style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
+                                <CheckCircle2 size={10} /> {localEntry.signed_off_name ?? 'Signed off'}
+                              </span>
+                            : canEdit && <button onClick={() => doAction('signoff')} disabled={signingOff}
+                                className="text-[10px] px-2 py-1 rounded font-medium hover:opacity-80"
+                                style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
+                                {signingOff ? <Loader2 size={10} className="animate-spin" /> : 'Sign off'}
+                              </button>
+                          }
+                        </div>
+                      </div>
+                      {/* Flag note input */}
+                      {showFlagInput && (
+                        <div className="px-4 pb-2.5 flex items-center gap-2"
+                          style={{ background: '#f8712208' }}>
+                          <input value={flagNote} onChange={e => setFlagNote(e.target.value)}
+                            placeholder="Note reason for flag…"
+                            className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border"
+                            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+                          <button onClick={() => doAction('flag', flagNote)}
+                            className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                            style={{ background: '#f87171', color: '#fff' }}>Flag</button>
+                          <button onClick={() => setShowFlagInput(false)}
+                            className="text-xs px-2 py-1.5 rounded-lg"
+                            style={{ color: 'var(--text-muted)' }}>Cancel</button>
+                        </div>
+                      )}
+                      {/* Flag note display */}
+                      {localEntry.discrepancy_flag && localEntry.discrepancy_note && (
+                        <div className="px-4 pb-2 text-[11px] italic" style={{ color: '#f87171', background: '#f8712208' }}>
+                          {localEntry.discrepancy_note}
+                        </div>
+                      )}
+                      {/* Sign-off audit trail */}
+                      {localEntry.signed_off_at && (
+                        <div className="px-4 pb-1.5 text-[10px]" style={{ color: 'var(--text-muted)', background: 'var(--bg-surface)' }}>
+                          Signed off by {localEntry.signed_off_name} · {new Date(localEntry.signed_off_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={`${w.week_start}-${w.site_id}`} className="rounded-xl border overflow-hidden"
+                    style={{ borderColor }}>
+                    {/* Week header */}
+                    <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2" style={{ background: bgColor }}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {hasDiscrepancy && <AlertTriangle size={12} style={{ color: '#f87171', flexShrink: 0 }} />}
+                        {w.all_signed_off && <CheckCircle2 size={12} style={{ color: '#4ade80', flexShrink: 0 }} />}
+                        <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{w.site_name}</span>
                         <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
-                          w/c {new Date(w.week_start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          w/c {new Date(w.week_start + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0 ml-2">
+                      <div className="flex items-center gap-3 shrink-0">
                         <div className="text-right">
                           <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Diary</p>
                           <p className="text-xs font-semibold" style={{ color: w.diary_hours > 0 ? '#4ade80' : 'var(--text-muted)' }}>
@@ -949,43 +1063,19 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                             {w.agency_hours > 0 ? `${w.agency_hours}h` : '—'}
                           </p>
                         </div>
-                        {discrepancy && (
+                        {hasDiscrepancy && (
                           <div className="text-right">
                             <p className="text-[10px]" style={{ color: '#f87171' }}>Diff</p>
-                            <p className="text-xs font-semibold" style={{ color: '#f87171' }}>
-                              {Math.abs(w.diary_hours - w.agency_hours).toFixed(1)}h
-                            </p>
+                            <p className="text-xs font-semibold" style={{ color: '#f87171' }}>{w.discrepancy.toFixed(1)}h</p>
                           </div>
                         )}
                       </div>
                     </div>
-                    <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                      {w.entries.map(e => (
-                        <div key={e.id} className="px-4 py-2 flex items-center gap-3 text-xs"
-                          style={{ background: 'var(--bg-surface)' }}>
-                          <span className="shrink-0 w-20" style={{ color: 'var(--text-muted)' }}>
-                            {new Date(e.entry_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
-                          </span>
-                          <span className="flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
-                            {e.role ?? '—'}
-                          </span>
-                          <span className="shrink-0 font-medium" style={{
-                            color: e.timesheet?.source === 'agency' ? '#60a5fa' : '#4ade80'
-                          }}>
-                            {e.hours != null ? `${e.hours}h` : '—'}
-                          </span>
-                          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded"
-                            style={{
-                              background: e.timesheet?.source === 'agency' ? 'rgba(96,165,250,0.12)' : 'rgba(74,222,128,0.12)',
-                              color: e.timesheet?.source === 'agency' ? '#60a5fa' : '#4ade80',
-                            }}>
-                            {e.timesheet?.source ?? 'diary'}
-                          </span>
-                          {e.notes && (
-                            <span className="truncate max-w-[120px]" style={{ color: 'var(--text-muted)' }}>{e.notes}</span>
-                          )}
-                        </div>
-                      ))}
+                    {/* Entries */}
+                    <div>
+                      {[...w.diary_entries, ...w.agency_entries]
+                        .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+                        .map(e => <EntryRow key={e.id} e={e} />)}
                     </div>
                   </div>
                 )
