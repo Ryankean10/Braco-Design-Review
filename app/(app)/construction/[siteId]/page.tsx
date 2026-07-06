@@ -133,6 +133,18 @@ export default async function ConstructionSitePage({ params }: { params: Promise
     .eq('is_active', true)
     .order('name')
 
+  // Fetch diary name mappings to build nameToPersonId map for CivilsPanel
+  const { data: nameMappings } = await supabase
+    .from('diary_name_mappings')
+    .select('raw_name, person_id')
+    .eq('site_id', siteId)
+    .not('person_id', 'is', null)
+
+  const nameToPersonId: Record<string, string> = {}
+  for (const m of nameMappings ?? []) {
+    if (m.person_id) nameToPersonId[m.raw_name] = m.person_id
+  }
+
   const canEdit = ['admin', 'engineer'].includes(role)
 
   return (
@@ -222,7 +234,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
             badge={acts.length > 0 ? `${pct}%` : undefined}
             summary={acts.length ? `below ground ${bgPct}% · above ground ${agPct}% · ${complete}/${acts.length} complete` : 'no activities seeded'}
           >
-            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Civils" />
+            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Civils" nameToPersonId={nameToPersonId} />
           </CollapsibleSection>
         )
       })()}
@@ -238,7 +250,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
             badge={acts.length > 0 ? `${pct}%` : undefined}
             summary={acts.length ? `${complete}/${acts.length} activities complete · ITP assurance driven` : 'no activities seeded'}
           >
-            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Electrical" />
+            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Electrical" nameToPersonId={nameToPersonId} />
           </CollapsibleSection>
         )
       })()}
@@ -254,7 +266,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
             badge={acts.length > 0 ? `${pct}%` : undefined}
             summary={acts.length ? `${complete}/${acts.length} activities complete · G99 / ITP sign-off driven` : 'no activities seeded'}
           >
-            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Commissioning" />
+            <CivilsPanel siteId={siteId} initialActivities={civilsActivities ?? []} initialDiaries={siteDiaries ?? []} canEdit={canEdit} disciplineFilter="Commissioning" nameToPersonId={nameToPersonId} />
           </CollapsibleSection>
         )
       })()}

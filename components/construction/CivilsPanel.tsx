@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
 import {
   HardHat, Upload, FileText, ChevronDown, ChevronRight,
   AlertTriangle, CheckCircle2, Clock, Loader2, BookOpen,
@@ -32,6 +33,7 @@ export interface SiteDiary {
   ai_crew_count: number | null
   ai_analysed_at: string | null
   uploaded_at: string
+  ai_personnel?: string[] | null
 }
 
 interface Props {
@@ -40,6 +42,7 @@ interface Props {
   initialDiaries: SiteDiary[]
   canEdit: boolean
   disciplineFilter?: 'Civils' | 'Electrical' | 'Commissioning'
+  nameToPersonId?: Record<string, string>   // raw diary name → person id
 }
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
@@ -154,30 +157,52 @@ function ActivityRow({ act }: { act: CivilsActivity }) {
   )
 }
 
-function DiaryCard({ diary }: { diary: SiteDiary }) {
+function DiaryCard({ diary, nameToPersonId }: { diary: SiteDiary; nameToPersonId?: Record<string, string> }) {
+  const personnel = diary.ai_personnel ?? []
   return (
-    <div className="rounded-lg border px-3 py-2.5 space-y-1"
+    <div className="rounded-lg border px-3 py-2.5 space-y-1.5"
       style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <CalendarDays size={12} style={{ color: 'var(--accent)' }} />
         <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
           {new Date(diary.diary_date).toLocaleDateString('en-GB', {
             weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
           })}
         </span>
+        {diary.ai_weather && (
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{diary.ai_weather}</span>
+        )}
         {diary.ai_crew_count && (
           <span className="flex items-center gap-1 text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
             <Users size={11} /> {diary.ai_crew_count} crew
           </span>
-        )}
-        {diary.ai_weather && (
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{diary.ai_weather}</span>
         )}
       </div>
       {diary.ai_summary && (
         <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
           {diary.ai_summary}
         </p>
+      )}
+      {personnel.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+          <Users size={10} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          {personnel.map(name => {
+            const personId = nameToPersonId?.[name]
+            return personId ? (
+              <Link key={name} href={`/team?person=${personId}`}
+                className="text-[11px] px-1.5 py-0.5 rounded font-medium hover:opacity-80 transition-opacity"
+                style={{ background: 'rgba(var(--accent-rgb, 99,102,241),0.12)', color: 'var(--accent)' }}>
+                {name}
+              </Link>
+            ) : (
+              <span key={name}
+                className="text-[11px] px-1.5 py-0.5 rounded"
+                style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
+                {name}
+              </span>
+            )
+          })}
+        </div>
       )}
       {diary.file_name && (
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -189,7 +214,7 @@ function DiaryCard({ diary }: { diary: SiteDiary }) {
 }
 
 
-export default function CivilsPanel({ siteId, initialActivities, initialDiaries, canEdit, disciplineFilter }: Props) {
+export default function CivilsPanel({ siteId, initialActivities, initialDiaries, canEdit, disciplineFilter, nameToPersonId }: Props) {
   const [activities, setActivities] = useState(initialActivities)
   const [diaries, setDiaries] = useState(initialDiaries)
   const [tab, setTab] = useState<'register' | 'diaries'>('register')
@@ -479,7 +504,7 @@ export default function CivilsPanel({ siteId, initialActivities, initialDiaries,
 
             {diaries.length > 0 && (
               <div className="space-y-2">
-                {diaries.map(d => <DiaryCard key={d.id} diary={d} />)}
+                {diaries.map(d => <DiaryCard key={d.id} diary={d} nameToPersonId={nameToPersonId} />)}
               </div>
             )}
           </div>
