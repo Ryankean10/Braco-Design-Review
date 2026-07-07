@@ -10,7 +10,7 @@ const ALERT_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 // Use Resend's default sending domain until gridgate.ai is verified in Resend dashboard
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'GridGate <onboarding@resend.dev>'
 
-async function sendHighImpactAlert(parsed: any) {
+async function sendHighImpactAlert(parsed: any, siteId: string) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return
 
@@ -70,7 +70,7 @@ async function sendHighImpactAlert(parsed: any) {
       </div>
 
       <div style="margin-top:20px;text-align:center">
-        <a href="https://braco-design-review.vercel.app/construction/${SITE_ID}?date=${parsed.log_date}#issues"
+        <a href="https://braco-design-review.vercel.app/construction/${siteId}?date=${parsed.log_date}#issues"
           style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600">
           View Issue in GridGate →
         </a>
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Send high-impact alert email (non-blocking — don't fail the request if email fails)
-  sendHighImpactAlert(parsed).catch(e => console.error('Alert email error:', e))
+  sendHighImpactAlert(parsed, SITE_ID).catch(e => console.error('Alert email error:', e))
 
   // Apply cable activity updates
   const cableUpdates: any[] = parsed.cable_updates ?? []
