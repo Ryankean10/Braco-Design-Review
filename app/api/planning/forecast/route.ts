@@ -101,11 +101,23 @@ Format your response as JSON with this structure:
   const jsonMatch = clean.match(/\{[\s\S]*\}/)
   if (!jsonMatch) return NextResponse.json({ error: 'Failed to parse forecast' }, { status: 500 })
 
-  try {
-    return NextResponse.json(JSON.parse(jsonMatch[0]))
-  } catch (e) {
-    console.error('Forecast JSON parse error:', (e as Error).message)
-    console.error('Raw response:', clean.slice(0, 500))
-    return NextResponse.json({ error: 'Forecast response was malformed — please try again' }, { status: 500 })
+  let raw = jsonMatch[0]
+
+  // Attempt parse, then progressively repair common Claude JSON issues
+  for (const attempt of [
+    (s: string) => s,                                           // 1. as-is
+    (s: string) => s.replace(/,(\s*[}\]])/g, '$1'),            // 2. trailing commas
+    (s: string) => s.replace(/[‘’]/g, "'")           // 3. smart single quotes
+                     .replace(/[“”]/g, '"'),
+    (s: string) => s.replace(/\n/g, ' ').replace(/\r/g, ''),   // 4. literal newlines in strings
+  ]) {
+    try {
+      return NextResponse.json(JSON.parse(attempt(raw)))
+    } catch {
+      // try next repair
+    }
   }
+
+  console.error('Forecast JSON unrecoverable. Raw:', raw.slice(0, 600))
+  return NextResponse.json({ error: 'Forecast response was malformed — please try again' }, { status: 500 })
 }
