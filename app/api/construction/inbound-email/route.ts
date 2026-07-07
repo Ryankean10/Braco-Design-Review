@@ -70,9 +70,9 @@ async function sendHighImpactAlert(parsed: any) {
       </div>
 
       <div style="margin-top:20px;text-align:center">
-        <a href="https://braco-design-review.vercel.app/construction"
+        <a href="https://braco-design-review.vercel.app/construction/${SITE_ID}?date=${parsed.log_date}#issues"
           style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600">
-          View in GridGate →
+          View Issue in GridGate →
         </a>
       </div>
     </div>
