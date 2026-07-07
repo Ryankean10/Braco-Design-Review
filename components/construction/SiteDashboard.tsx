@@ -412,6 +412,7 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
 
       {/* ── Daily logs ── */}
       <Section title="Daily logs" badge={recentLogs.length > 0 ? recentLogs.length : undefined}
+        defaultOpen={!!highlightDate}
         summary={latestLog ? `last: ${new Date(latestLog.log_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}${openIssues.length > 0 ? ` · ${openIssues.length} open issue${openIssues.length > 1 ? 's' : ''}` : ''}` : 'no logs yet'}>
         <div className="space-y-0 -mx-5 -mb-4">
           {canEdit && (
