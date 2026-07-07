@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
+
+function svc() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -147,16 +155,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sit
     .eq('source', 'agency')
     .maybeSingle()
 
+  // Upload file to storage
+  const storagePath = `${siteId}/${weekStart}/${file.name}`
+  const { error: storageErr } = await svc().storage
+    .from('timesheets')
+    .upload(storagePath, buf, {
+      contentType: file.type || 'application/vnd.ms-excel',
+      upsert: true,
+    })
+  if (storageErr) console.warn('Storage upload warning:', storageErr.message)
+
   let timesheetId: string
   if (existing) {
     timesheetId = existing.id
     // Clear old entries to replace with fresh upload
     await supabase.from('timesheet_entries').delete().eq('timesheet_id', timesheetId)
-    await supabase.from('timesheets').update({ file_name: file.name, uploaded_by: user.id }).eq('id', timesheetId)
+    await supabase.from('timesheets')
+      .update({ file_name: file.name, uploaded_by: user.id, storage_path: storagePath, uploaded_at: new Date().toISOString() })
+      .eq('id', timesheetId)
   } else {
     const { data: inserted, error: tsErr } = await supabase
       .from('timesheets')
-      .insert({ site_id: siteId, source: 'agency', week_start: weekStart, file_name: file.name, uploaded_by: user.id })
+      .insert({ site_id: siteId, source: 'agency', week_start: weekStart, file_name: file.name, storage_path: storagePath, uploaded_by: user.id })
       .select('id').single()
     if (tsErr) return NextResponse.json({ error: tsErr.message }, { status: 500 })
     timesheetId = inserted.id

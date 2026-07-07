@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import {
   Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle,
-  Loader2, ChevronRight, Users, Clock, RefreshCw,
+  Loader2, ChevronRight, Users, Clock, RefreshCw, Download, History,
 } from 'lucide-react'
 import DiscrepancyReviewModal from './DiscrepancyReviewModal'
 
@@ -17,6 +17,17 @@ interface UploadResult {
   discrepancies: number
   timesheetId: string
   replaced: boolean
+}
+
+interface HistoryRow {
+  id: string
+  week_start: string
+  file_name: string | null
+  has_file: boolean
+  uploaded_at: string
+  uploaded_by_name: string | null
+  discrepancies_total: number
+  discrepancies_unsigned: number
 }
 
 type Step = { label: string; status: 'pending' | 'active' | 'done' | 'error' }
@@ -33,6 +44,41 @@ export default function TimesheetUploadPanel({ siteId }: { siteId: string }) {
   const [file, setFile] = useState<File | null>(null)
   const [steps, setSteps] = useState<Step[]>(STEPS.map(label => ({ label, status: 'pending' })))
   const [progress, setProgress] = useState(0)
+  const [history, setHistory] = useState<HistoryRow[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [downloading, setDownloading] = useState<string | null>(null)
+  const [discrepancyTarget, setDiscrepancyTarget] = useState<{ weekStart: string; weekEnd: string } | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/construction/${siteId}/timesheets`)
+      .then(r => r.json())
+      .then(data => { setHistory(data); setHistoryLoading(false) })
+  }, [siteId])
+
+  function weekEnd(weekStart: string) {
+    const d = new Date(weekStart)
+    d.setUTCDate(d.getUTCDate() + 6)
+    return d.toISOString().slice(0, 10)
+  }
+
+  async function download(tsId: string, fileName: string | null) {
+    setDownloading(tsId)
+    const res = await fetch(`/api/construction/${siteId}/timesheets/${tsId}/download`)
+    const data = await res.json()
+    if (data.url) {
+      const a = document.createElement('a')
+      a.href = data.url
+      a.download = data.file_name ?? fileName ?? 'timesheet.xls'
+      a.click()
+    }
+    setDownloading(null)
+  }
+
+  function refreshHistory() {
+    fetch(`/api/construction/${siteId}/timesheets`)
+      .then(r => r.json())
+      .then(setHistory)
+  }
   const [result, setResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -101,6 +147,7 @@ export default function TimesheetUploadPanel({ siteId }: { siteId: string }) {
 
     setResult(data)
     setUploading(false)
+    refreshHistory()
   }
 
   function reset() {
@@ -279,12 +326,100 @@ export default function TimesheetUploadPanel({ siteId }: { siteId: string }) {
         </div>
       )}
 
+      {/* Upload history */}
+      <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center gap-2 mb-3">
+          <History size={13} style={{ color: 'var(--text-muted)' }} />
+          <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            Uploaded Timesheets
+          </p>
+        </div>
+
+        {historyLoading && (
+          <div className="flex items-center gap-2 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <Loader2 size={12} className="animate-spin" /> Loading…
+          </div>
+        )}
+
+        {!historyLoading && history.length === 0 && (
+          <p className="text-xs py-3" style={{ color: 'var(--text-muted)' }}>No timesheets uploaded yet.</p>
+        )}
+
+        {!historyLoading && history.length > 0 && (
+          <div className="space-y-2">
+            {history.map(h => {
+              const wEnd = weekEnd(h.week_start)
+              const hasUnsigned = h.discrepancies_unsigned > 0
+              return (
+                <div key={h.id} className="rounded-xl border flex items-center gap-3 px-3 py-2.5"
+                  style={{ borderColor: hasUnsigned ? '#fb923c44' : 'var(--border)', background: 'var(--bg-elevated)' }}>
+                  {/* File icon */}
+                  <FileSpreadsheet size={16} style={{ color: hasUnsigned ? '#fb923c' : '#4ade80', flexShrink: 0 }} />
+
+                  {/* Week info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                      Week ending {new Date(wEnd).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                    <p className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                      {h.file_name ?? 'Unnamed file'}
+                      {h.uploaded_by_name ? ` · ${h.uploaded_by_name}` : ''}
+                      {' · '}{new Date(h.uploaded_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                    </p>
+                  </div>
+
+                  {/* Discrepancy badge */}
+                  {h.discrepancies_total > 0 && (
+                    <button
+                      onClick={() => setDiscrepancyTarget({ weekStart: h.week_start, weekEnd: wEnd })}
+                      className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg shrink-0"
+                      style={{
+                        background: hasUnsigned ? '#fb923c22' : '#4ade8022',
+                        color: hasUnsigned ? '#fb923c' : '#4ade80',
+                      }}>
+                      {hasUnsigned
+                        ? <><AlertTriangle size={10} /> {h.discrepancies_unsigned} to sign off</>
+                        : <><CheckCircle2 size={10} /> {h.discrepancies_total} signed off</>
+                      }
+                    </button>
+                  )}
+
+                  {/* Download */}
+                  {h.has_file && (
+                    <button
+                      disabled={downloading === h.id}
+                      onClick={() => download(h.id, h.file_name)}
+                      className="p-1.5 rounded-lg hover:opacity-70 disabled:opacity-40 shrink-0"
+                      style={{ color: 'var(--text-muted)' }}
+                      title="Download original file">
+                      {downloading === h.id
+                        ? <Loader2 size={13} className="animate-spin" />
+                        : <Download size={13} />}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
       {showDiscrepancies && result && (
         <DiscrepancyReviewModal
           siteId={siteId}
           weekStart={result.weekStart}
           weekEnd={result.weekEnd}
           onClose={() => setShowDiscrepancies(false)}
+        />
+      )}
+
+      {discrepancyTarget && (
+        <DiscrepancyReviewModal
+          siteId={siteId}
+          weekStart={discrepancyTarget.weekStart}
+          weekEnd={discrepancyTarget.weekEnd}
+          onClose={() => setDiscrepancyTarget(null)}
         />
       )}
     </div>
