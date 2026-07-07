@@ -71,7 +71,7 @@ Key observations from site:
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
+    max_tokens: 4096,
     system: `You are a BESS (Battery Energy Storage System) construction planner with access to real historical data from the Dyce BESS site in Scotland.
 You help plan upcoming BESS projects by benchmarking against actual site experience.
 Always give concrete numbers. Be direct and practical. UK context, DNO/NESO terminology.
@@ -97,8 +97,15 @@ Format your response as JSON with this structure:
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  const clean = text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+  const jsonMatch = clean.match(/\{[\s\S]*\}/)
   if (!jsonMatch) return NextResponse.json({ error: 'Failed to parse forecast' }, { status: 500 })
 
-  return NextResponse.json(JSON.parse(jsonMatch[0]))
+  try {
+    return NextResponse.json(JSON.parse(jsonMatch[0]))
+  } catch (e) {
+    console.error('Forecast JSON parse error:', (e as Error).message)
+    console.error('Raw response:', clean.slice(0, 500))
+    return NextResponse.json({ error: 'Forecast response was malformed — please try again' }, { status: 500 })
+  }
 }
