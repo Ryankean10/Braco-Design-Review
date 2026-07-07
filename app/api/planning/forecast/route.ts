@@ -69,12 +69,37 @@ Key observations from site:
 
   const userInput = body
 
+  // Build free-issue constraint text if provided
+  const freeIssueItems: { description: string; deliveryDate: string }[] =
+    (userInput.freeIssueItems ?? []).filter((i: any) => i.description?.trim())
+
+  const freeIssueText = freeIssueItems.length > 0
+    ? `\n\nFREE-ISSUE MATERIALS — CRITICAL SCHEDULING CONSTRAINTS:\n` +
+      `These items are supplied by the client/employer. They are NOT on the contractor critical path ` +
+      `and must NOT be listed as risks or programme activities to procure. ` +
+      `Schedule work that depends on them to START ON OR AFTER the confirmed delivery date. ` +
+      `If delivery is after mobilisation, plan parallel works that do not require these items first:\n` +
+      freeIssueItems.map(i =>
+        `  • ${i.description}${i.deliveryDate ? ` — confirmed delivery: ${new Date(i.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}` : ' — delivery date TBC'}`
+      ).join('\n')
+    : ''
+
+  const additionalNotes = userInput.notes?.trim()
+    ? `\n\nADDITIONAL NOTES (treat as hard constraints):\n${userInput.notes}`
+    : ''
+
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
     system: `You are a BESS (Battery Energy Storage System) construction planner with access to real historical data from the Dyce BESS site in Scotland.
 You help plan upcoming BESS projects by benchmarking against actual site experience.
 Always give concrete numbers. Be direct and practical. UK context, DNO/NESO terminology.
+
+IMPORTANT RULES:
+- Free-issue items provided by the client are NOT contractor risks and NOT contractor procurement tasks. Never put them on the critical path. Schedule dependent works around their confirmed delivery dates.
+- Additional notes and constraints provided by the user OVERRIDE benchmark assumptions. Apply them exactly.
+- If a delivery date means certain works cannot start until partway through the programme, show earlier phases doing independent works first.
+
 Format your response as JSON with this structure:
 {
   "summary": "2-3 sentence overview",
@@ -92,7 +117,7 @@ Format your response as JSON with this structure:
 }`,
     messages: [{
       role: 'user',
-      content: `${benchmarkSummary}\n\nNew site to plan:\n${JSON.stringify(userInput, null, 2)}\n\nBased on the Dyce benchmark data above, provide a construction programme forecast for this new site. Return only valid JSON.`
+      content: `${benchmarkSummary}${freeIssueText}${additionalNotes}\n\nNew site to plan:\n${JSON.stringify({ ...userInput, freeIssueItems: undefined, notes: undefined }, null, 2)}\n\nBased on the Dyce benchmark data above, provide a construction programme forecast for this new site. Return only valid JSON.`
     }]
   })
 

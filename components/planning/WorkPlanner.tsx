@@ -1,7 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Zap, Clock, Users, Calendar, AlertTriangle, ChevronRight, Loader2 } from 'lucide-react'
+import { Zap, Clock, Users, Calendar, AlertTriangle, ChevronRight, Loader2, Plus, Trash2 } from 'lucide-react'
+
+interface FreeIssueItem {
+  description: string
+  deliveryDate: string
+}
 
 interface SiteInput {
   name: string
@@ -13,6 +18,7 @@ interface SiteInput {
   siteSizeHa: string
   locationRegion: string
   accessDifficulty: string
+  freeIssueItems: FreeIssueItem[]
   notes: string
 }
 
@@ -39,6 +45,7 @@ const DEFAULT: SiteInput = {
   siteSizeHa: '',
   locationRegion: 'Scotland',
   accessDifficulty: 'Standard',
+  freeIssueItems: [{ description: '', deliveryDate: '' }],
   notes: '',
 }
 
@@ -75,6 +82,20 @@ export default function WorkPlanner() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function setFreeIssue(idx: number, field: keyof FreeIssueItem, value: string) {
+    setForm(f => {
+      const items = [...f.freeIssueItems]
+      items[idx] = { ...items[idx], [field]: value }
+      return { ...f, freeIssueItems: items }
+    })
+  }
+  function addFreeIssue() {
+    setForm(f => ({ ...f, freeIssueItems: [...f.freeIssueItems, { description: '', deliveryDate: '' }] }))
+  }
+  function removeFreeIssue(idx: number) {
+    setForm(f => ({ ...f, freeIssueItems: f.freeIssueItems.filter((_, i) => i !== idx) }))
   }
 
   const inputClass = "w-full rounded-lg px-3 py-2 text-sm border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40"
@@ -137,6 +158,47 @@ export default function WorkPlanner() {
               <select className={inputClass} style={inputStyle} value={form.accessDifficulty} onChange={set('accessDifficulty')}>
                 {['Standard', 'Restricted', 'Remote', 'Very remote'].map(a => <option key={a}>{a}</option>)}
               </select>
+            </div>
+          </div>
+
+          {/* Free-issue materials */}
+          <div className="pt-1">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                Free-issue materials
+                <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
+                  — not on critical path, scheduled around delivery
+                </span>
+              </p>
+              <button type="button" onClick={addFreeIssue}
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                <Plus size={10} /> Add item
+              </button>
+            </div>
+            <div className="space-y-2">
+              {form.freeIssueItems.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    className={inputClass} style={inputStyle}
+                    value={item.description}
+                    onChange={e => setFreeIssue(idx, 'description', e.target.value)}
+                    placeholder="e.g. HV switchgear, transformer, cabling"/>
+                  <input
+                    className="rounded-lg px-3 py-2 text-sm border w-36 shrink-0"
+                    style={{ ...inputStyle, background: 'var(--surface)' }}
+                    type="date"
+                    value={item.deliveryDate}
+                    onChange={e => setFreeIssue(idx, 'deliveryDate', e.target.value)}
+                    title="Confirmed delivery date"/>
+                  {form.freeIssueItems.length > 1 && (
+                    <button type="button" onClick={() => removeFreeIssue(idx)}
+                      className="shrink-0 hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
