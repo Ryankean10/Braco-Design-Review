@@ -14,8 +14,9 @@ import CollapsibleSection from '@/components/construction/CollapsibleSection'
 import PersonnelMatchPanel from '@/components/construction/PersonnelMatchPanel'
 import TimesheetUploadPanel from '@/components/construction/TimesheetUploadPanel'
 
-export default async function ConstructionSitePage({ params }: { params: Promise<{ siteId: string }> }) {
+export default async function ConstructionSitePage({ params, searchParams }: { params: Promise<{ siteId: string }>; searchParams: Promise<{ date?: string }> }) {
   const { siteId } = await params
+  const { date: highlightDate } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -189,6 +190,7 @@ export default async function ConstructionSitePage({ params }: { params: Promise
         civilsActivities={civilsActivities ?? []}
         unmatchedPersonnel={unmatchedPersonnel}
         nameToPersonId={nameToPersonId}
+        highlightDate={highlightDate}
       />
 
       {/* Personnel matching */}

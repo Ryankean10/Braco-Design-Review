@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
   CheckCircle2, Clock, AlertCircle, CloudRain, Flag, Users,
@@ -28,6 +28,7 @@ interface Props {
   reviewItemCount: number; canEdit: boolean; civilsActivities?: CivilsActivity[]
   unmatchedPersonnel?: string[]
   nameToPersonId?: Record<string, string>
+  highlightDate?: string
 }
 
 const WEATHER_COLOR: Record<string, string> = { Good: '#4ade80', Fair: '#facc15', Poor: '#f87171' }
@@ -65,9 +66,18 @@ function Section({ title, badge, badgeColor, summary, defaultOpen = false, child
   )
 }
 
-export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [], unmatchedPersonnel = [], nameToPersonId = {} }: Props) {
+export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [], unmatchedPersonnel = [], nameToPersonId = {}, highlightDate }: Props) {
   const [showLogForm, setShowLogForm] = useState(false)
-  const [expandedLog, setExpandedLog] = useState<string | null>(null)
+  const [expandedLog, setExpandedLog] = useState<string | null>(
+    highlightDate ? (recentLogs.find(l => l.log_date === highlightDate)?.id ?? null) : null
+  )
+  const highlightRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (highlightDate && highlightRef.current) {
+      setTimeout(() => highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400)
+    }
+  }, [highlightDate])
 
   // Cable stats
   const ipeOnly   = cables.filter(c => !c.scope || c.scope === 'IPE')
@@ -426,11 +436,13 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
             {recentLogs.map(log => {
               const isOpen = expandedLog === log.id
+              const isHighlighted = highlightDate && log.log_date === highlightDate
               const personnel: PersonnelEntry[] = log.personnel ?? []
               const issues: IssueEntry[] = log.issues ?? []
               const openCount = issues.filter(i => i.status === 'Open').length
               return (
-                <div key={log.id} className="border-t" style={{ borderColor: 'var(--border)' }}>
+                <div key={log.id} ref={isHighlighted ? highlightRef : undefined}
+                  className="border-t" style={{ borderColor: 'var(--border)', background: isHighlighted ? 'rgba(251,146,60,0.08)' : undefined }}>
                   <button className="w-full flex items-center justify-between px-5 py-3 text-left hover:opacity-80 transition-opacity"
                     onClick={() => setExpandedLog(isOpen ? null : log.id)}>
                     <div className="flex items-center gap-4">
