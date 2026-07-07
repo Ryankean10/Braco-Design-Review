@@ -26,18 +26,23 @@ function processNewEmails() {
   let label = GmailApp.getUserLabelByName(CONFIG.processedLabel)
   if (!label) label = GmailApp.createLabel(CONFIG.processedLabel)
 
+  // Track processed message IDs per-message (not per-thread) so replies in the
+  // same thread are not skipped after the first message is processed.
+  const props = PropertiesService.getScriptProperties()
+
   const threads = GmailApp.search(CONFIG.searchQuery)
   let processed = 0
 
   for (const thread of threads) {
     const messages = thread.getMessages()
     for (const message of messages) {
-      // Skip if already processed
-      if (thread.getLabels().some(l => l.getName() === CONFIG.processedLabel)) continue
+      const msgId = message.getId()
+
+      // Skip if this specific message has already been processed
+      if (props.getProperty('msg_' + msgId)) continue
 
       const subject = message.getSubject()
       const body = message.getPlainBody()
-      const date = message.getDate()
 
       if (!body || body.trim().length < 50) continue
 
@@ -55,16 +60,20 @@ function processNewEmails() {
 
         if (code === 200 && result.success) {
           console.log(`✓ Processed: ${subject} → ${result.log_date}, ${result.personnel} people, ${result.activities_updated} activity updates`)
+          props.setProperty('msg_' + msgId, new Date().toISOString())
           thread.addLabel(label)
           processed++
         } else if (result.skipped) {
           console.log(`→ Skipped: ${subject} (${result.reason})`)
+          props.setProperty('msg_' + msgId, 'skipped')
           thread.addLabel(label)
         } else {
           console.error(`✗ Error on: ${subject} — HTTP ${code}`, result)
+          // Do NOT mark as processed — will retry on next run
         }
       } catch (e) {
         console.error(`✗ Exception on: ${subject}`, e.toString())
+        // Do NOT mark as processed — will retry on next run
       }
     }
   }
