@@ -16,7 +16,7 @@
 const CONFIG = {
   webhookUrl: 'https://braco-design-review.vercel.app/api/construction/inbound-email',
   webhookSecret: 'dyce-inbound-2026',   // must match INBOUND_EMAIL_SECRET in Vercel env vars
-  searchQuery: 'from:stuart.paterson@ocugroup.com subject:(progress) newer_than:2d',
+  searchQuery: 'from:ryan.kean@ocugroup.com subject:(progress) newer_than:2d',
   processedLabel: 'GridGate/Processed',  // Gmail label applied after processing
 }
 // ─────────────────────────────────────────────────────────────────────────────
