@@ -275,8 +275,13 @@ export default function WorkPlannerPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ document_ids: selectedDocs, notes }),
       })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      const text = await res.text()
+      let data: any
+      try { data = JSON.parse(text) } catch {
+        console.error('Forecast raw response:', text.slice(0, 500))
+        throw new Error('Server returned an unexpected response — please try again')
+      }
+      if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
       setSaved(data)
     } catch (e) {
       setError(String(e))
