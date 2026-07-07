@@ -124,7 +124,7 @@ export default async function DashboardPage() {
           <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Dashboard</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>BESS project review overview</p>
         </div>
-        {['admin', 'project_manager', 'engineer'].includes(role) && (
+        {['admin', 'engineer'].includes(role) && (
           <Link href="/projects/new"
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90"
             style={{ background: 'var(--accent)' }}>
