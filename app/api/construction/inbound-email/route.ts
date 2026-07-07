@@ -2,9 +2,94 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
+import { Resend } from 'resend'
 
 const WEBHOOK_SECRET = process.env.INBOUND_EMAIL_SECRET
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
+const ALERT_EMAIL = 'ryan.kean@ocugroup.com'
+const FROM_EMAIL = 'GridGate Alerts <alerts@gridgate.ai>'
+
+async function sendHighImpactAlert(parsed: any) {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return
+
+  const highIssues: any[] = (parsed.issues ?? []).filter((i: any) =>
+    i.impact === 'High' || i.impact === 'Critical'
+  )
+  const highWeather = parsed.weather_impact === 'High' || parsed.weather_impact === 'Critical'
+
+  if (!highIssues.length && !highWeather) return
+
+  const resend = new Resend(apiKey)
+
+  const issueRows = highIssues.map((i: any) => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #334155;color:#f87171;font-weight:600">${i.impact}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #334155;color:#e2e8f0">${i.description}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #334155;color:#94a3b8">${i.action ?? '—'}</td>
+    </tr>`).join('')
+
+  const weatherRow = highWeather ? `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #334155;color:#fb923c;font-weight:600">Weather — ${parsed.weather_impact}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #334155;color:#e2e8f0">${parsed.weather_description ?? ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #334155;color:#94a3b8">Lost hours: ${parsed.weather_lost_hours ?? 0}h</td>
+    </tr>` : ''
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#0f172a;font-family:system-ui,sans-serif">
+  <div style="max-width:600px;margin:32px auto;background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155">
+    <div style="background:#f87171;padding:16px 24px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:20px">⚠️</span>
+      <div>
+        <p style="margin:0;color:#fff;font-weight:700;font-size:15px">High Impact Issue — Dyce BESS</p>
+        <p style="margin:4px 0 0;color:#fecaca;font-size:12px">${new Date(parsed.log_date).toLocaleDateString('en-GB', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}</p>
+      </div>
+    </div>
+
+    <div style="padding:20px 24px">
+      <p style="margin:0 0 16px;color:#94a3b8;font-size:13px">The following high or critical impact items were identified in today's site diary for <strong style="color:#e2e8f0">Dyce BESS</strong>:</p>
+
+      <table style="width:100%;border-collapse:collapse;background:#0f172a;border-radius:8px;overflow:hidden;font-size:13px">
+        <thead>
+          <tr>
+            <th style="padding:8px 12px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #334155">Severity</th>
+            <th style="padding:8px 12px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #334155">Description</th>
+            <th style="padding:8px 12px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #334155">Action</th>
+          </tr>
+        </thead>
+        <tbody>${weatherRow}${issueRows}</tbody>
+      </table>
+
+      <div style="margin-top:16px;padding:14px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #64748b">
+        <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Today's Summary</p>
+        <p style="margin:0;color:#e2e8f0;font-size:13px;line-height:1.6">${parsed.summary ?? 'No summary available.'}</p>
+      </div>
+
+      <div style="margin-top:20px;text-align:center">
+        <a href="https://braco-design-review.vercel.app/construction"
+          style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600">
+          View in GridGate →
+        </a>
+      </div>
+    </div>
+
+    <div style="padding:12px 24px;border-top:1px solid #334155;text-align:center">
+      <p style="margin:0;color:#475569;font-size:11px">GridGate · Dyce BESS Site · Automated alert</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to: ALERT_EMAIL,
+    subject: `⚠️ High Impact Issue — Dyce BESS ${parsed.log_date}`,
+    html,
+  })
+}
 
 const SYSTEM_PROMPT = `You are a construction data extractor for a BESS site in Dyce, Aberdeen.
 Extract structured data from daily progress emails sent by the site construction manager (Stuart Paterson, OCU Group).
@@ -113,6 +198,9 @@ export async function POST(req: NextRequest) {
     console.error('Log upsert error:', logError)
     return NextResponse.json({ error: logError.message }, { status: 500 })
   }
+
+  // Send high-impact alert email (non-blocking — don't fail the request if email fails)
+  sendHighImpactAlert(parsed).catch(e => console.error('Alert email error:', e))
 
   // Apply cable activity updates
   const cableUpdates: any[] = parsed.cable_updates ?? []
