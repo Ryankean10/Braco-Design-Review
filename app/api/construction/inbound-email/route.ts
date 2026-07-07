@@ -6,8 +6,9 @@ import { Resend } from 'resend'
 
 const WEBHOOK_SECRET = process.env.INBOUND_EMAIL_SECRET
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
-const ALERT_EMAIL = 'ryan.kean@ocugroup.com'
-const FROM_EMAIL = 'GridGate Alerts <alerts@gridgate.ai>'
+const ALERT_EMAIL = process.env.ALERT_EMAIL ?? 'stc.ai.inbox@gmail.com'
+// Use Resend's default sending domain until gridgate.ai is verified in Resend dashboard
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'GridGate <onboarding@resend.dev>'
 
 async function sendHighImpactAlert(parsed: any) {
   const apiKey = process.env.RESEND_API_KEY
@@ -83,12 +84,13 @@ async function sendHighImpactAlert(parsed: any) {
 </body>
 </html>`
 
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: FROM_EMAIL,
     to: ALERT_EMAIL,
     subject: `⚠️ High Impact Issue — Dyce BESS ${parsed.log_date}`,
     html,
   })
+  console.log('Alert email sent:', JSON.stringify(result))
 }
 
 const SYSTEM_PROMPT = `You are a construction data extractor for a BESS site in Dyce, Aberdeen.
