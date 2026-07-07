@@ -6,7 +6,7 @@ import { Resend } from 'resend'
 
 const WEBHOOK_SECRET = process.env.INBOUND_EMAIL_SECRET
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
-const ALERT_EMAIL = process.env.ALERT_EMAIL ?? 'stc.ai.inbox@gmail.com'
+const ALERT_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 // Use Resend's default sending domain until gridgate.ai is verified in Resend dashboard
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'GridGate <onboarding@resend.dev>'
 
