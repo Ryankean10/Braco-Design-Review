@@ -10,7 +10,7 @@ const ALERT_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 // Use Resend's default sending domain until gridgate.ai is verified in Resend dashboard
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'GridGate <onboarding@resend.dev>'
 
-async function sendHighImpactAlert(parsed: any, siteId: string) {
+async function sendHighImpactAlert(parsed: any, siteId: string, siteName: string) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return
 
@@ -45,13 +45,13 @@ async function sendHighImpactAlert(parsed: any, siteId: string) {
     <div style="background:#f87171;padding:16px 24px;display:flex;align-items:center;gap:12px">
       <span style="font-size:20px">⚠️</span>
       <div>
-        <p style="margin:0;color:#fff;font-weight:700;font-size:15px">High Impact Issue — Dyce BESS</p>
+        <p style="margin:0;color:#fff;font-weight:700;font-size:15px">High Impact Issue — ${siteName}</p>
         <p style="margin:4px 0 0;color:#fecaca;font-size:12px">${new Date(parsed.log_date).toLocaleDateString('en-GB', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}</p>
       </div>
     </div>
 
     <div style="padding:20px 24px">
-      <p style="margin:0 0 16px;color:#94a3b8;font-size:13px">The following high or critical impact items were identified in today's site diary for <strong style="color:#e2e8f0">Dyce BESS</strong>:</p>
+      <p style="margin:0 0 16px;color:#94a3b8;font-size:13px">The following high or critical impact items were identified in today's site diary for <strong style="color:#e2e8f0">${siteName}</strong>:</p>
 
       <table style="width:100%;border-collapse:collapse;background:#0f172a;border-radius:8px;overflow:hidden;font-size:13px">
         <thead>
@@ -78,7 +78,7 @@ async function sendHighImpactAlert(parsed: any, siteId: string) {
     </div>
 
     <div style="padding:12px 24px;border-top:1px solid #334155;text-align:center">
-      <p style="margin:0;color:#475569;font-size:11px">GridGate · Dyce BESS Site · Automated alert</p>
+      <p style="margin:0;color:#475569;font-size:11px">GridGate · ${siteName} · Automated alert</p>
     </div>
   </div>
 </body>
@@ -87,7 +87,7 @@ async function sendHighImpactAlert(parsed: any, siteId: string) {
   const result = await resend.emails.send({
     from: FROM_EMAIL,
     to: ALERT_EMAIL,
-    subject: `⚠️ High Impact Issue — Dyce BESS ${parsed.log_date}`,
+    subject: `⚠️ High Impact Issue — ${siteName} ${parsed.log_date}`,
     html,
   })
   console.log('Alert email sent:', JSON.stringify(result))
@@ -162,6 +162,10 @@ export async function POST(req: NextRequest) {
     { auth: { persistSession: false } }
   )
 
+  // Fetch site name for alert emails
+  const { data: siteRow } = await sb.from('construction_sites').select('name').eq('id', SITE_ID).single()
+  const siteName = siteRow?.name ?? 'BESS Site'
+
   // Parse with Claude
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
@@ -202,7 +206,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Send high-impact alert email (non-blocking — don't fail the request if email fails)
-  sendHighImpactAlert(parsed, SITE_ID).catch(e => console.error('Alert email error:', e))
+  sendHighImpactAlert(parsed, SITE_ID, siteName).catch(e => console.error('Alert email error:', e))
 
   // Apply cable activity updates
   const cableUpdates: any[] = parsed.cable_updates ?? []
