@@ -66,9 +66,9 @@ export default function HelpChat() {
         <div className="flex flex-col rounded-2xl overflow-hidden"
           style={{
             width: 320, height: 440,
-            background: 'var(--surface-raised)',
-            border: '1px solid var(--border)',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            background: '#1e293b',
+            border: '1px solid #334155',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
           }}>
 
           {/* Header */}
@@ -100,7 +100,7 @@ export default function HelpChat() {
                     lineHeight: 1.5,
                     ...(m.role === 'user'
                       ? { background: '#3b82f6', color: 'white' }
-                      : { background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' })
+                      : { background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155' })
                   }}>
                   {m.content.split('\n').map((line, j, arr) => (
                     <span key={j}>{line}{j < arr.length - 1 && <br />}</span>
@@ -118,7 +118,7 @@ export default function HelpChat() {
             {loading && (
               <div className="flex justify-start">
                 <div className="rounded-xl px-3 py-2.5"
-                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  style={{ background: '#0f172a', border: '1px solid #334155' }}>
                   <div className="flex gap-1 items-center">
                     <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--text-muted)', animationDelay: '0ms' }} />
                     <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--text-muted)', animationDelay: '150ms' }} />
@@ -131,7 +131,7 @@ export default function HelpChat() {
           </div>
 
           {/* Input */}
-          <div className="px-3 py-3 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+          <div className="px-3 py-3 shrink-0" style={{ borderTop: '1px solid #334155', background: '#1e293b' }}>
             <div className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
@@ -143,9 +143,9 @@ export default function HelpChat() {
                 className="flex-1 resize-none rounded-xl px-3 py-2 focus:outline-none focus:ring-2"
                 style={{
                   fontSize: 12, lineHeight: 1.5,
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-primary)',
+                  background: '#0f172a',
+                  border: '1px solid #334155',
+                  color: '#e2e8f0',
                   maxHeight: 72,
                 }}
               />
@@ -155,7 +155,7 @@ export default function HelpChat() {
                 <Send size={12} color="white" />
               </button>
             </div>
-            <p className="text-center mt-1.5" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+            <p className="text-center mt-1.5" style={{ color: '#64748b', fontSize: 10 }}>
               Enter to send · Shift+Enter for new line
             </p>
           </div>
