@@ -34,13 +34,27 @@ interface Props {
 const WEATHER_COLOR: Record<string, string> = { Good: '#4ade80', Fair: '#facc15', Poor: '#f87171' }
 const IMPACT_COLOR: Record<string, string> = { None: '#4ade80', Low: '#facc15', Medium: '#fb923c', High: '#f87171' }
 
-function Section({ title, badge, badgeColor, summary, defaultOpen = false, children }: {
+function Section({ title, badge, badgeColor, summary, defaultOpen = false, id, children }: {
   title: string; badge?: string | number; badgeColor?: string
-  summary?: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode
+  summary?: React.ReactNode; defaultOpen?: boolean; id?: string; children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
+
+  useEffect(() => {
+    if (!id) return
+    const onHash = () => {
+      if (window.location.hash === `#${id}`) {
+        setOpen(true)
+        setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+      }
+    }
+    onHash()
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [id])
+
   return (
-    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+    <div id={id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-5 py-3.5 hover:opacity-80 transition-opacity"
@@ -160,7 +174,7 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi label="Overall progress" value={`${overallPct}%`} sub={pctLabel}
           color={overallPct === 100 ? '#4ade80' : 'var(--accent)'}
-          href={`?status=all#cable-register`} hint="View all cables" />
+          href="#progress-breakdown" hint="View progress breakdown" />
         <Kpi label="Cables in progress" value={String(inProg)} sub="active"
           color="#60a5fa" href={`?status=In+Progress#cable-register`} hint="Filter in-progress cables" />
         <Kpi label="Blocked" value={String(blocked)} sub="need action"
@@ -202,6 +216,7 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
 
       {/* ── Progress breakdown — side by side ── */}
       <Section title="Progress breakdown" badge={`${overallPct}% overall`} badgeColor="var(--accent)"
+        id="progress-breakdown"
         summary={pctLabel + (complete > 0 || total > 0 ? ` · ${complete}/${total} cables` : '')}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
