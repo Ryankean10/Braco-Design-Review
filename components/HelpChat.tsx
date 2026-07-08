@@ -147,7 +147,6 @@ export default function HelpChat() {
                   border: '1px solid var(--border)',
                   color: 'var(--text-primary)',
                   maxHeight: 72,
-                  focusRingColor: '#3b82f6',
                 }}
               />
               <button onClick={send} disabled={!input.trim() || loading}
