@@ -2,9 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, Users, HardHat, ClipboardList, UsersRound } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, Users, HardHat, ClipboardList, UsersRound, Bug } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
+
+const BugPanel = dynamic(() => import('@/components/admin/BugPanel'), { ssr: false })
 
 const NAV = [
   { href: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard, roles: null },
@@ -20,6 +24,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
   const pathname = usePathname()
   const router = useRouter()
   const role = profile?.role ?? 'engineer'
+  const [bugPanelOpen, setBugPanelOpen] = useState(false)
 
   async function signOut() {
     const supabase = createClient()
@@ -89,6 +94,17 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
             </p>
           </div>
         </div>
+        {role === 'admin' && (
+          <button
+            onClick={() => setBugPanelOpen(true)}
+            className="flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-80"
+            style={{ color: '#64748b' }}
+            title="Bug reports (admin)"
+          >
+            <Bug size={13} />
+            Bug reports
+          </button>
+        )}
         <button
           onClick={signOut}
           className="flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-80"
@@ -98,6 +114,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
           Sign out
         </button>
       </div>
+      {bugPanelOpen && <BugPanel onClose={() => setBugPanelOpen(false)} />}
     </aside>
   )
 }

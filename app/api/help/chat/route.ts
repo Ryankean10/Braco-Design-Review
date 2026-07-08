@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
@@ -44,72 +45,83 @@ GridGate manages BESS projects through their full lifecycle: Design → Procure 
 - Free-issue materials can be entered with delivery dates so they are excluded from the critical path
 
 **Design Review** (/projects)
-- Upload drawings/documents for AI-assisted review against 6 lenses: Standards & Compliance, Employer's Requirements, Constructability, Procurement, Testing & Commissioning, Civils & Temporary Works
-- Findings are classified Critical / Major / Minor / Observation
-- Human sign-off required on all findings
+- Upload drawings/documents for AI-assisted review against 6 lenses
+- Findings classified Critical / Major / Minor / Observation — human sign-off required
 
 **Documents** (/documents)
-- Project document library with version control and comment loop between designer and reviewer
-
-**Settings / Profile**
-- Top-right avatar → profile settings, role shown there
+- Project document library with version control and comment loop
 
 ## Bug reporting
-If the user describes something that isn't working correctly, is broken, shows an error, or behaves unexpectedly — that is a bug. Extract a clear summary of:
-1. What they were trying to do
-2. What happened instead
-3. Which page/section it occurred on
+If the user describes something that isn't working correctly, is broken, shows an error, or behaves unexpectedly — that is a bug.
 
 ## Response format
-Always respond in plain conversational English. Keep answers concise (2-4 sentences max unless a longer explanation is needed). If you cannot answer something, say so honestly.
-
-At the END of your response, output a JSON block on its own line in this exact format — do not include it in your conversational reply:
-{"isBugReport": true/false, "bugSummary": "one sentence description or null"}`
+Respond in plain conversational English, 2-4 sentences. At the END output a JSON block on its own line:
+{"isBugReport": true/false, "bugSummary": "one sentence or null", "suggestedActions": ["action 1", "action 2"] or []}`
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'GridGate <onboarding@resend.dev>'
 
-async function sendBugReport(bugSummary: string, userMessage: string, userName: string, userEmail: string) {
+async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[]) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return
-
   const resend = new Resend(apiKey)
+  const actionsHtml = suggestedActions.length
+    ? `<ul style="margin:8px 0 0;padding-left:16px;">${suggestedActions.map(a => `<li style="color:#94a3b8;font-size:13px;margin-bottom:4px">${a}</li>`).join('')}</ul>`
+    : ''
   await resend.emails.send({
     from: FROM_EMAIL,
     to: BUG_EMAIL,
     subject: `🐛 GridGate Bug Report — ${new Date().toLocaleDateString('en-GB')}`,
     html: `
-<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#0f172a;font-family:system-ui,sans-serif">
-  <div style="max-width:600px;margin:32px auto;background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155">
-    <div style="background:#8b5cf6;padding:16px 24px">
-      <p style="margin:0;color:#fff;font-weight:700;font-size:15px">🐛 Bug Report — GridGate</p>
-      <p style="margin:4px 0 0;color:#ddd6fe;font-size:12px">${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}</p>
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0f172a;font-family:system-ui,sans-serif">
+<div style="max-width:600px;margin:32px auto;background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155">
+  <div style="background:#8b5cf6;padding:16px 24px">
+    <p style="margin:0;color:#fff;font-weight:700;font-size:15px">🐛 Bug Report — GridGate</p>
+    <p style="margin:4px 0 0;color:#ddd6fe;font-size:12px">${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}</p>
+  </div>
+  <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #8b5cf6">
+      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Reported by</p>
+      <p style="margin:0;color:#e2e8f0;font-size:13px">${userName}${userEmail ? ` &lt;${userEmail}&gt;` : ''}</p>
     </div>
-    <div style="padding:20px 24px">
-      <div style="margin-bottom:16px;padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #8b5cf6">
-        <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Reported by</p>
-        <p style="margin:0;color:#e2e8f0;font-size:13px">${userName}${userEmail ? ` &lt;${userEmail}&gt;` : ''}</p>
-      </div>
-      <div style="margin-bottom:16px;padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #f87171">
-        <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Issue Summary</p>
-        <p style="margin:0;color:#e2e8f0;font-size:13px">${bugSummary}</p>
-      </div>
-      <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #64748b">
-        <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Full message</p>
-        <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.6">${userMessage}</p>
-      </div>
-      <div style="margin-top:20px;text-align:center">
-        <a href="https://braco-design-review.vercel.app"
-          style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600">
-          Open GridGate →
-        </a>
-      </div>
+    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #f87171">
+      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Issue</p>
+      <p style="margin:0;color:#e2e8f0;font-size:13px">${summary}</p>
+    </div>
+    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #64748b">
+      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Full message</p>
+      <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.6">${userMessage}</p>
+    </div>
+    ${suggestedActions.length ? `
+    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #10b981">
+      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Suggested actions</p>
+      ${actionsHtml}
+    </div>` : ''}
+    <div style="text-align:center;margin-top:8px">
+      <a href="https://braco-design-review.vercel.app/admin/bugs"
+        style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600">
+        View in Admin Panel →
+      </a>
     </div>
   </div>
-</body>
-</html>`
+</div></body></html>`
+  })
+}
+
+async function logBugToDb(summary: string, userMessage: string, userName: string, userEmail: string, userId: string, suggestedActions: string[]) {
+  const sb = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+  await sb.from('bug_reports').insert({
+    reporter_id: userId,
+    reporter_name: userName,
+    reporter_email: userEmail,
+    user_message: userMessage,
+    summary,
+    suggested_actions: suggestedActions,
+    status: 'open',
   })
 }
 
@@ -126,23 +138,21 @@ export async function POST(req: NextRequest) {
   const { messages } = await req.json()
   if (!messages?.length) return NextResponse.json({ error: 'No messages' }, { status: 400 })
 
-  // Get user profile for bug reports
   const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
   const userName = (profile as any)?.full_name ?? user.email ?? 'Unknown user'
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 512,
+    max_tokens: 600,
     system: SYSTEM_PROMPT,
     messages,
   })
 
   const rawText = response.content[0].type === 'text' ? response.content[0].text : ''
-
-  // Extract the JSON metadata line
-  const jsonMatch = rawText.match(/\{"isBugReport":[^}]+\}/)
+  const jsonMatch = rawText.match(/\{[\s\S]*"isBugReport"[\s\S]*\}/)
   let isBugReport = false
-  let bugSummary = null
+  let bugSummary: string | null = null
+  let suggestedActions: string[] = []
   let displayText = rawText
 
   if (jsonMatch) {
@@ -150,16 +160,17 @@ export async function POST(req: NextRequest) {
       const meta = JSON.parse(jsonMatch[0])
       isBugReport = meta.isBugReport === true
       bugSummary = meta.bugSummary ?? null
+      suggestedActions = meta.suggestedActions ?? []
     } catch {}
     displayText = rawText.replace(jsonMatch[0], '').trim()
   }
 
-  // Fire bug report email non-blocking
   if (isBugReport && bugSummary) {
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content ?? ''
-    sendBugReport(bugSummary, lastUserMsg, userName, user.email ?? '').catch(e =>
-      console.error('Bug report email error:', e)
-    )
+    Promise.all([
+      logBugToDb(bugSummary, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions),
+      sendBugEmail(bugSummary, lastUserMsg, userName, user.email ?? '', suggestedActions),
+    ]).catch(e => console.error('Bug report error:', e))
   }
 
   return NextResponse.json({ message: displayText, isBugReport, bugSummary })
