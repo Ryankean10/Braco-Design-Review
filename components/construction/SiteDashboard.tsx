@@ -34,24 +34,15 @@ interface Props {
 const WEATHER_COLOR: Record<string, string> = { Good: '#4ade80', Fair: '#facc15', Poor: '#f87171' }
 const IMPACT_COLOR: Record<string, string> = { None: '#4ade80', Low: '#facc15', Medium: '#fb923c', High: '#f87171' }
 
-function Section({ title, badge, badgeColor, summary, defaultOpen = false, id, children }: {
+function Section({ title, badge, badgeColor, summary, defaultOpen = false, id, forceOpen, children }: {
   title: string; badge?: string | number; badgeColor?: string
-  summary?: React.ReactNode; defaultOpen?: boolean; id?: string; children: React.ReactNode
+  summary?: React.ReactNode; defaultOpen?: boolean; id?: string; forceOpen?: boolean; children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
 
   useEffect(() => {
-    if (!id) return
-    const onHash = () => {
-      if (window.location.hash === `#${id}`) {
-        setOpen(true)
-        setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-      }
-    }
-    onHash()
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  }, [id])
+    if (forceOpen) setOpen(true)
+  }, [forceOpen])
 
   return (
     <div id={id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
@@ -82,6 +73,7 @@ function Section({ title, badge, badgeColor, summary, defaultOpen = false, id, c
 
 export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [], unmatchedPersonnel = [], nameToPersonId = {}, highlightDate }: Props) {
   const [showLogForm, setShowLogForm] = useState(false)
+  const [progressOpen, setProgressOpen] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(
     highlightDate ? (recentLogs.find(l => l.log_date === highlightDate)?.id ?? null) : null
   )
@@ -174,7 +166,11 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi label="Overall progress" value={`${overallPct}%`} sub={pctLabel}
           color={overallPct === 100 ? '#4ade80' : 'var(--accent)'}
-          href="#progress-breakdown" hint="View progress breakdown" />
+          hint="View progress breakdown"
+          onClick={() => {
+            setProgressOpen(true)
+            setTimeout(() => document.getElementById('progress-breakdown')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+          }} />
         <Kpi label="Cables in progress" value={String(inProg)} sub="active"
           color="#60a5fa" href={`?status=In+Progress#cable-register`} hint="Filter in-progress cables" />
         <Kpi label="Blocked" value={String(blocked)} sub="need action"
@@ -216,7 +212,7 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
 
       {/* ── Progress breakdown — side by side ── */}
       <Section title="Progress breakdown" badge={`${overallPct}% overall`} badgeColor="var(--accent)"
-        id="progress-breakdown"
+        id="progress-breakdown" forceOpen={progressOpen}
         summary={pctLabel + (complete > 0 || total > 0 ? ` · ${complete}/${total} cables` : '')}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -549,16 +545,16 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
   )
 }
 
-function Kpi({ label, value, sub, color, highlight, href, hint, icon }: {
+function Kpi({ label, value, sub, color, highlight, href, hint, icon, onClick }: {
   label: string; value: string; sub: string; color: string
-  highlight?: boolean; href?: string; hint?: string; icon?: React.ReactNode
+  highlight?: boolean; href?: string; hint?: string; icon?: React.ReactNode; onClick?: () => void
 }) {
   const inner = (
     <div className="rounded-xl border p-4 transition-all h-full" title={hint}
       style={{
         background: 'var(--bg-surface)',
         borderColor: highlight ? color + '66' : 'var(--border)',
-        cursor: href ? 'pointer' : 'default',
+        cursor: href || onClick ? 'pointer' : 'default',
       }}>
       <div className="flex items-center justify-between mb-1">
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
@@ -569,6 +565,7 @@ function Kpi({ label, value, sub, color, highlight, href, hint, icon }: {
     </div>
   )
   if (href) return <Link href={href} className="block hover:opacity-90 transition-opacity">{inner}</Link>
+  if (onClick) return <button className="block w-full text-left hover:opacity-90 transition-opacity" onClick={onClick}>{inner}</button>
   return inner
 }
 
