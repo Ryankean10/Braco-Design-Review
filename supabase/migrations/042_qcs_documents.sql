@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS public.qcs_documents (
   reference_no      text,                        -- QCS-001, QCS-002 etc
   template_key      text,                        -- which template was used
   field_data        jsonb DEFAULT '{}'::jsonb,   -- all form field values
-  status            text NOT NULL DEFAULT 'draft'
-                      CHECK (status IN ('draft', 'pending_review', 'approved', 'rejected')),
+  status            text NOT NULL DEFAULT 'wip'
+                      CHECK (status IN ('wip', 'act_review', 'submitted')),
   generated_by      uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   generated_by_name text,
   approved_by       uuid REFERENCES auth.users(id) ON DELETE SET NULL,

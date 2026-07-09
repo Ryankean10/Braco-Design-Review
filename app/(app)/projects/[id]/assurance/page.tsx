@@ -31,20 +31,18 @@ export default async function AssurancePage({ params }: { params: Promise<{ id: 
     supabase.from('qcs_documents').select('*').eq('project_id', id).order('created_at', { ascending: false }),
   ])
 
-  const openQcs     = (qcsDocs ?? []).filter((q: any) => q.status === 'draft' || q.status === 'pending_review')
-  const approvedQcs = (qcsDocs ?? []).filter((q: any) => q.status === 'approved')
+  const openQcs     = (qcsDocs ?? []).filter((q: any) => q.status === 'wip' || q.status === 'act_review')
+  const submittedQcs = (qcsDocs ?? []).filter((q: any) => q.status === 'submitted')
 
   const statusColor: Record<string, string> = {
-    draft:          '#64748b',
-    pending_review: '#f59e0b',
-    approved:       '#22c55e',
-    rejected:       '#f87171',
+    wip:        '#f59e0b',
+    act_review: '#6366f1',
+    submitted:  '#22c55e',
   }
   const statusLabel: Record<string, string> = {
-    draft:          'Draft',
-    pending_review: 'Pending Review',
-    approved:       'Approved',
-    rejected:       'Rejected',
+    wip:        'WIP',
+    act_review: 'ACT Review',
+    submitted:  'Submitted to Client',
   }
 
   return (
@@ -127,11 +125,11 @@ export default async function AssurancePage({ params }: { params: Promise<{ id: 
               </div>
             )}
 
-            {/* Approved QCS */}
-            {approvedQcs.length > 0 && (
+            {/* Submitted QCS */}
+            {submittedQcs.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Approved</p>
-                {approvedQcs.map((q: any) => (
+                <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Submitted to Client</p>
+                {submittedQcs.map((q: any) => (
                   <div key={q.id} className="rounded-xl border px-5 py-3.5 flex items-center gap-4"
                     style={{ background: '#0d2818', borderColor: '#22c55e33' }}>
                     <div className="flex-1 min-w-0">
@@ -143,7 +141,7 @@ export default async function AssurancePage({ params }: { params: Promise<{ id: 
                     </div>
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
                       style={{ background: '#22c55e22', color: '#22c55e' }}>
-                      Approved
+                      Submitted to Client
                     </span>
                     <p className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>{q.approved_by_name ?? '—'}</p>
                   </div>
