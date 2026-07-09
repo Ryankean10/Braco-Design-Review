@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen, TrendingUp } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen, TrendingUp, ShieldCheck } from 'lucide-react'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -211,6 +211,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <BookOpen size={13} /> Technical
           </Link>
         )}
+        {role !== 'client' && (
+          <Link href={`/projects/${id}/assurance`}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border hover:opacity-80"
+            style={{ color: '#22c55e', borderColor: '#22c55e44', background: '#22c55e0d' }}>
+            <ShieldCheck size={13} /> Assurance
+          </Link>
+        )}
         <Link href={`/projects/${id}/edit`}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border hover:opacity-80"
           style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
@@ -229,21 +236,20 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         />
       </div>
 
-      {/* ITP upload */}
-      {role !== 'client' && (
-        <div className="mb-6">
-          <ProjectITPUpload
-            projectId={id}
-            siteId={(constructionSite as any)?.id ?? null}
-            initialItps={(projectItps ?? []) as any}
-            canEdit={canEdit}
-            userRole={role}
-          />
-        </div>
-      )}
 
       {/* Feature panels */}
       <div className="grid grid-cols-2 gap-4 mb-6">
+        {role !== 'client' && (
+          <Link href={`/projects/${id}/assurance`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80 col-span-2"
+            style={{ background: '#0d2818', borderColor: '#22c55e44', minHeight: 80 }}>
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={20} style={{ color: '#22c55e' }} />
+              <p className="text-sm font-medium" style={{ color: '#22c55e' }}>Project Assurance</p>
+            </div>
+            <p className="text-xs" style={{ color: '#4ade8088' }}>ITP, Quality Check Sheets (QCS) and construction sign-off</p>
+          </Link>
+        )}
         <Link href={`/projects/${id}/documents`}
           className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
