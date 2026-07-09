@@ -184,15 +184,19 @@ export interface GenerateResult {
   errors: string[]
 }
 
+type ProgressCallback = (current: number, total: number, ref: string, title: string) => void
+
 /**
  * Main entry point — called after ITP upload.
  * Parses the ITP, generates all QCS docs, uploads to Storage, inserts DB rows.
+ * onProgress is called after each row is processed (created or skipped).
  */
 export async function generateQcsPack(
   itpBuffer: Buffer,
   project: Project,
   userId: string,
-  userName: string
+  userName: string,
+  onProgress?: ProgressCallback
 ): Promise<GenerateResult> {
   const supabase = sb()
   const rows = parseItpRows(itpBuffer)
@@ -211,11 +215,14 @@ export async function generateQcsPack(
   }
 
   const result: GenerateResult = { created: 0, skipped: 0, errors: [] }
+  const total = rows.length
+  let processed = 0
 
   for (const row of rows) {
     const tmpl = templateMap[row.templateRef]
     if (!tmpl?.docx_path) {
       result.skipped++
+      onProgress?.(++processed, total, row.ref, row.title)
       continue
     }
 
@@ -224,14 +231,17 @@ export async function generateQcsPack(
       .from('qcs_documents')
       .select('id')
       .eq('project_id', project.id)
-      .eq('field_data->>'+ 'itp_ref', row.ref)
+      .eq('field_data->>' + 'itp_ref', row.ref)
       .maybeSingle()
-    if (existing) { result.skipped++; continue }
+    if (existing) {
+      result.skipped++
+      onProgress?.(++processed, total, row.ref, row.title)
+      continue
+    }
 
     try {
       const docxBuf = await generateQcs(supabase, tmpl.docx_path, row, project)
 
-      // Filename: ColE + " - " + ColK
       const safeTitle = row.title.replace(/[/\\:*?"<>|]/g, '_').substring(0, 100)
       const filename  = `${row.ref} - ${safeTitle}.docx`
       const storagePath = `${project.id}/${filename}`
@@ -245,6 +255,7 @@ export async function generateQcsPack(
 
       if (uploadErr) {
         result.errors.push(`Upload failed for ${row.ref}: ${uploadErr.message}`)
+        onProgress?.(++processed, total, row.ref, row.title)
         continue
       }
 
@@ -269,6 +280,8 @@ export async function generateQcsPack(
     } catch (e: any) {
       result.errors.push(`${row.ref}: ${e.message}`)
     }
+
+    onProgress?.(++processed, total, row.ref, row.title)
   }
 
   return result
