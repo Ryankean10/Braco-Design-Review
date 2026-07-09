@@ -167,12 +167,12 @@ async function generateQcs(
   docXml = fillCell(docXml, 'Contract No.', row.ref.split('-')[0])  // e.g. 22163
   zip.updateFile('word/document.xml', Buffer.from(docXml, 'utf8'))
 
-  // -- header2.xml (Production Evidence) --
-  const h2Entry = zip.getEntry('word/header2.xml')
-  if (h2Entry) {
-    let h2Xml = h2Entry.getData().toString('utf8')
-    h2Xml = fillProductionEvidence(h2Xml, row.ref)
-    zip.updateFile('word/header2.xml', Buffer.from(h2Xml, 'utf8'))
+  // Production Evidence placeholder can be in any header file — replace in all of them
+  for (const entry of zip.getEntries()) {
+    if (!/^word\/header\d+\.xml$/.test(entry.entryName)) continue
+    const hXml = entry.getData().toString('utf8')
+    if (!hXml.includes('Production Evidence Document Reference Here')) continue
+    zip.updateFile(entry.entryName, Buffer.from(fillProductionEvidence(hXml, row.ref), 'utf8'))
   }
 
   return zip.toBuffer()
