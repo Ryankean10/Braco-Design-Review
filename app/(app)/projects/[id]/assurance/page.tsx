@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, ShieldCheck, ClipboardList, FileCheck2 } from 'lucide-react'
 import ProjectITPUpload from '@/components/ProjectITPUpload'
 import GenerateQcsButton from '@/components/assurance/GenerateQcsButton'
+import QcsDocList from '@/components/assurance/QcsDocList'
 
 export default async function AssurancePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -29,22 +30,11 @@ export default async function AssurancePage({ params }: { params: Promise<{ id: 
   const [{ data: projectItps }, { data: constructionSite }, { data: qcsDocs }] = await Promise.all([
     supabase.from('project_itps').select('*').eq('project_id', id).order('uploaded_at', { ascending: false }),
     supabase.from('construction_sites').select('id').eq('project_id', id).maybeSingle(),
-    supabase.from('qcs_documents').select('*').eq('project_id', id).order('created_at', { ascending: false }),
+    supabase.from('qcs_documents')
+      .select('id, title, reference_no, status, location, generated_by_name, approved_by_name, pdf_storage_path')
+      .eq('project_id', id)
+      .order('reference_no', { ascending: true }),
   ])
-
-  const openQcs     = (qcsDocs ?? []).filter((q: any) => q.status === 'wip' || q.status === 'act_review')
-  const submittedQcs = (qcsDocs ?? []).filter((q: any) => q.status === 'submitted')
-
-  const statusColor: Record<string, string> = {
-    wip:        '#f59e0b',
-    act_review: '#6366f1',
-    submitted:  '#22c55e',
-  }
-  const statusLabel: Record<string, string> = {
-    wip:        'WIP',
-    act_review: 'ACT Review',
-    submitted:  'Submitted to Client',
-  }
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -91,59 +81,15 @@ export default async function AssurancePage({ params }: { params: Promise<{ id: 
             <FileCheck2 size={32} className="mx-auto mb-3" style={{ color: '#334155' }} />
             <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>No QCS documents yet</p>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              QCS templates are being configured. Once ready, you can generate a Quality Check Sheet for each ITP activity.
+              Upload an ITP then click Generate QCS Pack to produce a quality check sheet for each activity.
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {/* Active/draft QCS */}
-            {openQcs.length > 0 && (
-              <div className="space-y-2 mb-4">
-                <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>In progress</p>
-                {openQcs.map((q: any) => (
-                  <div key={q.id} className="rounded-xl border px-5 py-3.5 flex items-center gap-4"
-                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{q.title}</p>
-                        <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>{q.reference_no}</span>
-                      </div>
-                      {q.location && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{q.location}</p>}
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
-                      style={{ background: (statusColor[q.status] ?? '#64748b') + '22', color: statusColor[q.status] ?? '#64748b' }}>
-                      {statusLabel[q.status] ?? q.status}
-                    </span>
-                    <p className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>{q.generated_by_name ?? '—'}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Submitted QCS */}
-            {submittedQcs.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Submitted to Client</p>
-                {submittedQcs.map((q: any) => (
-                  <div key={q.id} className="rounded-xl border px-5 py-3.5 flex items-center gap-4"
-                    style={{ background: '#0d2818', borderColor: '#22c55e33' }}>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{q.title}</p>
-                        <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>{q.reference_no}</span>
-                      </div>
-                      {q.location && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{q.location}</p>}
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
-                      style={{ background: '#22c55e22', color: '#22c55e' }}>
-                      Submitted to Client
-                    </span>
-                    <p className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>{q.approved_by_name ?? '—'}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <QcsDocList
+            projectId={id}
+            docs={qcsDocs as any}
+            canEdit={canEdit}
+          />
         )}
       </section>
 
