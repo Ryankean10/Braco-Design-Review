@@ -9,9 +9,10 @@ import * as XLSX from 'xlsx'
 import AdmZip from 'adm-zip'
 import { createClient } from '@supabase/supabase-js'
 
-const COL_REF         = 4   // E — production evidence reference e.g. 22163-OCU-QCS-ECV-00001
-const COL_TITLE       = 10  // K — activity description
-const COL_TEMPLATE    = 29  // AD — QCS / Register Template Title
+// Fallback column indices if header-detection fails
+const COL_REF_DEFAULT      = 4
+const COL_TITLE_DEFAULT    = 10
+const COL_TEMPLATE_DEFAULT = 29
 
 const TEMPLATE_BUCKET = 'qcs-templates'
 const QCS_BUCKET      = 'project-qcs'
@@ -87,9 +88,41 @@ export interface Project {
   location: string
 }
 
-/** Parse ITP Excel buffer — returns all rows that have a template in col AD */
+/** Detect column indices by scanning for the header row containing "QCS / Register Template Title" */
+function detectColumns(rows: any[][]): { colRef: number; colTitle: number; colTemplate: number } {
+  for (const row of rows.slice(0, 40)) {
+    // Must find the exact QCS template column header in this row first
+    let tmplCol = -1
+    for (let c = 0; c < row.length; c++) {
+      const v = String(row[c] ?? '').trim().toLowerCase()
+      // Must be a header cell that mentions both "qcs" or "register" AND "template" — not just data
+      if ((v.includes('qcs') || v.includes('register')) && v.includes('template') && v.length < 60) {
+        tmplCol = c
+        break
+      }
+    }
+    if (tmplCol === -1) continue
+
+    // Verify this row also has a "description" or "sequential" header (confirms it's the header row)
+    const hasDescription = row.some((c: any) => String(c ?? '').trim().toLowerCase() === 'description')
+    const hasSequential  = row.some((c: any) => String(c ?? '').trim().toLowerCase().includes('sequential'))
+    if (!hasDescription && !hasSequential) continue
+
+    let colRef   = COL_REF_DEFAULT
+    let colTitle = COL_TITLE_DEFAULT
+    for (let i = 0; i < row.length; i++) {
+      const h = String(row[i] ?? '').trim().toLowerCase()
+      if (h.includes('sequential') && h.includes('reference')) colRef = i
+      if (h === 'description') colTitle = i
+    }
+    return { colRef, colTitle, colTemplate: tmplCol }
+  }
+  return { colRef: COL_REF_DEFAULT, colTitle: COL_TITLE_DEFAULT, colTemplate: COL_TEMPLATE_DEFAULT }
+}
+
+/** Parse ITP Excel buffer — returns all rows that have a template in col AD (or equivalent) */
 export function parseItpRows(buffer: Buffer): ItpRow[] {
-  const wb = XLSX.read(buffer, { type: 'buffer' })
+  const wb = XLSX.read(buffer, { type: 'buffer', bookVBA: false })
   // Find the main ITP sheet (not Title Sheet / Data / etc.)
   const sheetName = wb.SheetNames.find(n =>
     n !== 'Title Sheet' && n !== 'Data' && n !== 'Doc Type - FULL' &&
@@ -99,11 +132,13 @@ export function parseItpRows(buffer: Buffer): ItpRow[] {
   const ws = wb.Sheets[sheetName]
   const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
 
+  const { colRef, colTitle, colTemplate } = detectColumns(rows)
+
   const result: ItpRow[] = []
   for (const row of rows) {
-    const ref      = String(row[COL_REF] ?? '').trim()
-    const title    = String(row[COL_TITLE] ?? '').trim()
-    const tmplCell = String(row[COL_TEMPLATE] ?? '').trim()
+    const ref      = String(row[colRef] ?? '').trim()
+    const title    = String(row[colTitle] ?? '').trim()
+    const tmplCell = String(row[colTemplate] ?? '').trim()
     const tmplRef  = extractRef(tmplCell)
 
     // Must have a doc ref (22163-OCU-QCS-...) and a template ref
