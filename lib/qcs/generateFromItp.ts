@@ -67,7 +67,7 @@ function fillProductionEvidence(xml: string, value: string): string {
 }
 
 /** Download a file from Supabase Storage as a Buffer */
-async function downloadTemplate(supabase: ReturnType<typeof createClient>, path: string): Promise<Buffer> {
+async function downloadTemplate(supabase: any, path: string): Promise<Buffer> {
   const { data, error } = await supabase.storage.from(TEMPLATE_BUCKET).download(path)
   if (error || !data) throw new Error(`Failed to download template ${path}: ${error?.message}`)
   const buf = Buffer.from(await data.arrayBuffer())
@@ -116,7 +116,7 @@ export function parseItpRows(buffer: Buffer): ItpRow[] {
 
 /** Generate one QCS DOCX from template + project + row data */
 async function generateQcs(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   templateDocxPath: string,
   row: ItpRow,
   project: Project
