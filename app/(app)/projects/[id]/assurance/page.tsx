@@ -3,8 +3,9 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ShieldCheck, ClipboardList, FileCheck2, Plus } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, ClipboardList, FileCheck2 } from 'lucide-react'
 import ProjectITPUpload from '@/components/ProjectITPUpload'
+import GenerateQcsButton from '@/components/assurance/GenerateQcsButton'
 
 export default async function AssurancePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -79,14 +80,8 @@ export default async function AssurancePage({ params }: { params: Promise<{ id: 
               </span>
             )}
           </div>
-          {canEdit && (
-            <button
-              disabled
-              title="Upload your QCS template first"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium opacity-40 cursor-not-allowed"
-              style={{ background: '#22c55e', color: '#0f172a' }}>
-              <Plus size={12} /> New QCS
-            </button>
+          {canEdit && (projectItps ?? []).length > 0 && (
+            <GenerateQcsButton projectId={id} />
           )}
         </div>
 
