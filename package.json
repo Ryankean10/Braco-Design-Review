@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.104.1",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
+    "adm-zip": "^0.5.18",
     "lucide-react": "^1.17.0",
     "next": "16.2.9",
     "pdf-parse": "^1.1.1",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^20",
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",
