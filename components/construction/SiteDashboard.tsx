@@ -13,7 +13,7 @@ interface CableItem {
   id: string; cable_ref: string; package_name: string; mvs: string | null
   overall_status: string; completion_pct: number; flagged: boolean; scope?: string
 }
-interface PersonnelEntry { name: string; role: string; company?: string; hours: number; note?: string }
+interface PersonnelEntry { name: string; role: string; company?: string; hours: number; note?: string; person_id?: string }
 interface IssueEntry { description: string; impact: string; status: string; action?: string }
 interface DailyLog {
   id: string; log_date: string; total_manhours: number | null; personnel: PersonnelEntry[]
