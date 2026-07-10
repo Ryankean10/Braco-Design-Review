@@ -143,6 +143,11 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
     .not('person_id', 'is', null)
 
   const nameToPersonId: Record<string, string> = {}
+  // Direct name → id from people table (covers email-parsed daily log personnel)
+  for (const p of allPeople ?? []) {
+    nameToPersonId[p.name] = p.id
+  }
+  // Diary name mappings override (raw diary name → confirmed person_id)
   for (const m of nameMappings ?? []) {
     if (m.person_id) nameToPersonId[m.raw_name] = m.person_id
   }

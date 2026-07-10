@@ -405,8 +405,8 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
                         {p.name[0]}
                       </div>
                       <div className="min-w-0">
-                        {nameToPersonId[p.name] ? (
-                          <Link href={`/team?person=${nameToPersonId[p.name]}`}
+                        {(nameToPersonId[p.name] ?? p.person_id) ? (
+                          <Link href={`/team?person=${nameToPersonId[p.name] ?? p.person_id}`}
                             className="font-medium truncate hover:underline"
                             style={{ color: 'var(--accent)' }}>
                             {p.name}
