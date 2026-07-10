@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic()
@@ -26,13 +27,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ site
   return NextResponse.json(data)
 }
 
-/** Run Claude over the log entry to extract/enrich issues, personnel, and timesheet data */
-async function analyseLog(body: any): Promise<{
-  issues: any[]
-  personnel: any[]
-  total_manhours: number
-  ai_flags: string[]
-}> {
+async function runAiAnalysis(logId: string, body: any) {
+  const service = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+
   const prompt = `You are analysing a construction site daily log entry. Extract and return structured data.
 
 LOG DATE: ${body.log_date}
@@ -51,10 +52,10 @@ ${(body.issues ?? []).map((i: any) =>
 ).join('\n') || '(none)'}
 
 Your tasks:
-1. ISSUES: Merge the entered issues with any additional issues you can identify from the summary text. Do not duplicate. Add an "owner" field where identifiable. Return all issues.
-2. PERSONNEL: Clean up the entered personnel list (fix obvious name typos, normalise roles). Also check if the summary mentions anyone not in the list and add them. Flag timesheet anomalies (e.g. hours > 12, missing hours, note says "left early" but hours not adjusted).
+1. ISSUES: Merge entered issues with any additional issues identifiable from the summary. Do not duplicate. Add an "owner" field where identifiable.
+2. PERSONNEL: Clean up the entered personnel list (fix obvious name typos, normalise roles). Check if summary mentions anyone not in the list and add them. Flag timesheet anomalies.
 3. TIMESHEET: Calculate total_manhours as sum of all personnel hours.
-4. FLAGS: Return a concise list of any concerns (e.g. "John Smith logged 14h — verify", "Issue raised with no action owner", "Weather impact High but no lost hours recorded").
+4. FLAGS: Return concise list of concerns (e.g. "John Smith logged 14h — verify", "Issue raised with no action owner", "Weather impact High but no lost hours recorded").
 
 Respond with ONLY valid JSON in this exact shape:
 {
@@ -64,22 +65,28 @@ Respond with ONLY valid JSON in this exact shape:
   "ai_flags": ["..."]
 }`
 
-  const msg = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    })
 
-  const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : ''
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('AI did not return valid JSON')
+    const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : ''
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return
 
-  const parsed = JSON.parse(jsonMatch[0])
-  return {
-    issues:         Array.isArray(parsed.issues) ? parsed.issues : body.issues ?? [],
-    personnel:      Array.isArray(parsed.personnel) ? parsed.personnel : body.personnel ?? [],
-    total_manhours: typeof parsed.total_manhours === 'number' ? parsed.total_manhours : 0,
-    ai_flags:       Array.isArray(parsed.ai_flags) ? parsed.ai_flags : [],
+    const parsed = JSON.parse(jsonMatch[0])
+
+    await service.from('site_daily_logs').update({
+      issues:        Array.isArray(parsed.issues) ? parsed.issues : body.issues ?? [],
+      personnel:     Array.isArray(parsed.personnel) ? parsed.personnel : body.personnel ?? [],
+      total_manhours: typeof parsed.total_manhours === 'number' ? parsed.total_manhours : body.total_manhours,
+      ai_flags:      Array.isArray(parsed.ai_flags) ? parsed.ai_flags : [],
+      updated_at:    new Date().toISOString(),
+    }).eq('id', logId)
+  } catch (e) {
+    console.error('AI analysis failed for log', logId, e)
   }
 }
 
@@ -91,23 +98,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sit
 
   const body = await req.json()
 
-  // Run AI analysis (falls back to raw values on failure)
-  let personnel   = body.personnel ?? []
-  let issues      = body.issues ?? []
-  let total_manhours = personnel.reduce((s: number, p: any) => s + (Number(p.hours) || 0), 0)
-  let ai_flags: string[] = []
+  const personnel      = body.personnel ?? []
+  const total_manhours = personnel.reduce((s: number, p: any) => s + (Number(p.hours) || 0), 0)
 
-  try {
-    const ai = await analyseLog(body)
-    personnel      = ai.personnel
-    issues         = ai.issues
-    total_manhours = ai.total_manhours
-    ai_flags       = ai.ai_flags
-  } catch (e) {
-    // Non-fatal — save with original data
-    console.error('AI analysis failed:', e)
-  }
-
+  // Save immediately
   const { data, error } = await supabase
     .from('site_daily_logs')
     .upsert({
@@ -122,7 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sit
       rain_mm:             body.rain_mm ?? null,
       weather_lost_hours:  body.weather_lost_hours ?? 0,
       weather_impact:      body.weather_impact ?? null,
-      issues,
+      issues:              body.issues ?? [],
       summary:             body.summary ?? null,
       source:              body.source ?? 'manual',
       raw_email_body:      body.raw_email_body ?? null,
@@ -134,5 +128,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sit
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ ...data, ai_flags }, { status: 201 })
+  // Fire AI analysis in background — does not block the response
+  runAiAnalysis(data.id, { ...body, total_manhours })
+
+  return NextResponse.json({ ...data, ai_flags: [] }, { status: 201 })
 }
