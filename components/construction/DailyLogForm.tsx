@@ -44,6 +44,7 @@ export default function DailyLogForm({ siteId, onSaved }: Props) {
   const [issues, setIssues] = useState<IssueRow[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [aiFlags, setAiFlags] = useState<string[]>([])
 
   function addPerson() {
     setPersonnel(p => [...p, { name: '', role: 'Electrician', company: 'IPE', hours: '', note: '' }])
@@ -70,7 +71,7 @@ export default function DailyLogForm({ siteId, onSaved }: Props) {
     const validPersonnel = personnel.filter(p => p.name.trim())
     const totalManhours = validPersonnel.reduce((s, p) => s + (Number(p.hours) || 0), 0)
 
-    setSaving(true); setError('')
+    setSaving(true); setError(''); setAiFlags([])
     try {
       const res = await fetch(`/api/construction/sites/${siteId}/daily-log`, {
         method: 'POST',
@@ -95,6 +96,12 @@ export default function DailyLogForm({ siteId, onSaved }: Props) {
         }),
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? 'Save failed') }
+      const saved = await res.json()
+      if (saved.ai_flags?.length) {
+        setAiFlags(saved.ai_flags)
+        // Brief pause so user sees flags before form closes
+        await new Promise(r => setTimeout(r, 2000))
+      }
       onSaved?.()
     } catch (e: any) {
       setError(e.message)
@@ -273,6 +280,15 @@ export default function DailyLogForm({ siteId, onSaved }: Props) {
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
+      {aiFlags.length > 0 && (
+        <div className="rounded-lg p-3 space-y-1" style={{ background: '#f59e0b18', border: '1px solid #f59e0b44' }}>
+          <p className="text-xs font-semibold" style={{ color: '#f59e0b' }}>AI review flagged {aiFlags.length} item{aiFlags.length !== 1 ? 's' : ''}:</p>
+          {aiFlags.map((flag, i) => (
+            <p key={i} className="text-xs" style={{ color: 'var(--text-primary)' }}>· {flag}</p>
+          ))}
+        </div>
+      )}
+
       <div className="flex justify-end gap-2">
         <button onClick={onSaved}
           className="px-4 py-2 rounded-lg text-xs border hover:opacity-70"
@@ -283,7 +299,7 @@ export default function DailyLogForm({ siteId, onSaved }: Props) {
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium text-white hover:opacity-80 disabled:opacity-50"
           style={{ background: 'var(--accent)' }}>
           {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-          Save log
+          {saving ? 'Analysing & saving…' : 'Save log'}
         </button>
       </div>
     </div>
