@@ -72,11 +72,19 @@ function Section({ title, badge, badgeColor, summary, defaultOpen = false, id, f
 }
 
 export default function SiteDashboard({ site, siteId, cables, recentLogs, reviewItemCount, canEdit, civilsActivities = [], unmatchedPersonnel = [], nameToPersonId = {}, highlightDate }: Props) {
+  const [logs, setLogs] = useState<DailyLog[]>(recentLogs)
   const [showLogForm, setShowLogForm] = useState(false)
   const [progressOpen, setProgressOpen] = useState(false)
   const [expandedLog, setExpandedLog] = useState<string | null>(
     highlightDate ? (recentLogs.find(l => l.log_date === highlightDate)?.id ?? null) : null
   )
+
+  async function refreshLogs() {
+    try {
+      const res = await fetch(`/api/construction/sites/${siteId}/daily-log?limit=30`)
+      if (res.ok) setLogs(await res.json())
+    } catch {}
+  }
   const highlightRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -139,9 +147,9 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
     if (c.overall_status === 'Complete') byMvs[m].complete++
   })
 
-  const totalManhours7d = recentLogs.reduce((s, l) => s + (l.total_manhours ?? 0), 0)
-  const latestLog = recentLogs[0] ?? null
-  const openIssues = recentLogs.flatMap(l => (l.issues ?? []).filter((i: IssueEntry) => i.status === 'Open'))
+  const totalManhours7d = logs.reduce((s, l) => s + (l.total_manhours ?? 0), 0)
+  const latestLog = logs[0] ?? null
+  const openIssues = logs.flatMap(l => (l.issues ?? []).filter((i: IssueEntry) => i.status === 'Open'))
 
   return (
     <div className="space-y-3">
@@ -422,7 +430,7 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
       )}
 
       {/* ── Daily logs ── */}
-      <Section title="Daily logs" badge={recentLogs.length > 0 ? recentLogs.length : undefined}
+      <Section title="Daily logs" badge={logs.length > 0 ? logs.length : undefined}
         defaultOpen={!!highlightDate}
         summary={latestLog ? `last: ${new Date(latestLog.log_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}${openIssues.length > 0 ? ` · ${openIssues.length} open issue${openIssues.length > 1 ? 's' : ''}` : ''}` : 'no logs yet'}>
         <div className="space-y-0 -mx-5 -mb-4">
@@ -435,18 +443,18 @@ export default function SiteDashboard({ site, siteId, cables, recentLogs, review
               </button>
               {showLogForm && (
                 <div className="mt-3">
-                  <DailyLogForm siteId={site.id} onSaved={() => setShowLogForm(false)} />
+                  <DailyLogForm siteId={site.id} onSaved={async () => { setShowLogForm(false); await refreshLogs() }} />
                 </div>
               )}
             </div>
           )}
 
-          {recentLogs.length === 0 && (
+          {logs.length === 0 && (
             <p className="text-sm text-center py-6 px-5" style={{ color: 'var(--text-muted)' }}>No daily logs yet</p>
           )}
 
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {recentLogs.map(log => {
+            {logs.map(log => {
               const isOpen = expandedLog === log.id
               const isHighlighted = highlightDate && log.log_date === highlightDate
               const personnel: PersonnelEntry[] = log.personnel ?? []
