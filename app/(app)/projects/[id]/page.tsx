@@ -124,6 +124,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     { data: constructionSite },
     { data: projectMembers },
     { data: allInternalProfiles },
+
   ] = await Promise.all([
     supabase.from('client_comments')
       .select('*, comment_attachments(*)')
@@ -139,12 +140,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     supabase.from('profiles')
       .select('id, full_name, email')
       .eq('role', 'client'),
-    supabase.from('project_members')
-      .select('id, user_id')
-      .eq('project_id', id),
-    supabase.from('profiles')
-      .select('id, full_name, email, role')
-      .in('role', ['admin', 'engineer', 'project_manager', 'operative']),
     supabase.from('project_standards').select('standard_id, standards(*, standard_clauses(*))').eq('project_id', id),
     supabase.from('project_hs_references').select('hs_id, hs_references(*)').eq('project_id', id),
     supabase.from('project_lessons_learned').select('lesson_id, lessons_learned(*)').eq('project_id', id),
@@ -155,6 +150,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     supabase.from('operator_rules').select('*').order('operator').order('category'),
     supabase.from('project_itps').select('*').eq('project_id', id).order('uploaded_at', { ascending: false }),
     supabase.from('construction_sites').select('id').eq('project_id', id).maybeSingle(),
+    supabase.from('project_members').select('id, user_id').eq('project_id', id),
+    supabase.from('profiles').select('id, full_name, email, role').in('role', ['admin', 'engineer', 'project_manager', 'operative']),
   ])
 
   const linkedStandards = (linkedStandardRows ?? []).map((r: any) => r.standards).filter(Boolean)
