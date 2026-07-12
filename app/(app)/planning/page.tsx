@@ -10,11 +10,26 @@ export default async function PlanningPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = profile?.role ?? 'engineer'
-  if (role === 'client') redirect('/dashboard')
+  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
+
+  // Project managers / operatives only see their allocated projects
+  let allowedProjectIds: string[] | null = null
+  if (role === 'project_manager' || role === 'operative') {
+    const { data: memberships } = await supabase
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', user.id)
+    allowedProjectIds = (memberships ?? []).map((m: any) => m.project_id)
+  }
+
+  let projectsQuery = supabase.from('projects').select('id, name, stage, capacity_mw, location, client').order('created_at', { ascending: false })
+  if (allowedProjectIds !== null) {
+    projectsQuery = projectsQuery.in('id', allowedProjectIds.length > 0 ? allowedProjectIds : [''])
+  }
 
   // All projects + their latest forecast (if any)
   const [{ data: projects }, { data: forecasts }] = await Promise.all([
-    supabase.from('projects').select('id, name, stage, capacity_mw, location, client').order('created_at', { ascending: false }),
+    projectsQuery,
     supabase.from('work_planner_forecasts').select('project_id, created_at, forecast, status').order('created_at', { ascending: false }),
   ])
 

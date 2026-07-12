@@ -24,7 +24,7 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
-  if (role === 'client') notFound()
+  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(role)) notFound()
 
   const { data: site } = await supabase
     .from('construction_sites')
@@ -32,6 +32,17 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
     .eq('id', siteId)
     .single()
   if (!site) notFound()
+
+  // Project managers / operatives must be members of this site's project
+  if ((role === 'project_manager' || role === 'operative') && site.project_id) {
+    const { data: membership } = await supabase
+      .from('project_members')
+      .select('id')
+      .eq('project_id', site.project_id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!membership) notFound()
+  }
 
   // Fetch all cables with their activities
   const { data: cables } = await supabase

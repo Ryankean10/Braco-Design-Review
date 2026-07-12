@@ -10,12 +10,23 @@ export default async function ConstructionIndexPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
-  if (role === 'client') redirect('/dashboard')
+  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
 
-  const { data: sites } = await supabase
-    .from('construction_sites')
-    .select('*')
-    .order('created_at', { ascending: false })
+  // Project managers and operatives can only see sites for their allocated projects
+  let allowedProjectIds: string[] | null = null
+  if (role === 'project_manager' || role === 'operative') {
+    const { data: memberships } = await supabase
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', user.id)
+    allowedProjectIds = (memberships ?? []).map((m: any) => m.project_id)
+  }
+
+  let sitesQuery = supabase.from('construction_sites').select('*').order('created_at', { ascending: false })
+  if (allowedProjectIds !== null) {
+    sitesQuery = sitesQuery.in('project_id', allowedProjectIds.length > 0 ? allowedProjectIds : [''])
+  }
+  const { data: sites } = await sitesQuery
 
   const siteSummaries = await Promise.all((sites ?? []).map(async site => {
     const [

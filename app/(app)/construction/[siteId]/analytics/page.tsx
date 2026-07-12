@@ -12,10 +12,11 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ site
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role === 'client') notFound()
+  const role = profile?.role ?? ''
+  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(role)) notFound()
 
   const [{ data: site }, { data: logs }, { data: cables }] = await Promise.all([
-    supabase.from('construction_sites').select('id, name, client').eq('id', siteId).single(),
+    supabase.from('construction_sites').select('id, name, client, project_id').eq('id', siteId).single(),
     supabase.from('site_daily_logs')
       .select('log_date, total_manhours, weather_conditions, weather_description, weather_lost_hours, weather_impact, personnel, issues, summary')
       .eq('site_id', siteId)
@@ -24,6 +25,16 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ site
   ])
 
   if (!site) notFound()
+
+  if ((role === 'project_manager' || role === 'operative') && (site as any).project_id) {
+    const { data: membership } = await supabase
+      .from('project_members')
+      .select('id')
+      .eq('project_id', (site as any).project_id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!membership) notFound()
+  }
 
   const totalCables = cables?.length ?? 0
   const completedCables = cables?.filter(c => c.status === 'Complete').length ?? 0

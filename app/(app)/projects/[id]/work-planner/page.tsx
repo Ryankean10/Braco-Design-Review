@@ -19,6 +19,15 @@ export default async function WorkPlannerPage({ params }: { params: Promise<{ id
   if (!project) notFound()
   const role = profile?.role ?? 'engineer'
   if (role === 'client') redirect(`/projects/${id}`)
+  if (role === 'project_manager' || role === 'operative') {
+    const { data: membership } = await supabase
+      .from('project_members')
+      .select('id')
+      .eq('project_id', id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!membership) redirect('/planning')
+  }
 
   return (
     <WorkPlannerPanel
