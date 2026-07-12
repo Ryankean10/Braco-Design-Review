@@ -12,6 +12,7 @@ export default async function ProcurementPage({ params }: { params: Promise<{ id
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role === 'client') redirect(`/projects/${id}`)
 
   const { data: project } = await supabase.from('projects').select('*').eq('id', id).single()
   if (!project) notFound()

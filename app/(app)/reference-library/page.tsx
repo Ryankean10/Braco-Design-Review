@@ -8,6 +8,7 @@ export default async function ReferenceLibraryPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role === 'client') redirect('/dashboard')
   const isAdmin = profile?.role === 'admin'
 
   const [{ data: standards }, { data: hsRefs }, { data: lessons }, { data: opRules }] = await Promise.all([

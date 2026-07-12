@@ -1,19 +1,18 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { notFound } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import SiteAnalytics from '@/components/construction/SiteAnalytics'
 
 export default async function AnalyticsPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
-  const cookieStore = await cookies()
+  const supabase = await createClient()
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role === 'client') notFound()
 
   const [{ data: site }, { data: logs }, { data: cables }] = await Promise.all([
     supabase.from('construction_sites').select('id, name, client').eq('id', siteId).single(),

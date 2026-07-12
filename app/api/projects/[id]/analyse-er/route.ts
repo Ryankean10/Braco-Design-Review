@@ -4,13 +4,13 @@ export const maxDuration = 60
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractAndParse } from '@/lib/repairJson'
+import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params
+  const auth = await requireRole(INTERNAL_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   // Load project + ER document
   const { data: project } = await supabase
@@ -111,7 +111,7 @@ ${erTextTruncated}`
   if (result.applicable_ids?.length) {
     const rows = result.applicable_ids
       .filter(sid => standards.some(s => s.id === sid))
-      .map(sid => ({ project_id: projectId, standard_id: sid, added_by: user.id }))
+      .map(sid => ({ project_id: projectId, standard_id: sid, added_by: auth.user.id }))
 
     if (rows.length) {
       await supabase.from('project_standards').upsert(rows, { onConflict: 'project_id,standard_id' })

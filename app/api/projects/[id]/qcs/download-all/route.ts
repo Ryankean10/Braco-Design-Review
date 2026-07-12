@@ -4,16 +4,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import AdmZip from 'adm-zip'
+import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params
+  const auth = await requireRole(INTERNAL_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const { data: project } = await supabase
     .from('projects')

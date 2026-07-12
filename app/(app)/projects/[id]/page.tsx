@@ -11,6 +11,7 @@ import ClientProjectView from '@/components/ClientProjectView'
 import InternalCommentPanel from '@/components/InternalCommentPanel'
 import ProjectStageTracker from '@/components/ProjectStageTracker'
 import ClientAccessPanel from '@/components/ClientAccessPanel'
+import TeamAccessPanel from '@/components/TeamAccessPanel'
 import { makeDefaultStages, STAGE_ORDER as STAGE_NAMES } from '@/lib/stageDefaults'
 import ProjectITPUpload from '@/components/ProjectITPUpload'
 
@@ -121,6 +122,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     { data: allOps },
     { data: projectItps },
     { data: constructionSite },
+    { data: projectMembers },
+    { data: allInternalProfiles },
   ] = await Promise.all([
     supabase.from('client_comments')
       .select('*, comment_attachments(*)')
@@ -136,6 +139,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     supabase.from('profiles')
       .select('id, full_name, email')
       .eq('role', 'client'),
+    supabase.from('project_members')
+      .select('id, user_id')
+      .eq('project_id', id),
+    supabase.from('profiles')
+      .select('id, full_name, email, role')
+      .in('role', ['admin', 'engineer', 'project_manager', 'operative']),
     supabase.from('project_standards').select('standard_id, standards(*, standard_clauses(*))').eq('project_id', id),
     supabase.from('project_hs_references').select('hs_id, hs_references(*)').eq('project_id', id),
     supabase.from('project_lessons_learned').select('lesson_id, lessons_learned(*)').eq('project_id', id),
@@ -347,9 +356,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* Client access — admin/PM only */}
+      {/* Team & client access — admin/PM only */}
       {['admin', 'project_manager'].includes(role) && (
-        <div className="mb-4">
+        <div className="mb-4 grid grid-cols-2 gap-4">
+          <TeamAccessPanel
+            projectId={id}
+            initialMembers={((projectMembers ?? []) as any[]).map((m) => {
+              const p = ((allInternalProfiles ?? []) as any[]).find((p) => p.id === m.user_id)
+              return { id: m.id, user_id: m.user_id, full_name: p?.full_name ?? null, email: p?.email ?? '', role: p?.role ?? 'engineer' }
+            })}
+            availableUsers={((allInternalProfiles ?? []) as any[]).map((p) => ({
+              id: p.id, full_name: p.full_name ?? null, email: p.email ?? '', role: p.role ?? 'engineer',
+            }))}
+          />
           <ClientAccessPanel
             projectId={id}
             initialAssigned={(assignedClients ?? []).map((a: any) => {

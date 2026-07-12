@@ -1,10 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import ProjectForm from '@/components/ProjectForm'
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!['admin', 'engineer', 'project_manager'].includes(profile?.role ?? '')) redirect(`/projects/${id}`)
 
   const { data: project } = await supabase
     .from('projects')

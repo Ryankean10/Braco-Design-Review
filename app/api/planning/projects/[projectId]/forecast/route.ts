@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as serviceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
 
 export const maxDuration = 300
 
@@ -19,9 +20,9 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
+  const auth = await requireRole(INTERNAL_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data } = await supabase
     .from('work_planner_forecasts')
@@ -39,9 +40,9 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
+  const auth2 = await requireRole(INTERNAL_ROLES)
+  if ('error' in auth2) return auth2.error
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
   const { document_ids = [], notes = '' } = body as { document_ids: string[]; notes: string }
@@ -238,7 +239,7 @@ Scale all numbers to match this project's MW capacity and MVS count relative to 
             forecast,
             document_ids,
             benchmark_ids: (benchmarks ?? []).map(b => b.id),
-            created_by: user.id,
+            created_by: auth2.user.id,
           })
           .select()
           .single()

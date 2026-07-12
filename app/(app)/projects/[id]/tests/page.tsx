@@ -20,6 +20,7 @@ export default async function TestRegisterPage({ params }: { params: Promise<{ i
   ])
 
   if (!project) notFound()
+  if (profile?.role === 'client') redirect(`/projects/${projectId}`)
 
   const canEdit = ['admin', 'engineer'].includes(profile?.role ?? '')
 

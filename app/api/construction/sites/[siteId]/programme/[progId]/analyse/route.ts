@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { analyseProgramme } from '@/lib/analyseProgramme'
+import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
 
 export const maxDuration = 300 // 5 min — requires Vercel Pro, harmless on hobby
 
@@ -9,9 +10,9 @@ export async function POST(
   { params }: { params: Promise<{ siteId: string; progId: string }> }
 ) {
   const { siteId, progId } = await params
+  const auth = await requireRole(INTERNAL_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Stream the response so Vercel doesn't cut us off at 60s
   const stream = new ReadableStream({

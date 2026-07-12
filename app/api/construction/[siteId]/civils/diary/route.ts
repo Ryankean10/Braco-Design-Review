@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 120
@@ -13,6 +14,14 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ siteId: string }> }
 ) {
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(profile?.role ?? '')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { siteId } = await params
 
   let diaryText = ''
@@ -70,8 +79,8 @@ export async function POST(
   }
 
   // Load current civils activities for context
-  const supabase = serviceSupabase()
-  const { data: activities } = await supabase
+  const svcDb = serviceSupabase()
+  const { data: activities } = await svcDb
     .from('civils_activities')
     .select('id, activity_group, description, category, status, progress_pct')
     .eq('site_id', siteId)
@@ -131,7 +140,7 @@ Only include activities in ai_activities if the diary explicitly mentions them. 
   }
 
   // Insert diary record
-  const { data: diary, error: diaryErr } = await supabase
+  const { data: diary, error: diaryErr } = await svcDb
     .from('site_diaries')
     .insert({
       site_id: siteId,
@@ -169,7 +178,7 @@ Only include activities in ai_activities if the diary explicitly mentions them. 
 
     // Only update if progress is moving forward (don't regress)
     const newPct = Math.max(match.progress_pct, update.progress_pct ?? 0)
-    await supabase
+    await svcDb
       .from('civils_activities')
       .update({
         status: update.status ?? match.status,

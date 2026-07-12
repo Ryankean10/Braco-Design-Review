@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireRole, MANAGER_ROLES } from '@/lib/auth'
 import * as XLSX from 'xlsx'
 
 function svc() {
@@ -96,6 +97,8 @@ function parseBlock(rows: unknown[][], startRow: number, weekEndISO: string) {
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
+  const auth = await requireRole(MANAGER_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })

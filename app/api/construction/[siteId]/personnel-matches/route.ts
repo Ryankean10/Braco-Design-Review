@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole, MANAGER_ROLES } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 // GET: return all unique diary names for this site, with current match state
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
+  const auth = await requireRole(MANAGER_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   // Unique names from timesheet_entries (diary source only)
   const { data: entries } = await supabase
@@ -55,6 +56,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ sit
 // POST: save a manual match (or no_match flag) for a name, then update timesheet_entries
 export async function POST(req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
+  const auth = await requireRole(MANAGER_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
@@ -84,6 +87,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sit
     .eq('person_name', raw_name)
 
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+
+  return NextResponse.json({ ok: true })
+}
+
+// DELETE: remove a name entirely — wipes timesheet entries and strips from ai_personnel arrays
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
+  const { siteId } = await params
+  const auth = await requireRole(MANAGER_ROLES)
+  if ('error' in auth) return auth.error
+  const supabase = await createClient()
+
+  const { raw_name } = await req.json()
+  if (!raw_name) return NextResponse.json({ error: 'raw_name required' }, { status: 400 })
+
+  // Delete timesheet entries for this name on this site
+  await supabase.from('timesheet_entries')
+    .delete()
+    .eq('site_id', siteId)
+    .eq('person_name', raw_name)
+
+  // Remove name from ai_personnel arrays in site_diaries
+  // PostgreSQL: filter the JSONB array to exclude this name
+  await supabase.rpc('remove_diary_personnel_name', { p_site_id: siteId, p_name: raw_name })
+
+  // Remove the mapping record
+  await supabase.from('diary_name_mappings')
+    .delete()
+    .eq('site_id', siteId)
+    .eq('raw_name', raw_name)
 
   return NextResponse.json({ ok: true })
 }
