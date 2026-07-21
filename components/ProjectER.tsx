@@ -1,9 +1,34 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { FileText, Sparkles, X, Upload, ChevronDown, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react'
+import { FileText, Sparkles, X, Upload, ChevronDown, ChevronRight, AlertCircle, CheckCircle, MessageSquare, Scale, Send, Quote } from 'lucide-react'
 import AIProgressBar from '@/components/AIProgressBar'
 import { createClient } from '@/lib/supabase/client'
+
+type InterrogatePosition = 'NOT_REQUIRED' | 'REQUIRED' | 'AMBIGUOUS' | 'NOT_COVERED' | 'PARTIALLY_REQUIRED'
+
+interface InterrogateClause {
+  ref: string
+  text: string
+  significance: string
+}
+
+interface InterrogateResult {
+  position: InterrogatePosition
+  position_label: string
+  summary: string
+  clauses: InterrogateClause[]
+  argument: string
+  suggested_response: string
+}
+
+const POSITION_STYLES: Record<InterrogatePosition, { bg: string; border: string; text: string; label: string }> = {
+  NOT_REQUIRED:       { bg: '#052e16', border: '#166534', text: '#86efac', label: '✓ Not Required' },
+  NOT_COVERED:        { bg: '#0c1a3a', border: '#1e3a8a', text: '#93c5fd', label: '◈ Not Covered in ER' },
+  AMBIGUOUS:          { bg: '#2d1b00', border: '#854d0e', text: '#fcd34d', label: '⚠ Ambiguous' },
+  PARTIALLY_REQUIRED: { bg: '#2d1b00', border: '#92400e', text: '#fdba74', label: '◑ Partially Required' },
+  REQUIRED:           { bg: '#3f1212', border: '#7f1d1d', text: '#fca5a5', label: '✗ Required by ER' },
+}
 
 interface MissingStandard {
   ref: string
@@ -38,6 +63,13 @@ export default function ProjectER({
   const [expandedMissing, setExpandedMissing] = useState(true)
   const [dismissedMissing, setDismissedMissing] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Interrogator state
+  const [question, setQuestion] = useState('')
+  const [interrogating, setInterrogating] = useState(false)
+  const [interrogateResult, setInterrogateResult] = useState<InterrogateResult | null>(null)
+  const [interrogateError, setInterrogateError] = useState('')
+  const [askedQuestion, setAskedQuestion] = useState('')
 
   const supabase = createClient()
 
@@ -119,6 +151,28 @@ export default function ProjectER({
       setError(e.message)
     } finally {
       setAnalysing(false)
+    }
+  }
+
+  async function interrogate() {
+    if (!question.trim()) return
+    setInterrogating(true)
+    setInterrogateError('')
+    setInterrogateResult(null)
+    setAskedQuestion(question)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/er-interrogate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: question.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Interrogation failed')
+      setInterrogateResult(data.result)
+    } catch (e: any) {
+      setInterrogateError(e.message)
+    } finally {
+      setInterrogating(false)
     }
   }
 
@@ -291,6 +345,152 @@ export default function ProjectER({
             )}
           </div>
         )}
+        {/* ER Commercial Interrogator — only when ER is uploaded */}
+        {storagePath && (
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+            {/* Section header */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+              <Scale size={13} style={{ color: '#a78bfa' }} />
+              <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Commercial Interrogator</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full ml-1" style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>AI · Commercial Bias</span>
+            </div>
+
+            <div className="p-4 space-y-3" style={{ background: 'var(--bg-elevated)' }}>
+              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                Ask a question about the ER. The AI will search the document and respond with a commercial bias — looking for arguments that the requirement is not in scope, advisory only, or a potential variation.
+              </p>
+
+              {/* Question input */}
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <MessageSquare size={12} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    value={question}
+                    onChange={e => setQuestion(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !interrogating) interrogate() }}
+                    placeholder="e.g. Is cable containment in troughs required by the ER?"
+                    className="w-full rounded-lg border pl-8 pr-3 py-2.5 text-sm"
+                    style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
+                    disabled={interrogating}
+                  />
+                </div>
+                <button
+                  onClick={interrogate}
+                  disabled={interrogating || !question.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50 shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}
+                >
+                  <Send size={11} />
+                  {interrogating ? 'Searching…' : 'Search ER'}
+                </button>
+              </div>
+
+              {/* Loading */}
+              {interrogating && (
+                <AIProgressBar
+                  stages={[
+                    { pct: 10, label: 'Downloading ER from storage…',    ms: 800  },
+                    { pct: 25, label: 'Extracting text from PDF…',       ms: 1000 },
+                    { pct: 45, label: 'Searching for relevant clauses…', ms: 5000 },
+                    { pct: 70, label: 'Building commercial argument…',   ms: 8000 },
+                    { pct: 90, label: 'Drafting suggested response…',    ms: 5000 },
+                  ]}
+                  note="Searching full ER document — typically 20–45 seconds"
+                />
+              )}
+
+              {/* Error */}
+              {interrogateError && (
+                <div className="flex items-start gap-2 rounded-lg px-3 py-2.5" style={{ background: '#3f1212', border: '1px solid #7f1d1d' }}>
+                  <AlertCircle size={13} className="mt-0.5 shrink-0" style={{ color: '#f87171' }} />
+                  <p className="text-xs" style={{ color: '#fca5a5' }}>{interrogateError}</p>
+                </div>
+              )}
+
+              {/* Result */}
+              {interrogateResult && (() => {
+                const pos = interrogateResult.position in POSITION_STYLES ? interrogateResult.position : 'AMBIGUOUS'
+                const style = POSITION_STYLES[pos]
+                return (
+                  <div className="space-y-3">
+                    {/* Question echo + position badge */}
+                    <div className="rounded-lg px-3 py-2.5 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                      <p className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>Question asked:</p>
+                      <p className="text-xs italic" style={{ color: 'var(--text-primary)' }}>"{askedQuestion}"</p>
+                    </div>
+
+                    {/* Position badge */}
+                    <div className="rounded-lg px-4 py-3 border" style={{ background: style.bg, borderColor: style.border }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold" style={{ color: style.text }}>{style.label}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border" style={{ background: style.bg, borderColor: style.border, color: style.text }}>
+                          {interrogateResult.position_label}
+                        </span>
+                      </div>
+                      <p className="text-xs" style={{ color: style.text }}>{interrogateResult.summary}</p>
+                    </div>
+
+                    {/* Relevant clauses */}
+                    {interrogateResult.clauses.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Relevant clauses found</p>
+                        {interrogateResult.clauses.map((clause, i) => (
+                          <div key={i} className="rounded-lg border p-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <Quote size={10} style={{ color: '#a78bfa' }} />
+                              <span className="text-[10px] font-mono font-semibold" style={{ color: '#a78bfa' }}>{clause.ref}</span>
+                            </div>
+                            <p className="text-xs italic mb-1.5 leading-relaxed" style={{ color: 'var(--text-primary)' }}>"{clause.text}"</p>
+                            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{clause.significance}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {interrogateResult.clauses.length === 0 && (
+                      <div className="rounded-lg border px-3 py-2.5 text-xs" style={{ background: '#0c1a3a', borderColor: '#1e3a8a', color: '#93c5fd' }}>
+                        No specific clauses found in the ER for this matter — supports a "not in scope" position.
+                      </div>
+                    )}
+
+                    {/* Commercial argument */}
+                    <div className="rounded-lg border p-4" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Commercial Argument</p>
+                      <div className="text-xs leading-relaxed space-y-2" style={{ color: 'var(--text-primary)' }}>
+                        {interrogateResult.argument.split('\n').filter(Boolean).map((para, i) => (
+                          <p key={i}>{para}</p>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Suggested response */}
+                    <div className="rounded-lg border p-4" style={{ background: 'rgba(167,139,250,0.06)', borderColor: '#7c3aed44' }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#a78bfa' }}>Suggested Response</p>
+                      <p className="text-xs leading-relaxed" style={{ color: 'var(--text-primary)' }}>{interrogateResult.suggested_response}</p>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(interrogateResult.suggested_response)}
+                        className="mt-2 text-[10px] px-2 py-1 rounded border hover:opacity-70"
+                        style={{ borderColor: '#7c3aed44', color: '#a78bfa' }}
+                      >
+                        Copy to clipboard
+                      </button>
+                    </div>
+
+                    {/* Ask another */}
+                    <button
+                      onClick={() => { setInterrogateResult(null); setQuestion(''); setAskedQuestion('') }}
+                      className="text-xs" style={{ color: 'var(--text-muted)' }}
+                    >
+                      ← Ask another question
+                    </button>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )
