@@ -146,19 +146,30 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
     .eq('is_active', true)
     .order('name')
 
-  // Fetch diary name mappings to build nameToPersonId map for CivilsPanel
-  const { data: nameMappings } = await supabase
-    .from('diary_name_mappings')
-    .select('raw_name, person_id')
-    .eq('site_id', siteId)
-    .not('person_id', 'is', null)
+  // Fetch diary name mappings + resolved timesheet entries to build nameToPersonId
+  const [{ data: nameMappings }, { data: resolvedEntries }] = await Promise.all([
+    supabase
+      .from('diary_name_mappings')
+      .select('raw_name, person_id')
+      .eq('site_id', siteId)
+      .not('person_id', 'is', null),
+    supabase
+      .from('timesheet_entries')
+      .select('person_name, person_id')
+      .eq('site_id', siteId)
+      .not('person_id', 'is', null),
+  ])
 
   const nameToPersonId: Record<string, string> = {}
-  // Direct name → id from people table (covers email-parsed daily log personnel)
+  // 1. Direct name match from people table
   for (const p of allPeople ?? []) {
     nameToPersonId[p.name] = p.id
   }
-  // Diary name mappings override (raw diary name → confirmed person_id)
+  // 2. Resolved timesheet entries (set by PersonnelMatchPanel when a match is confirmed)
+  for (const e of resolvedEntries ?? []) {
+    if (e.person_id && !nameToPersonId[e.person_name]) nameToPersonId[e.person_name] = e.person_id
+  }
+  // 3. diary_name_mappings override (highest priority — explicit manual match)
   for (const m of nameMappings ?? []) {
     if (m.person_id) nameToPersonId[m.raw_name] = m.person_id
   }
