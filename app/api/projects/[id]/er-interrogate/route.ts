@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
+import { extractAndParse } from '@/lib/repairJson'
 
 export const maxDuration = 90
 
@@ -91,17 +92,9 @@ ${erTextTruncated}`
 
   let result: any
   try {
-    const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    result = JSON.parse(cleaned)
+    result = extractAndParse(responseText)
   } catch {
-    const match = responseText.match(/\{[\s\S]*\}/)
-    if (match) {
-      try { result = JSON.parse(match[0]) } catch {
-        return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })
-      }
-    } else {
-      return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })
-    }
+    return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })
   }
 
   return NextResponse.json({ result, question })
