@@ -31,13 +31,54 @@ const POSTCODE_COORDS: Record<string, [number, number]> = {
   'KW':   [58.44, -3.09],
 }
 
-function postcodeToSVG(postcode: string | null): [number, number] {
-  if (!postcode) return latLonToSVG(57.23, -2.71)
-  const clean = postcode.toUpperCase().trim()
+// Fallback place-name lookup for when location is stored as a town name
+const PLACE_COORDS: Record<string, [number, number]> = {
+  'ABERDEEN':     [57.15, -2.09],
+  'ABERLOUR':     [57.47, -3.23],
+  'ALFORD':       [57.23, -2.71],
+  'AYR':          [55.46, -4.63],
+  'BRACO':        [56.24, -3.84],
+  'BRECHIN':      [56.73, -2.66],
+  'CAMPBELTOWN':  [55.43, -5.62],
+  'DUNDEE':       [56.46, -2.97],
+  'DUNBLANE':     [56.19, -3.97],
+  'DUMFRIES':     [55.07, -3.61],
+  'EDINBURGH':    [55.95, -3.19],
+  'ELGIN':        [57.65, -3.32],
+  'FORFAR':       [56.65, -2.89],
+  'FORT WILLIAM': [56.82, -5.11],
+  'FALKIRK':      [56.00, -3.78],
+  'GLASGOW':      [55.86, -4.26],
+  'HUNTLY':       [57.44, -2.78],
+  'INVERNESS':    [57.48, -4.22],
+  'INVERURIE':    [57.28, -2.37],
+  'KILMARNOCK':   [55.61, -4.50],
+  'KIRKCALDY':    [56.11, -3.16],
+  'MONTROSE':     [56.71, -2.47],
+  'OBAN':         [56.41, -5.47],
+  'PERTH':        [56.40, -3.47],
+  'PITLOCHRY':    [56.71, -3.73],
+  'STIRLING':     [56.12, -3.94],
+  'STONEHAVEN':   [56.96, -2.21],
+  'TURRIFF':      [57.54, -2.46],
+}
+
+function postcodeToSVG(location: string | null): [number, number] {
+  if (!location) return latLonToSVG(57.23, -2.71)
+  const clean = location.toUpperCase().trim()
+
+  // Try postcode district first (e.g. FK15, AB54)
   const district = clean.match(/^[A-Z]{1,2}\d{1,2}/)?.[0] ?? ''
   const area = clean.match(/^[A-Z]{1,2}/)?.[0] ?? ''
-  const coords = POSTCODE_COORDS[district] ?? POSTCODE_COORDS[area]
-  return coords ? latLonToSVG(coords[0], coords[1]) : latLonToSVG(57.23, -2.71)
+  const postcodeMatch = POSTCODE_COORDS[district] ?? POSTCODE_COORDS[area]
+  if (postcodeMatch) return latLonToSVG(postcodeMatch[0], postcodeMatch[1])
+
+  // Try place name (exact or contained)
+  for (const [place, coords] of Object.entries(PLACE_COORDS)) {
+    if (clean.includes(place)) return latLonToSVG(coords[0], coords[1])
+  }
+
+  return latLonToSVG(57.23, -2.71) // default to depot
 }
 
 const CATEGORY_IMAGE: Record<string, string> = {
@@ -130,11 +171,11 @@ export default function PlantMap({ plant, onClose }: Props) {
         </div>
 
         {/* Map */}
-        <div className="relative overflow-hidden" style={{ flex: '1 1 0', minHeight: 0 }}>
+        <div style={{ flex: '1 1 0', minHeight: 0, position: 'relative' }}>
           <svg
             viewBox="0 0 500 600"
             preserveAspectRatio="xMidYMid meet"
-            style={{ display: 'block', width: '100%', height: '100%', background: '#0d1f35' }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: '#0d1f35' }}
           >
             {/* Sea background */}
             <rect width="500" height="600" fill="#0d1f35" />
