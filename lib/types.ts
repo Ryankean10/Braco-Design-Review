@@ -1,4 +1,26 @@
-export type Role = 'admin' | 'project_manager' | 'engineer' | 'operative' | 'client'
+export type Role = 'superadmin' | 'admin' | 'project_manager' | 'engineer' | 'operative' | 'client'
+
+export type Module =
+  | 'projects'
+  | 'documents'
+  | 'reviews'
+  | 'reference_library'
+  | 'procurement'
+  | 'tests'
+  | 'assurance'
+  | 'construction'
+  | 'planning'
+  | 'team'
+
+export interface Company {
+  id: string
+  name: string
+  slug: string
+  logo_url: string | null
+  modules: Module[]
+  created_at: string
+  updated_at: string
+}
 
 export type Stage =
   | 'Feasibility'
@@ -15,6 +37,7 @@ export interface Profile {
   email: string
   full_name: string | null
   role: Role
+  company_id: string | null
   created_at: string
 }
 

@@ -1,8 +1,33 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+function extractCompanySlug(request: NextRequest): string {
+  const host = request.headers.get('host') ?? ''
+  const hostname = host.split(':')[0]
+  const parts = hostname.split('.')
+
+  // braco.gridgate.app → 'braco'
+  // Exclude localhost and Vercel preview URLs
+  if (
+    parts.length >= 3 &&
+    !hostname.startsWith('localhost') &&
+    !hostname.includes('vercel.app')
+  ) {
+    return parts[0]
+  }
+
+  // Dev / Vercel preview: fall back to env var or 'braco'
+  return process.env.DEFAULT_COMPANY_SLUG ?? 'braco'
+}
+
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  const companySlug = extractCompanySlug(request)
+
+  // Pass company slug to server components via request headers
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-company-slug', companySlug)
+
+  let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,7 +39,7 @@ export async function middleware(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
+          supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -27,7 +52,7 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Webhook endpoints are secured by their own secret header, not auth
+  // Webhook endpoints secured by their own secret header
   if (pathname.startsWith('/api/construction/inbound-email')) {
     return supabaseResponse
   }

@@ -65,7 +65,7 @@ async function run() {
 
     for (const [ext, filename] of Object.entries(fileMap)) {
       const localPath = `${TEMPLATE_DIR}/${filename}`
-      const storagePath = `${ref}/${filename}`
+      const storagePath = `${ref}/${filename.replace(/[^\w\s\-_.()&]/g, '_')}`
       const contentType = ext === 'pdf' ? 'application/pdf'
         : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 

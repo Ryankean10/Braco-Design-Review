@@ -2,28 +2,45 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, Users, HardHat, ClipboardList, UsersRound, Bug } from 'lucide-react'
+import {
+  LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight,
+  Users, HardHat, ClipboardList, UsersRound, Bug, Building2,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Profile } from '@/lib/types'
+import type { Profile, Company, Module } from '@/lib/types'
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 
 const BugPanel = dynamic(() => import('@/components/admin/BugPanel'), { ssr: false })
 
-const NAV = [
-  { href: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard, roles: null },
-  { href: '/projects',          label: 'Projects',         icon: FolderOpen,      roles: null },
-  { href: '/construction',       label: 'Construction',     icon: HardHat,         roles: ['admin', 'engineer', 'project_manager', 'operative'] },
-  { href: '/reference-library', label: 'Reference Library',icon: BookOpen,        roles: null },
-  { href: '/planning',           label: 'Work Planner',     icon: ClipboardList,   roles: ['admin', 'engineer', 'project_manager'] },
-  { href: '/team',              label: 'Team',             icon: UsersRound,      roles: ['admin', 'engineer', 'project_manager'] },
-  { href: '/users',             label: 'Users',            icon: Users,           roles: ['admin'] },
+type NavItem = {
+  href: string
+  label: string
+  icon: React.ComponentType<{ size?: number }>
+  roles?: string[]
+  module?: Module
+}
+
+const NAV: NavItem[] = [
+  { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard },
+  { href: '/projects',          label: 'Projects',          icon: FolderOpen,     module: 'projects' },
+  { href: '/construction',      label: 'Construction',      icon: HardHat,        module: 'construction', roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
+  { href: '/reference-library', label: 'Reference Library', icon: BookOpen,       module: 'reference_library' },
+  { href: '/planning',          label: 'Work Planner',      icon: ClipboardList,  module: 'planning',    roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/team',              label: 'Team',              icon: UsersRound,     module: 'team',        roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/users',             label: 'Users',             icon: Users,          roles: ['superadmin', 'admin'] },
 ]
 
-export default function Sidebar({ profile }: { profile: Profile | null }) {
+const SUPERADMIN_NAV: NavItem[] = [
+  { href: '/admin/companies', label: 'Companies', icon: Building2 },
+]
+
+export default function Sidebar({ profile, company }: { profile: Profile | null; company: Company | null }) {
   const pathname = usePathname()
   const router = useRouter()
   const role = profile?.role ?? 'engineer'
+  const isSuperadmin = role === 'superadmin'
+  const enabledModules = company?.modules ?? []
   const [bugPanelOpen, setBugPanelOpen] = useState(false)
 
   async function signOut() {
@@ -33,30 +50,43 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
     router.refresh()
   }
 
+  function isVisible(item: NavItem) {
+    if (item.roles && !item.roles.includes(role)) return false
+    if (item.module && !isSuperadmin && !enabledModules.includes(item.module)) return false
+    return true
+  }
+
+  const companyInitial = (company?.name ?? 'G')[0].toUpperCase()
+  const companyName = company?.name ?? 'GridGate'
+
   return (
     <aside
       className="w-56 flex flex-col shrink-0 border-r"
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
     >
-      {/* Logo */}
+      {/* Company logo / name */}
       <div className="px-4 py-5 border-b flex items-center gap-2.5" style={{ borderColor: 'var(--border)' }}>
-        <div
-          className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0"
-          style={{ background: 'var(--accent)' }}
-        >
-          B
-        </div>
+        {company?.logo_url ? (
+          <img src={company.logo_url} alt={companyName} className="w-7 h-7 rounded-md object-contain" />
+        ) : (
+          <div
+            className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0"
+            style={{ background: 'var(--accent)' }}
+          >
+            {companyInitial}
+          </div>
+        )}
         <div className="min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-            Safe T Projects
+            {companyName}
           </p>
           <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>BESS Project Platform</p>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5">
-        {NAV.filter(({ roles }) => !roles || roles.includes(role)).map(({ href, label, icon: Icon }) => {
+      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+        {NAV.filter(isVisible).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
             <Link
@@ -74,6 +104,35 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
             </Link>
           )
         })}
+
+        {/* Superadmin section */}
+        {isSuperadmin && (
+          <>
+            <div className="pt-3 pb-1 px-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Super Admin
+              </p>
+            </div>
+            {SUPERADMIN_NAV.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href + '/')
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
+                  style={{
+                    color: active ? 'var(--accent)' : 'var(--text-muted)',
+                    background: active ? 'rgba(108,114,245,0.12)' : 'transparent',
+                  }}
+                >
+                  <Icon size={15} />
+                  {label}
+                  {active && <ChevronRight size={12} className="ml-auto" />}
+                </Link>
+              )
+            })}
+          </>
+        )}
       </nav>
 
       {/* User */}
@@ -94,12 +153,12 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
             </p>
           </div>
         </div>
-        {role === 'admin' && (
+        {(role === 'admin' || isSuperadmin) && (
           <button
             onClick={() => setBugPanelOpen(true)}
             className="flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-80"
             style={{ color: '#64748b' }}
-            title="Bug reports (admin)"
+            title="Bug reports"
           >
             <Bug size={13} />
             Bug reports

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Users, CheckCircle2, XCircle, AlertTriangle, ChevronDown, Loader2, Link2, ExternalLink } from 'lucide-react'
+import { Users, CheckCircle2, XCircle, AlertTriangle, ChevronDown, Loader2, Link2, ExternalLink, Trash2 } from 'lucide-react'
 
 interface Person { id: string; name: string; role: string | null; company: string | null }
 interface NameRow {
@@ -17,6 +17,7 @@ export default function PersonnelMatchPanel({ siteId, people }: { siteId: string
   const [rows, setRows] = useState<NameRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  const [removing, setRemoving] = useState<string | null>(null)
   const [selections, setSelections] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -40,6 +41,18 @@ export default function PersonnelMatchPanel({ siteId, people }: { siteId: string
       }))
     }
     setSaving(null)
+  }
+
+  async function remove(rawName: string) {
+    if (!confirm(`Remove "${rawName}" from this site's diary records and analytics? This cannot be undone.`)) return
+    setRemoving(rawName)
+    const res = await fetch(`/api/construction/${siteId}/personnel-matches`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_name: rawName }),
+    })
+    if (res.ok) setRows(prev => prev.filter(r => r.raw_name !== rawName))
+    setRemoving(null)
   }
 
   const unresolved = rows.filter(r => !r.no_match && !r.manual_person_id && !r.auto_person_id)
@@ -146,6 +159,18 @@ export default function PersonnelMatchPanel({ siteId, people }: { siteId: string
               title="Open staff card">
               <ExternalLink size={11} /> Profile
             </Link>
+          )}
+          {/* Remove — only for unresolved or flagged-no-match rows */}
+          {!resolvedId && (
+            <button
+              disabled={removing === row.raw_name}
+              onClick={() => remove(row.raw_name)}
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border font-medium hover:opacity-80 disabled:opacity-40"
+              style={{ borderColor: '#f8717144', color: '#f87171' }}
+              title="Remove from site — deletes timesheet entries and diary records">
+              {removing === row.raw_name ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+              Remove
+            </button>
           )}
         </div>
       </div>
