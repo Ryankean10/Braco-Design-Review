@@ -1,8 +1,34 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import Sidebar from '@/components/Sidebar'
 import HelpChat from '@/components/HelpChat'
+
+export async function generateMetadata(): Promise<Metadata> {
+  const headersList = await headers()
+  const slug = headersList.get('x-company-slug') ?? 'braco'
+
+  const sb = createAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+  const { data: company } = await sb
+    .from('companies')
+    .select('name, tagline')
+    .eq('slug', slug)
+    .single()
+
+  const name    = company?.name    ?? 'MRRK'
+  const tagline = company?.tagline ?? 'Project Management Platform'
+
+  return {
+    title: `${name} — ${tagline}`,
+    description: tagline,
+  }
+}
 
 function hexToRgb(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16)
