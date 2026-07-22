@@ -111,9 +111,14 @@ export default async function DashboardPage() {
     projectQuery = projectQuery.in('id', ids)
   }
 
-  const [{ data: projects }, { data: allProjectStages }, { data: openComments }] = await Promise.all([
-    projectQuery,
-    supabase.from('project_stages').select('project_id, stage, status, checklist'),
+  const { data: projects } = await projectQuery
+
+  const projectIds = (projects ?? []).map((p: any) => p.id)
+
+  const [{ data: allProjectStages }, { data: openComments }] = await Promise.all([
+    projectIds.length > 0
+      ? supabase.from('project_stages').select('project_id, stage, status, checklist').in('project_id', projectIds)
+      : Promise.resolve({ data: [] }),
     role !== 'operative'
       ? supabase.from('client_comments').select('id, project_id, subject_label, created_at, status').eq('status', 'Open').order('created_at', { ascending: false })
       : Promise.resolve({ data: [] }),
