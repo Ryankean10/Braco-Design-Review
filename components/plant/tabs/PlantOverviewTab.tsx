@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { PlantItem } from '@/lib/types'
+import type { PlantItem, PlantCategory, PlantStatus } from '@/lib/types'
 
 interface Props {
   item: PlantItem & { project?: any; site?: any; operator?: any }
@@ -113,17 +113,17 @@ export default function PlantOverviewTab({ item, projects, people, canEdit }: Pr
         <Input label="Name" field="name" />
         <div>
           <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Category</label>
-          <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+          <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as PlantCategory }))}
             className="w-full px-3 py-2 rounded-lg text-sm border"
             style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
-            {['excavator','dumper','telehandler','crane','roller','generator','lorry','scaffold','pump','other'].map(c =>
+            {(['excavator','dumper','telehandler','crane','roller','generator','lorry','scaffold','pump','other'] as PlantCategory[]).map(c =>
               <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
             )}
           </select>
         </div>
         <div>
           <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Status</label>
-          <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+          <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as PlantStatus }))}
             className="w-full px-3 py-2 rounded-lg text-sm border"
             style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
             {['available','on_hire','breakdown','returned','sold'].map(s =>
