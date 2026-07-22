@@ -23,6 +23,7 @@ const POSTCODE_COORDS: Record<string, [number, number]> = {
   'PA':   [55.85, -4.43],
   'PH':   [56.40, -3.47],
   'FK':   [56.12, -3.94],
+  'FK15': [56.19, -3.97],  // Dunblane
   'KA':   [55.61, -4.50],
   'ML':   [55.77, -3.99],
   'TD':   [55.60, -2.80],
@@ -113,7 +114,7 @@ export default function PlantMap({ plant, onClose }: Props) {
           border: '1px solid #1e3a5f',
           width: '100%',
           maxWidth: 760,
-          maxHeight: '90vh',
+          height: '90vh',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -129,12 +130,11 @@ export default function PlantMap({ plant, onClose }: Props) {
         </div>
 
         {/* Map */}
-        <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
+        <div className="relative overflow-hidden" style={{ flex: '1 1 0', minHeight: 0 }}>
           <svg
             viewBox="0 0 500 600"
             preserveAspectRatio="xMidYMid meet"
-            className="w-full h-full"
-            style={{ display: 'block', background: '#0a1628' }}
+            style={{ display: 'block', width: '100%', height: '100%', background: '#0d1f35' }}
           >
             {/* Sea background */}
             <rect width="500" height="600" fill="#0d1f35" />
