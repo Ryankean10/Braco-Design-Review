@@ -6,7 +6,7 @@ function extractCompanySlug(request: NextRequest): string {
   const hostname = host.split(':')[0]
   const parts = hostname.split('.')
 
-  // braco.gridgate.app → 'braco'
+  // braco.mrrk.app → 'braco'
   // Exclude localhost and Vercel preview URLs
   if (
     parts.length >= 3 &&

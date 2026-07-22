@@ -21,7 +21,7 @@ export default function HelpChat() {
     if (open && messages.length === 0) {
       setMessages([{
         role: 'assistant',
-        content: 'Hi! Ask me anything about GridGate, or describe a bug and I\'ll log it for the team.',
+        content: 'Hi! Ask me anything about MRRK, or describe a bug and I\'ll log it for the team.',
       }])
     }
     if (open) setTimeout(() => inputRef.current?.focus(), 150)
@@ -79,7 +79,7 @@ export default function HelpChat() {
                 <MessageCircle size={12} color="white" />
               </div>
               <div>
-                <p className="text-white font-semibold" style={{ fontSize: 12, lineHeight: 1 }}>GridGate Assistant</p>
+                <p className="text-white font-semibold" style={{ fontSize: 12, lineHeight: 1 }}>MRRK Assistant</p>
                 <p className="text-blue-200" style={{ fontSize: 10, marginTop: 2 }}>Help & bug reports</p>
               </div>
             </div>
@@ -167,7 +167,7 @@ export default function HelpChat() {
         onClick={() => setOpen(v => !v)}
         className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 active:scale-95"
         style={{ background: '#3b82f6' }}
-        title="GridGate Assistant"
+        title="MRRK Assistant"
       >
         {open ? <X size={18} color="white" /> : <MessageCircle size={18} color="white" />}
       </button>

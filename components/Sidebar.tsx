@@ -57,7 +57,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   }
 
   const companyInitial = (company?.name ?? 'G')[0].toUpperCase()
-  const companyName = company?.name ?? 'GridGate'
+  const companyName = company?.name ?? 'MRRK'
 
   return (
     <aside

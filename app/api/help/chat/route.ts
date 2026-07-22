@@ -7,10 +7,10 @@ import { cookies } from 'next/headers'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-const SYSTEM_PROMPT = `You are GridGate Assistant — a helpful support bot for the GridGate platform, a construction and design review tool for BESS (Battery Energy Storage System) projects in the UK.
+const SYSTEM_PROMPT = `You are MRRK Assistant — a helpful support bot for the MRRK platform, a construction and design review tool for BESS (Battery Energy Storage System) projects in the UK.
 
-## What GridGate does
-GridGate manages BESS projects through their full lifecycle: Design → Procure → Build & Install → Test & Commission → Energise & Handover.
+## What MRRK does
+MRRK manages BESS projects through their full lifecycle: Design → Procure → Build & Install → Test & Commission → Energise & Handover.
 
 ## App sections and where to find things
 
@@ -59,7 +59,7 @@ Respond in plain conversational English, 2-4 sentences. At the END output a JSON
 {"isBugReport": true/false, "bugSummary": "one sentence or null", "suggestedActions": ["action 1", "action 2"] or []}`
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'GridGate <onboarding@resend.dev>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'MRRK <onboarding@resend.dev>'
 
 async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[]) {
   const apiKey = process.env.RESEND_API_KEY
@@ -71,12 +71,12 @@ async function sendBugEmail(summary: string, userMessage: string, userName: stri
   await resend.emails.send({
     from: FROM_EMAIL,
     to: BUG_EMAIL,
-    subject: `🐛 GridGate Bug Report — ${new Date().toLocaleDateString('en-GB')}`,
+    subject: `🐛 MRRK Bug Report — ${new Date().toLocaleDateString('en-GB')}`,
     html: `
 <!DOCTYPE html><html><body style="margin:0;padding:0;background:#0f172a;font-family:system-ui,sans-serif">
 <div style="max-width:600px;margin:32px auto;background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155">
   <div style="background:#8b5cf6;padding:16px 24px">
-    <p style="margin:0;color:#fff;font-weight:700;font-size:15px">🐛 Bug Report — GridGate</p>
+    <p style="margin:0;color:#fff;font-weight:700;font-size:15px">🐛 Bug Report — MRRK</p>
     <p style="margin:4px 0 0;color:#ddd6fe;font-size:12px">${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}</p>
   </div>
   <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">

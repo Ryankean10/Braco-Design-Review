@@ -351,7 +351,7 @@ export default function ProgressReportDoc({ siteName, client, location, voltageK
         borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 8,
         display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#9ca3af',
       }}>
-        <span>GridGate · Construction Progress Report · {siteName}</span>
+        <span>MRRK · Construction Progress Report · {siteName}</span>
         <span>Generated {today} · Confidential</span>
       </div>
 

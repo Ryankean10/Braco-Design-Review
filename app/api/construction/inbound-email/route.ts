@@ -8,7 +8,7 @@ const WEBHOOK_SECRET = process.env.INBOUND_EMAIL_SECRET
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
 const ALERT_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 // Use Resend's default sending domain until gridgate.ai is verified in Resend dashboard
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'GridGate <onboarding@resend.dev>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'MRRK <onboarding@resend.dev>'
 
 async function sendHighImpactAlert(parsed: any, siteId: string, siteName: string) {
   const apiKey = process.env.RESEND_API_KEY
@@ -72,13 +72,13 @@ async function sendHighImpactAlert(parsed: any, siteId: string, siteName: string
       <div style="margin-top:20px;text-align:center">
         <a href="https://braco-design-review.vercel.app/construction/${siteId}?date=${parsed.log_date}#issues"
           style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600">
-          View Issue in GridGate →
+          View Issue in MRRK →
         </a>
       </div>
     </div>
 
     <div style="padding:12px 24px;border-top:1px solid #334155;text-align:center">
-      <p style="margin:0;color:#475569;font-size:11px">GridGate · ${siteName} · Automated alert</p>
+      <p style="margin:0;color:#475569;font-size:11px">MRRK · ${siteName} · Automated alert</p>
     </div>
   </div>
 </body>

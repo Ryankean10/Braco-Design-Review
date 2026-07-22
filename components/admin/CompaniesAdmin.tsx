@@ -112,7 +112,7 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
                 style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
               {newSlug && (
-                <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>{newSlug}.gridgate.app</p>
+                <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>{newSlug}.mrrk.app</p>
               )}
             </div>
           </div>
@@ -173,7 +173,7 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
               </div>
               <div>
                 <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{company.name}</p>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{company.slug}.gridgate.app</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{company.slug}.mrrk.app</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
