@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import Link from 'next/link'
 import { FolderOpen, Plus, MessageSquare } from 'lucide-react'
 import ClientDashboard from '@/components/ClientDashboard'
@@ -23,8 +24,18 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role, full_name, email').eq('id', user.id).single()
+  const headersList = await headers()
+  const companySlug = headersList.get('x-company-slug') ?? 'braco'
+
+  const [{ data: profile }, { data: company }] = await Promise.all([
+    supabase.from('profiles').select('role, full_name, email').eq('id', user.id).single(),
+    supabase.from('companies').select('tagline, industry').eq('slug', companySlug).single(),
+  ])
   const role = profile?.role ?? 'engineer'
+  const industry = (company as any)?.industry ?? 'bess'
+  const dashboardSubtitle = industry === 'civils'
+    ? 'Construction management overview'
+    : 'BESS project review overview'
 
   // ── Client dashboard ───────────────────────────────────────────────────────
   if (role === 'client') {
@@ -122,7 +133,7 @@ export default async function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Dashboard</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>BESS project review overview</p>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>{dashboardSubtitle}</p>
         </div>
         {['admin', 'engineer'].includes(role) && (
           <Link href="/projects/new"

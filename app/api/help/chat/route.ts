@@ -7,45 +7,64 @@ import { cookies } from 'next/headers'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-const SYSTEM_PROMPT = `You are MRRK Assistant — a helpful support bot for the MRRK platform, a construction and design review tool for BESS (Battery Energy Storage System) projects in the UK.
+function buildSystemPrompt(industry: string): string {
+  const isCivils = industry === 'civils'
 
-## What MRRK does
-MRRK manages BESS projects through their full lifecycle: Design → Procure → Build & Install → Test & Commission → Energise & Handover.
+  const intro = isCivils
+    ? `You are MRRK Assistant — a helpful support bot for the MRRK platform, a construction management tool for civil engineering and grounds works projects in the UK.`
+    : `You are MRRK Assistant — a helpful support bot for the MRRK platform, a construction and design review tool for BESS (Battery Energy Storage System) projects in the UK.`
+
+  const whatItDoes = isCivils
+    ? `## What MRRK does
+MRRK manages civil engineering and grounds works projects through their full lifecycle: Feasibility → Design → Procure → Build & Install → Test & Commission → Handover.`
+    : `## What MRRK does
+MRRK manages BESS projects through their full lifecycle: Design → Procure → Build & Install → Test & Commission → Energise & Handover.`
+
+  const constructionSection = isCivils
+    ? `**Construction page** (/construction)
+- Shows all active construction sites
+- Click a site to open its full dashboard
+- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Civils activities, ITP panel, Programme, Agency Timesheets`
+    : `**Construction page** (/construction)
+- Shows all active construction sites (e.g. Dyce BESS, Braco BESS)
+- Click a site to open its full dashboard
+- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Cable Register, Civils activities, ITP panel, Programme, Agency Timesheets`
+
+  const planningSection = isCivils
+    ? `**Planning / Work Planner** (/planning)
+- AI-powered programme forecast generator — input site parameters to get a construction programme
+- Free-issue materials can be entered with delivery dates so they are excluded from the critical path`
+    : `**Planning / Work Planner** (/planning)
+- AI-powered forecast generator — input site parameters, get a programme forecast benchmarked against Dyce BESS real data
+- Free-issue materials can be entered with delivery dates so they are excluded from the critical path`
+
+  return `${intro}
+
+${whatItDoes}
 
 ## App sections and where to find things
 
-**Construction page** (/construction)
-- Shows all active construction sites (e.g. Dyce BESS, Braco BESS)
-- Click a site to open its full dashboard
-- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Cable Register, Civils activities, ITP panel, Programme, Agency Timesheets
+${constructionSection}
 
 **Daily Logs**
 - Found inside each construction site page → "Daily logs" section
 - Shows the last 7 days of site diary entries with weather, crew, issues and summary
-- Electricians progress emails are automatically ingested each evening
 - Civils diaries can be uploaded as PDFs
 
 **Team page** (/team)
-- Full staff library — OCU staff, agency electricians, civils crew, subcontractors
+- Full staff library — civils crew, subcontractors, site managers
 - Click a person to see their profile, credentials, site appointments
-- Filter by group (Agency Staff, OCU Civils Staff, Project Staff, etc.)
-
-**Cable Register**
-- Found inside each construction site → "Cable Register" tab
-- Shows all cables with status (Not Started / In Progress / Complete), completion %, flagged items
-- Tracks individual activities: Pull, Gland, Crimp, Terminate, Test, Torque, Label
+- Filter by group
 
 **ITP (Inspection & Test Plan)**
 - Found inside each construction site → "ITP" section
 - Tracks hold points and witness points for each test activity
 - Requires sign-off before moving to next stage
 
-**Planning / Work Planner** (/planning)
-- AI-powered forecast generator — input site parameters, get a programme forecast benchmarked against Dyce BESS real data
-- Free-issue materials can be entered with delivery dates so they are excluded from the critical path
+${planningSection}
 
-**Design Review** (/projects)
-- Upload drawings/documents for AI-assisted review against 6 lenses
+**Projects** (/projects)
+- Upload drawings/documents for AI-assisted review
 - Findings classified Critical / Major / Minor / Observation — human sign-off required
 
 **Documents** (/documents)
@@ -57,6 +76,7 @@ If the user describes something that isn't working correctly, is broken, shows a
 ## Response format
 Respond in plain conversational English, 2-4 sentences. At the END output a JSON block on its own line:
 {"isBugReport": true/false, "bugSummary": "one sentence or null", "suggestedActions": ["action 1", "action 2"] or []}`
+}
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'MRRK <onboarding@resend.dev>'
@@ -138,13 +158,17 @@ export async function POST(req: NextRequest) {
   const { messages } = await req.json()
   if (!messages?.length) return NextResponse.json({ error: 'No messages' }, { status: 400 })
 
+  const companySlug = req.headers.get('x-company-slug') ?? 'braco'
+  const { data: company } = await supabase.from('companies').select('industry').eq('slug', companySlug).single()
+  const industry = (company as any)?.industry ?? 'bess'
+
   const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
   const userName = (profile as any)?.full_name ?? user.email ?? 'Unknown user'
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 600,
-    system: SYSTEM_PROMPT,
+    system: buildSystemPrompt(industry),
     messages,
   })
 

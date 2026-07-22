@@ -20,6 +20,8 @@ export interface Company {
   modules: Module[]
   accent_color: string | null
   secondary_color: string | null
+  tagline: string | null
+  industry: 'bess' | 'civils' | string
   created_at: string
   updated_at: string
 }

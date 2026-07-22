@@ -80,7 +80,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
           <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
             {companyName}
           </p>
-          <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>BESS Project Platform</p>
+          <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{company?.tagline ?? 'BESS Project Platform'}</p>
         </div>
       </div>
 
