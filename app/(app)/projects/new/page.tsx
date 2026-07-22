@@ -7,7 +7,7 @@ export default async function NewProjectPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!['admin', 'engineer', 'project_manager'].includes(profile?.role ?? '')) redirect('/dashboard')
+  if (!['superadmin', 'admin', 'engineer', 'project_manager'].includes(profile?.role ?? '')) redirect('/dashboard')
 
   return (
     <div className="p-8 max-w-2xl mx-auto">

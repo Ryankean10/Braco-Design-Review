@@ -77,7 +77,7 @@ export default async function DashboardPage() {
 
   // Non-admin roles only see their assigned projects
   let projectQuery = supabase.from('projects').select('*').order('updated_at', { ascending: false })
-  if (role !== 'admin') {
+  if (!['superadmin', 'admin'].includes(role)) {
     const { data: memberships } = await supabase
       .from('project_members').select('project_id').eq('user_id', user.id)
     const ids = (memberships ?? []).map((m: any) => m.project_id)

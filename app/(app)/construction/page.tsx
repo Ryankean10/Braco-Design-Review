@@ -10,7 +10,7 @@ export default async function ConstructionIndexPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
-  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
+  if (!['superadmin', 'admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
 
   // Project managers and operatives can only see sites for their allocated projects
   let allowedProjectIds: string[] | null = null

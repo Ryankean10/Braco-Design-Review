@@ -10,7 +10,7 @@ export default async function PlanningPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = profile?.role ?? 'engineer'
-  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
+  if (!['superadmin', 'admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
 
   // Project managers / operatives only see their allocated projects
   let allowedProjectIds: string[] | null = null

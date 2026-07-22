@@ -23,7 +23,7 @@ export default async function ProjectsPage() {
   const role = profile?.role ?? 'engineer'
 
   let projectIds: string[] | null = null
-  if (role !== 'admin') {
+  if (!['superadmin', 'admin'].includes(role)) {
     const table = role === 'client' ? 'project_clients' : 'project_members'
     const { data: memberships } = await supabase.from(table).select('project_id').eq('user_id', user.id)
     projectIds = (memberships ?? []).map((m: any) => m.project_id)
