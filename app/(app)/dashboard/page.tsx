@@ -28,10 +28,11 @@ export default async function DashboardPage() {
   const companySlug = headersList.get('x-company-slug') ?? 'braco'
 
   const [{ data: profile }, { data: company }] = await Promise.all([
-    supabase.from('profiles').select('role, full_name, email').eq('id', user.id).single(),
+    supabase.from('profiles').select('role, full_name, email, company_id').eq('id', user.id).single(),
     supabase.from('companies').select('tagline, industry').eq('slug', companySlug).single(),
   ])
   const role = profile?.role ?? 'engineer'
+  const userCompanyId = (profile as any)?.company_id as string | null
   const industry = (company as any)?.industry ?? 'bess'
   const dashboardSubtitle = industry === 'civils'
     ? 'Construction management overview'
@@ -88,6 +89,10 @@ export default async function DashboardPage() {
 
   // Non-admin roles only see their assigned projects
   let projectQuery = supabase.from('projects').select('*').order('updated_at', { ascending: false })
+  // Explicit company filter — belt-and-suspenders on top of RLS
+  if (role !== 'superadmin' && userCompanyId) {
+    projectQuery = projectQuery.eq('company_id', userCompanyId)
+  }
   if (!['superadmin', 'admin'].includes(role)) {
     const { data: memberships } = await supabase
       .from('project_members').select('project_id').eq('user_id', user.id)

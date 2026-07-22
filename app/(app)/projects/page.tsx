@@ -19,8 +19,9 @@ export default async function ProjectsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   const role = profile?.role ?? 'engineer'
+  const userCompanyId = (profile as any)?.company_id as string | null
 
   let projectIds: string[] | null = null
   if (!['superadmin', 'admin'].includes(role)) {
@@ -30,6 +31,10 @@ export default async function ProjectsPage() {
   }
 
   let projectQuery = supabase.from('projects').select('*').order('updated_at', { ascending: false })
+  // Explicit company filter — belt-and-suspenders on top of RLS
+  if (role !== 'superadmin' && userCompanyId) {
+    projectQuery = projectQuery.eq('company_id', userCompanyId)
+  }
   if (projectIds !== null) {
     if (projectIds.length === 0) projectQuery = projectQuery.in('id', ['none'])
     else projectQuery = projectQuery.in('id', projectIds)
