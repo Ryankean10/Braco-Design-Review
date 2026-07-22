@@ -62,7 +62,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   return (
     <aside
       className="w-56 flex flex-col shrink-0 border-r"
-      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+      style={{ background: 'var(--bg-sidebar, var(--bg-surface))', borderColor: 'var(--border)', color: 'var(--sidebar-text, inherit)' }}
     >
       {/* Company logo / name */}
       <div className="px-4 py-5 border-b flex items-center gap-2.5" style={{ borderColor: 'var(--border)' }}>

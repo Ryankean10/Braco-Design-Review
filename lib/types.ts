@@ -18,6 +18,8 @@ export interface Company {
   slug: string
   logo_url: string | null
   modules: Module[]
+  accent_color: string | null
+  secondary_color: string | null
   created_at: string
   updated_at: string
 }
