@@ -145,7 +145,16 @@ export default function PlantOverviewTab({ item, projects, people, canEdit }: Pr
       <div className="border-t pt-4 grid grid-cols-2 gap-4" style={{ borderColor: 'var(--border)' }}>
         <div>
           <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Assign to Project</label>
-          <select value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}
+          <select value={form.project_id} onChange={e => {
+            const pid = e.target.value
+            setForm(f => ({
+              ...f,
+              project_id: pid,
+              status: pid
+                ? (f.status === 'available' ? 'on_hire' : f.status) as PlantStatus
+                : (f.status === 'on_hire'   ? 'available' : f.status) as PlantStatus,
+            }))
+          }}
             className="w-full px-3 py-2 rounded-lg text-sm border"
             style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
             <option value="">Unassigned</option>

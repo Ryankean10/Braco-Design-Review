@@ -18,6 +18,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
+  const projectId = body.project_id || null
+  // Auto-manage status: assigning a project → on_hire; clearing it → available (unless breakdown/sold/returned)
+  let status = body.status
+  if (projectId && status === 'available') status = 'on_hire'
+  if (!projectId && status === 'on_hire') status = 'available'
+
   const { error } = await supabase.from('plant_items').update({
     name:             body.name,
     category:         body.category,
@@ -25,8 +31,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     model:            body.model || null,
     plant_ref:        body.plant_ref || null,
     year:             body.year ? parseInt(body.year) : null,
-    status:           body.status,
-    project_id:       body.project_id || null,
+    status,
+    project_id:       projectId,
     operator_id:      body.operator_id || null,
     supplier:         body.supplier || null,
     hire_rate_daily:  body.hire_rate_daily ? parseFloat(body.hire_rate_daily) : null,
