@@ -11,6 +11,105 @@ export type Module =
   | 'construction'
   | 'planning'
   | 'team'
+  | 'plant'
+
+export type PlantStatus = 'available' | 'on_hire' | 'breakdown' | 'returned' | 'sold'
+export type PlantCategory = 'excavator' | 'dumper' | 'telehandler' | 'crane' | 'roller' | 'generator' | 'lorry' | 'scaffold' | 'pump' | 'other'
+
+export interface PlantItem {
+  id: string
+  company_id: string
+  name: string
+  category: PlantCategory
+  make: string | null
+  model: string | null
+  plant_ref: string | null
+  year: number | null
+  status: PlantStatus
+  project_id: string | null
+  site_id: string | null
+  operator_id: string | null
+  supplier: string | null
+  hire_rate_daily: number | null
+  hire_rate_weekly: number | null
+  on_hire_date: string | null
+  expected_off_hire: string | null
+  actual_off_hire: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PlantFinancial {
+  id: string
+  plant_id: string
+  project_id: string | null
+  company_id: string
+  type: 'cost' | 'income'
+  description: string | null
+  amount: number
+  date: string
+  invoice_ref: string | null
+  status: 'outstanding' | 'invoiced' | 'paid'
+  created_at: string
+}
+
+export interface PlantCertificate {
+  id: string
+  plant_id: string
+  company_id: string
+  type: string
+  reference: string | null
+  issued_date: string | null
+  expiry_date: string
+  issued_by: string | null
+  file_url: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface PlantManual {
+  id: string
+  plant_id: string
+  company_id: string
+  name: string
+  storage_path: string
+  file_size: number | null
+  ai_processed: boolean
+  ai_processed_at: string | null
+  created_at: string
+}
+
+export interface PlantMaintenanceTask {
+  id: string
+  plant_id: string
+  company_id: string
+  manual_id: string | null
+  title: string
+  description: string | null
+  interval_type: string | null
+  interval_value: number | null
+  next_due_date: string | null
+  recurring: boolean
+  created_at: string
+}
+
+export interface PlantMaintenanceLog {
+  id: string
+  plant_id: string
+  task_id: string | null
+  company_id: string
+  carried_out_by: string | null
+  carried_out_date: string
+  description: string
+  parts_used: { name: string; qty: number; cost: number }[]
+  labour_cost: number
+  parts_cost: number
+  downtime_hours: number
+  next_due_date: string | null
+  notes: string | null
+  created_at: string
+}
 
 export interface Company {
   id: string
