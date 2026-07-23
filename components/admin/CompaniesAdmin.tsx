@@ -3,123 +3,211 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Company, Module } from '@/lib/types'
-import { Building2, Plus, Check, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { Building2, Plus, Check, X, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 
-// Top-level sidebar modules
-const TOP_MODULES: { key: Module; label: string; subFeatures?: { key: string; label: string }[] }[] = [
-  { key: 'projects', label: 'Projects' },
+const MODULE_GROUPS: {
+  label: string
+  modules: { key: string; label: string; subFeatures?: { key: string; label: string }[] }[]
+}[] = [
   {
-    key: 'construction', label: 'Construction',
-    subFeatures: [
-      { key: 'construction.itp',         label: 'ITP (Inspection & Test Plan)' },
-      { key: 'construction.civils',      label: 'Civils Works' },
-      { key: 'construction.cable',       label: 'Cable Schedule' },
-      { key: 'construction.timesheets',  label: 'Agency Timesheets' },
-      { key: 'construction.programme',   label: 'Programme (P6)' },
+    label: 'Core',
+    modules: [
+      { key: 'projects',          label: 'Projects' },
+      { key: 'documents',         label: 'Documents' },
+      { key: 'reviews',           label: 'Reviews' },
+      { key: 'reference_library', label: 'Reference Library' },
     ],
   },
-  { key: 'reference_library', label: 'Reference Library' },
-  { key: 'planning',          label: 'Work Planner' },
-  { key: 'team',              label: 'Team' },
-  { key: 'plant',             label: 'Plant' },
-  { key: 'documents',         label: 'Documents' },
-  { key: 'reviews',           label: 'Reviews' },
-  { key: 'procurement',       label: 'Procurement' },
-  { key: 'tests',             label: 'Tests' },
-  { key: 'assurance',         label: 'Assurance' },
+  {
+    label: 'Construction',
+    modules: [
+      {
+        key: 'construction', label: 'Construction (top-level)',
+        subFeatures: [
+          { key: 'construction.itp',        label: 'ITP (Inspection & Test Plan)' },
+          { key: 'construction.civils',     label: 'Civils Works' },
+          { key: 'construction.cable',      label: 'Cable Schedule' },
+          { key: 'construction.timesheets', label: 'Agency Timesheets' },
+          { key: 'construction.programme',  label: 'Programme (P6)' },
+        ],
+      },
+      { key: 'planning', label: 'Work Planner' },
+    ],
+  },
+  {
+    label: 'Resources',
+    modules: [
+      { key: 'team',        label: 'Team' },
+      { key: 'plant',       label: 'Plant' },
+    ],
+  },
+  {
+    label: 'Compliance',
+    modules: [
+      { key: 'procurement', label: 'Procurement' },
+      { key: 'tests',       label: 'Tests' },
+      { key: 'assurance',   label: 'Assurance' },
+    ],
+  },
 ]
 
-function hasFeature(modules: string[], key: string) {
-  return modules.includes(key)
+const ALL_TOP_MODULES = MODULE_GROUPS.flatMap(g => g.modules.map(m => ({ key: m.key as Module, label: m.label })))
+
+function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none"
+      style={{ background: on ? 'var(--accent)' : '#334155' }}
+    >
+      <span
+        className="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+        style={{ transform: on ? 'translateX(16px)' : 'translateX(0)' }}
+      />
+    </button>
+  )
 }
 
-function ModuleRow({
-  mod,
+function ModuleGroup({
+  group,
   modules,
   onToggle,
 }: {
-  mod: typeof TOP_MODULES[0]
+  group: typeof MODULE_GROUPS[0]
   modules: string[]
   onToggle: (key: string) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const on = hasFeature(modules, mod.key)
-  const hasSubs = !!mod.subFeatures?.length
+  const [openSubs, setOpenSubs] = useState<string | null>(null)
+
+  return (
+    <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-base)' }}>
+      <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
+        {group.label}
+      </p>
+      <div className="space-y-3">
+        {group.modules.map(mod => {
+          const on = modules.includes(mod.key)
+          const hasSubs = !!mod.subFeatures?.length
+          const subsOpen = openSubs === mod.key
+
+          return (
+            <div key={mod.key}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Toggle on={on} onClick={() => onToggle(mod.key)} />
+                  <span className="text-sm truncate" style={{ color: on ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                    {mod.label}
+                  </span>
+                </div>
+                {hasSubs && on && (
+                  <button
+                    onClick={() => setOpenSubs(subsOpen ? null : mod.key)}
+                    className="flex items-center gap-1 text-xs shrink-0 hover:opacity-70 transition-opacity"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {subsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    Sub-features
+                  </button>
+                )}
+              </div>
+
+              {hasSubs && on && subsOpen && (
+                <div className="mt-3 ml-5 pl-3 border-l space-y-2.5" style={{ borderColor: 'var(--border)' }}>
+                  {mod.subFeatures!.map(sf => {
+                    const sfOn = modules.includes(sf.key)
+                    return (
+                      <div key={sf.key} className="flex items-center justify-between gap-3">
+                        <span className="text-xs" style={{ color: sfOn ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                          {sf.label}
+                        </span>
+                        <Toggle on={sfOn} onClick={() => onToggle(sf.key)} />
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function CompanyDetail({
+  company,
+  onBack,
+  onUpdate,
+}: {
+  company: Company
+  onBack: () => void
+  onUpdate: (updated: Company) => void
+}) {
+  const supabase = createClient()
+  const modules = company.modules as string[]
+
+  async function toggle(key: string) {
+    const updated = modules.includes(key) ? modules.filter(m => m !== key) : [...modules, key]
+    const { error } = await supabase
+      .from('companies')
+      .update({ modules: updated, updated_at: new Date().toISOString() })
+      .eq('id', company.id)
+    if (!error) onUpdate({ ...company, modules: updated as Module[] })
+  }
+
+  const enabledCount = MODULE_GROUPS.flatMap(g => g.modules).filter(m => modules.includes(m.key)).length
+  const totalCount   = MODULE_GROUPS.flatMap(g => g.modules).length
 
   return (
     <div>
-      <div className="flex items-center gap-2">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
         <button
-          onClick={() => onToggle(mod.key)}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors"
-          style={{
-            borderColor: on ? 'var(--accent)' : 'var(--border)',
-            background: on ? 'rgba(108,114,245,0.12)' : 'transparent',
-            color: on ? 'var(--accent)' : 'var(--text-muted)',
-          }}
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm hover:opacity-70 transition-opacity"
+          style={{ color: 'var(--text-muted)' }}
         >
-          {on ? <Check size={10} /> : <X size={10} />}
-          {mod.label}
+          <ArrowLeft size={15} />
+          Companies
         </button>
-        {hasSubs && on && (
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="flex items-center gap-0.5 text-[10px] transition-opacity hover:opacity-80"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-            {expanded ? 'hide' : 'features'}
-          </button>
-        )}
+        <span style={{ color: 'var(--border)' }}>/</span>
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
+          style={{ background: company.accent_color ?? 'var(--accent)' }}
+        >
+          {company.name[0].toUpperCase()}
+        </div>
+        <div>
+          <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{company.name}</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{company.slug}.yacht-gitana.com · {enabledCount}/{totalCount} modules enabled</p>
+        </div>
       </div>
 
-      {hasSubs && on && expanded && (
-        <div className="mt-2 ml-2 pl-3 border-l space-y-1.5" style={{ borderColor: 'var(--border)' }}>
-          {mod.subFeatures!.map(sf => {
-            const sfOn = hasFeature(modules, sf.key)
-            return (
-              <button
-                key={sf.key}
-                onClick={() => onToggle(sf.key)}
-                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors"
-                style={{
-                  borderColor: sfOn ? 'var(--accent)' : 'var(--border)',
-                  background: sfOn ? 'rgba(108,114,245,0.10)' : 'transparent',
-                  color: sfOn ? 'var(--accent)' : 'var(--text-muted)',
-                }}
-              >
-                {sfOn ? <Check size={9} /> : <X size={9} />}
-                {sf.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* Module groups */}
+      <div className="grid grid-cols-2 gap-4">
+        {MODULE_GROUPS.map(group => (
+          <ModuleGroup key={group.label} group={group} modules={modules} onToggle={toggle} />
+        ))}
+      </div>
     </div>
   )
 }
 
 export default function CompaniesAdmin({ companies: initial }: { companies: Company[] }) {
   const [companies, setCompanies] = useState(initial)
+  const [selected, setSelected] = useState<Company | null>(null)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [newSlug, setNewSlug] = useState('')
-  const [newModules, setNewModules] = useState<string[]>(['projects', 'documents', 'reviews', 'reference_library'])
+  const [newModules, setNewModules] = useState<Module[]>(['projects', 'documents', 'reviews', 'reference_library'])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()
 
-  async function toggleFeature(company: Company, key: string) {
-    const current = company.modules as string[]
-    const updated = current.includes(key) ? current.filter(m => m !== key) : [...current, key]
-    const { error } = await supabase
-      .from('companies')
-      .update({ modules: updated, updated_at: new Date().toISOString() })
-      .eq('id', company.id)
-    if (!error) {
-      setCompanies(cs => cs.map(c => c.id === company.id ? { ...c, modules: updated as Module[] } : c))
-    }
+  function handleUpdate(updated: Company) {
+    setCompanies(cs => cs.map(c => c.id === updated.id ? updated : c))
+    setSelected(updated)
   }
 
   async function createCompany() {
@@ -143,6 +231,18 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
     setSaving(false)
   }
 
+  if (selected) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <CompanyDetail
+          company={selected}
+          onBack={() => setSelected(null)}
+          onUpdate={handleUpdate}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -150,7 +250,7 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
           <Building2 size={22} style={{ color: 'var(--accent)' }} />
           <div>
             <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Companies</h1>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Manage tenants, modules and sub-features</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Click a company to manage its modules</p>
           </div>
         </div>
         <button
@@ -187,20 +287,17 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
                 className="w-full px-3 py-2 rounded-lg text-sm border"
                 style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
-              {newSlug && (
-                <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>{newSlug}.yacht-gitana.com</p>
-              )}
+              {newSlug && <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>{newSlug}.yacht-gitana.com</p>}
             </div>
           </div>
           <div className="mb-4">
-            <label className="text-xs mb-2 block" style={{ color: 'var(--text-muted)' }}>Modules</label>
+            <label className="text-xs mb-2 block" style={{ color: 'var(--text-muted)' }}>Initial modules</label>
             <div className="flex flex-wrap gap-2">
-              {TOP_MODULES.map(mod => {
-                const on = newModules.includes(mod.key)
+              {ALL_TOP_MODULES.map(({ key, label }) => {
+                const on = newModules.includes(key)
                 return (
-                  <button
-                    key={mod.key}
-                    onClick={() => setNewModules(m => on ? m.filter(x => x !== mod.key) : [...m, mod.key])}
+                  <button key={key}
+                    onClick={() => setNewModules(m => on ? m.filter(x => x !== key) : [...m, key])}
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors"
                     style={{
                       borderColor: on ? 'var(--accent)' : 'var(--border)',
@@ -209,7 +306,7 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
                     }}
                   >
                     {on && <Check size={10} />}
-                    {mod.label}
+                    {label}
                   </button>
                 )
               })}
@@ -217,57 +314,69 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
           </div>
           {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
           <div className="flex gap-2">
-            <button
-              onClick={createCompany}
-              disabled={saving || !newName || !newSlug}
+            <button onClick={createCompany} disabled={saving || !newName || !newSlug}
               className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
-              style={{ background: 'var(--accent)' }}
-            >
+              style={{ background: 'var(--accent)' }}>
               {saving ? 'Creating…' : 'Create'}
             </button>
-            <button
-              onClick={() => setCreating(false)}
-              className="px-4 py-2 rounded-lg text-sm"
-              style={{ color: 'var(--text-muted)' }}
-            >
+            <button onClick={() => setCreating(false)} className="px-4 py-2 rounded-lg text-sm" style={{ color: 'var(--text-muted)' }}>
               Cancel
             </button>
           </div>
         </div>
       )}
 
-      {/* Company list */}
-      <div className="space-y-4">
-        {companies.map(company => (
-          <div key={company.id} className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
-                style={{ background: company.accent_color ?? 'var(--accent)' }}
-              >
-                {company.name[0].toUpperCase()}
+      {/* Company cards */}
+      <div className="grid grid-cols-2 gap-4">
+        {companies.map(company => {
+          const mods = company.modules as string[]
+          const enabledCount = MODULE_GROUPS.flatMap(g => g.modules).filter(m => mods.includes(m.key)).length
+          const totalCount   = MODULE_GROUPS.flatMap(g => g.modules).length
+          return (
+            <button
+              key={company.id}
+              onClick={() => setSelected(company)}
+              className="rounded-xl border p-4 text-left transition-all hover:border-accent group"
+              style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
+                  style={{ background: company.accent_color ?? 'var(--accent)' }}
+                >
+                  {company.name[0].toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{company.name}</p>
+                  <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{company.slug}.yacht-gitana.com</p>
+                </div>
+                <ChevronRight size={14} className="ml-auto shrink-0 opacity-40 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--accent)' }} />
               </div>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{company.name}</p>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{company.slug}.yacht-gitana.com</p>
-              </div>
-            </div>
 
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-              Modules & features
-            </p>
-            <div className="flex flex-wrap gap-2 items-start">
-              {TOP_MODULES.map(mod => (
-                <ModuleRow
-                  key={mod.key}
-                  mod={mod}
-                  modules={company.modules as string[]}
-                  onToggle={key => toggleFeature(company, key)}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+              {/* Module pills preview */}
+              <div className="flex flex-wrap gap-1.5">
+                {MODULE_GROUPS.flatMap(g => g.modules).map(mod => {
+                  const on = mods.includes(mod.key)
+                  return (
+                    <span key={mod.key}
+                      className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                      style={{
+                        background: on ? 'rgba(108,114,245,0.12)' : 'rgba(100,116,139,0.08)',
+                        color: on ? 'var(--accent)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {mod.label}
+                    </span>
+                  )
+                })}
+              </div>
+
+              <p className="text-[10px] mt-2.5" style={{ color: 'var(--text-muted)' }}>
+                {enabledCount} of {totalCount} modules enabled
+              </p>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
