@@ -27,7 +27,7 @@ const MODULE_GROUPS: {
           { key: 'construction.itp',        label: 'ITP (Inspection & Test Plan)' },
           { key: 'construction.civils',     label: 'Civils Works' },
           { key: 'construction.cable',      label: 'Cable Schedule' },
-          { key: 'construction.timesheets', label: 'Agency Timesheets' },
+          { key: 'construction.timesheets', label: 'Timesheets' },
           { key: 'construction.programme',  label: 'Programme (P6)' },
         ],
       },

@@ -190,7 +190,7 @@ export default function TimesheetUploadPanel({ siteId }: { siteId: string }) {
               <Upload size={24} style={{ color: 'var(--text-muted)' }} />
               <div className="text-center">
                 <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                  Drop agency timesheet here
+                  Drop timesheet here
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                   XLS or XLSX · GPW / OCU Dyce format

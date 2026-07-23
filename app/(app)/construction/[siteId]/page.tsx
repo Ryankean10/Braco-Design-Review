@@ -242,7 +242,7 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
 
       {/* Agency timesheet upload */}
       {feat('construction.timesheets') && <CollapsibleSection
-        title="Agency Timesheets"
+        title="Timesheets"
         badge={undefined}
         summary="Upload agency XLS timesheets — auto-analysed, matched to staff, discrepancies flagged"
       >

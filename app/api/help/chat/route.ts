@@ -24,11 +24,11 @@ MRRK manages BESS projects through their full lifecycle: Design → Procure → 
     ? `**Construction page** (/construction)
 - Shows all active construction sites
 - Click a site to open its full dashboard
-- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Civils activities, ITP panel, Programme, Agency Timesheets`
+- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Civils activities, ITP panel, Programme, timesheets`
     : `**Construction page** (/construction)
 - Shows all active construction sites (e.g. Dyce BESS, Braco BESS)
 - Click a site to open its full dashboard
-- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Cable Register, Civils activities, ITP panel, Programme, Agency Timesheets`
+- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Cable Register, Civils activities, ITP panel, Programme, timesheets`
 
   const planningSection = isCivils
     ? `**Planning / Work Planner** (/planning)

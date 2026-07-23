@@ -918,7 +918,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                 <div className="text-center py-8">
                   <Clock size={24} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
                   <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No timesheet records yet.</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Hours are populated from diary records and agency timesheet uploads.</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Hours are populated from diary records and timesheet uploads.</p>
                 </div>
               )}
               {tsLoaded && tsWeeks.length > 0 && tsWeeks.map(w => {
