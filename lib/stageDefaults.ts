@@ -1,3 +1,5 @@
+// ── BESS stages ────────────────────────────────────────────────────────────
+
 export const STAGE_ORDER = [
   'Feasibility',
   'Design',
@@ -8,6 +10,23 @@ export const STAGE_ORDER = [
 ] as const
 
 export type StageName = typeof STAGE_ORDER[number]
+
+// ── Civils / contractor stages ─────────────────────────────────────────────
+
+export const CIVILS_STAGE_ORDER = [
+  'Tender',
+  'Awarded',
+  'Mobilisation',
+  'On Site',
+  'Defects',
+  'Handover',
+] as const
+
+export type CivilsStageName = typeof CIVILS_STAGE_ORDER[number]
+
+export type AnyStage = StageName | CivilsStageName
+
+// ── Shared types ───────────────────────────────────────────────────────────
 
 export type ChecklistItem = {
   id: string
@@ -23,7 +42,7 @@ export type StageStatus = 'Not Started' | 'In Progress' | 'Complete' | 'On Hold'
 export interface ProjectStage {
   id: string
   project_id: string
-  stage: StageName
+  stage: AnyStage
   status: StageStatus
   checklist: ChecklistItem[]
   signed_off_by: string | null
@@ -35,7 +54,8 @@ export interface ProjectStage {
   updated_at: string
 }
 
-// Default checklist items per stage — seeded when project_stages row is created
+// ── BESS checklists ────────────────────────────────────────────────────────
+
 export const DEFAULT_CHECKLISTS: Record<StageName, string[]> = {
   'Feasibility': [
     'Grid connection application submitted to DNO/NESO',
@@ -97,7 +117,112 @@ export const DEFAULT_CHECKLISTS: Record<StageName, string[]> = {
   ],
 }
 
-export function makeDefaultStages(projectId: string): Omit<ProjectStage, 'id' | 'created_at' | 'updated_at'>[] {
+// ── Civils checklists ──────────────────────────────────────────────────────
+
+export const CIVILS_DEFAULT_CHECKLISTS: Record<CivilsStageName, string[]> = {
+  'Tender': [
+    'Enquiry / ITT received and logged',
+    'Site visit carried out',
+    'Scope of works confirmed with client',
+    'Plant and labour requirements estimated',
+    'Subcontractor quotes obtained',
+    'Tender price agreed and signed off internally',
+    'Tender submitted to client',
+  ],
+  'Awarded': [
+    'Contract / order confirmation received',
+    'Contract sum and programme dates confirmed',
+    'Insurance and bonds in place',
+    'Procurement list raised — long-lead items identified',
+    'Project manager and site manager appointed',
+    'Programme issued to client',
+  ],
+  'Mobilisation': [
+    'Plant allocated and delivery dates confirmed',
+    'Crew appointed and inducted',
+    'RAMS and method statements prepared and approved',
+    'Traffic management plan approved',
+    'Site establishment and welfare set up',
+    'Temporary works design approved (if required)',
+    'Groundworks drawings issued for construction',
+    'Pre-start meeting held with client',
+  ],
+  'On Site': [
+    'Daily site diaries being completed',
+    'Timesheets submitted weekly',
+    'COSHH and material deliveries recorded',
+    'Weekly progress report issued to client',
+    'Open issues / RFIs tracked and responded to',
+    'ITP hold and witness points completed as applicable',
+    'Variations agreed and instructed in writing',
+  ],
+  'Defects': [
+    'Practical completion certificate issued',
+    'Snagging list issued and agreed with client',
+    'All snagging items rectified and signed off',
+    'As-built drawings issued',
+    'O&M manuals issued (if applicable)',
+    'Retention amount confirmed',
+  ],
+  'Handover': [
+    'Final account submitted',
+    'Final account agreed and signed off',
+    'Retention released (or retention bond in place)',
+    'Defects liability period expired',
+    'Project file archived',
+    'Lessons learned review completed',
+  ],
+}
+
+// ── Colour maps ────────────────────────────────────────────────────────────
+
+export const STAGE_COLOURS: Record<StageName, string> = {
+  'Feasibility':         '#4b5563',
+  'Design':              '#2563eb',
+  'Procure':             '#7c3aed',
+  'Build & Install':     '#d97706',
+  'Test & Commission':   '#dc2626',
+  'Energise & Handover': '#16a34a',
+}
+
+export const CIVILS_STAGE_COLOURS: Record<CivilsStageName, string> = {
+  'Tender':       '#6366f1',
+  'Awarded':      '#0ea5e9',
+  'Mobilisation': '#f59e0b',
+  'On Site':      '#f97316',
+  'Defects':      '#dc2626',
+  'Handover':     '#16a34a',
+}
+
+export function getStageColour(stage: string, industry = 'bess'): string {
+  if (industry === 'civils') return CIVILS_STAGE_COLOURS[stage as CivilsStageName] ?? '#4b5563'
+  return STAGE_COLOURS[stage as StageName] ?? '#4b5563'
+}
+
+// ── Factory functions ──────────────────────────────────────────────────────
+
+export function makeDefaultStages(projectId: string, industry = 'bess'): Omit<ProjectStage, 'id' | 'created_at' | 'updated_at'>[] {
+  if (industry === 'civils') {
+    return CIVILS_STAGE_ORDER.map(stage => ({
+      project_id: projectId,
+      stage,
+      status: 'Not Started' as StageStatus,
+      checklist: CIVILS_DEFAULT_CHECKLISTS[stage].map((label, i) => ({
+        id: `${stage.replace(/\s+/g, '_').toLowerCase()}_${i}`,
+        label,
+        checked: false,
+        checked_by: null,
+        checked_by_name: null,
+        checked_at: null,
+      })),
+      signed_off_by: null,
+      signed_off_at: null,
+      sign_off_notes: null,
+      started_at: null,
+      completed_at: null,
+    }))
+  }
+
   return STAGE_ORDER.map(stage => ({
     project_id: projectId,
     stage,
@@ -116,4 +241,8 @@ export function makeDefaultStages(projectId: string): Omit<ProjectStage, 'id' | 
     started_at: null,
     completed_at: null,
   }))
+}
+
+export function getStageOrder(industry = 'bess'): readonly string[] {
+  return industry === 'civils' ? CIVILS_STAGE_ORDER : STAGE_ORDER
 }

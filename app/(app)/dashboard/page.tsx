@@ -6,20 +6,7 @@ import Link from 'next/link'
 import { getCompanyContext } from '@/lib/getCompanyContext'
 import { FolderOpen, Plus, MessageSquare } from 'lucide-react'
 import ClientDashboard from '@/components/ClientDashboard'
-import { STAGE_ORDER } from '@/lib/stageDefaults'
-import type { StageName } from '@/lib/stageDefaults'
-
-function stageColour(stage: StageName) {
-  const map: Record<StageName, string> = {
-    'Feasibility':         '#4b5563',
-    'Design':              '#2563eb',
-    'Procure':             '#7c3aed',
-    'Build & Install':     '#d97706',
-    'Test & Commission':   '#dc2626',
-    'Energise & Handover': '#16a34a',
-  }
-  return map[stage] ?? '#4b5563'
-}
+import { getStageOrder, getStageColour } from '@/lib/stageDefaults'
 
 export default async function DashboardPage() {
   const { supabase, user, profile, role, company, effectiveCompanyId } = await getCompanyContext()
@@ -112,7 +99,8 @@ export default async function DashboardPage() {
   ])
 
   // Count projects with each stage "In Progress"
-  const byStage = STAGE_ORDER.map(stage => ({
+  const stageOrder = getStageOrder(industry)
+  const byStage = stageOrder.map(stage => ({
     stage,
     inProgress: (allProjectStages ?? []).filter(s => s.stage === stage && s.status === 'In Progress').length,
     complete:   (allProjectStages ?? []).filter(s => s.stage === stage && s.status === 'Complete').length,
@@ -177,9 +165,9 @@ export default async function DashboardPage() {
         <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Active stages across all projects</p>
         <div className="grid grid-cols-3 gap-3">
           {byStage.map(({ stage, inProgress, complete }) => (
-            <div key={stage} className="rounded-xl p-4 border" style={{ background: 'var(--bg-surface)', borderColor: inProgress > 0 ? `${stageColour(stage)}55` : 'var(--border)' }}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: inProgress > 0 ? stageColour(stage) : 'var(--text-muted)' }}>{stage}</p>
-              <p className="text-3xl font-bold mb-1" style={{ color: inProgress > 0 ? stageColour(stage) : 'var(--text-muted)' }}>{inProgress}</p>
+            <div key={stage} className="rounded-xl p-4 border" style={{ background: 'var(--bg-surface)', borderColor: inProgress > 0 ? `${getStageColour(stage, industry)}55` : 'var(--border)' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: inProgress > 0 ? getStageColour(stage, industry) : 'var(--text-muted)' }}>{stage}</p>
+              <p className="text-3xl font-bold mb-1" style={{ color: inProgress > 0 ? getStageColour(stage, industry) : 'var(--text-muted)' }}>{inProgress}</p>
               <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                 in progress{complete > 0 ? ` · ${complete} complete` : ''}
               </p>
@@ -219,7 +207,7 @@ export default async function DashboardPage() {
                     {active.length > 0
                       ? active.map(s => (
                           <span key={s} className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap"
-                            style={{ background: `${stageColour(s as StageName)}22`, color: stageColour(s as StageName), border: `1px solid ${stageColour(s as StageName)}55` }}>
+                            style={{ background: `${getStageColour(s, industry)}22`, color: getStageColour(s, industry), border: `1px solid ${getStageColour(s, industry)}55` }}>
                             {s}
                           </span>
                         ))

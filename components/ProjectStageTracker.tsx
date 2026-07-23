@@ -7,8 +7,7 @@ import {
   CheckSquare, Square, PenLine, AlertCircle, Lock, HardHat
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { ProjectStage, StageStatus, ChecklistItem, StageName } from '@/lib/stageDefaults'
-import { STAGE_ORDER } from '@/lib/stageDefaults'
+import type { ProjectStage, StageStatus, ChecklistItem, AnyStage } from '@/lib/stageDefaults'
 
 const STATUS_CFG: Record<StageStatus, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
   'Not Started': { color: '#64748b', bg: 'rgba(100,116,139,0.1)',  border: 'rgba(100,116,139,0.3)', icon: <Circle size={13} />,       label: 'Not Started' },
@@ -17,9 +16,8 @@ const STATUS_CFG: Record<StageStatus, { color: string; bg: string; border: strin
   'On Hold':     { color: '#fb923c', bg: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.35)', icon: <PauseCircle size={13} />,  label: 'On Hold'     },
 }
 
-// Stages that can run in parallel (not hard gates)
-const PARALLEL_STAGES: StageName[] = ['Design', 'Procure', 'Build & Install', 'Test & Commission']
-const GATE_STAGES:     StageName[] = ['Feasibility', 'Energise & Handover']
+// Gate stages require sign-off before project can progress
+const GATE_STAGES: AnyStage[] = ['Feasibility', 'Energise & Handover', 'Awarded', 'Handover']
 
 interface Props {
   stages: ProjectStage[]
@@ -31,22 +29,22 @@ interface Props {
 
 export default function ProjectStageTracker({ stages: initStages, canEdit, userId, userName, projectId }: Props) {
   const [stages, setStages] = useState<ProjectStage[]>(initStages)
-  const [expanded, setExpanded] = useState<StageName | null>(null)
-  const [signingOff, setSigningOff] = useState<StageName | null>(null)
+  const [expanded, setExpanded] = useState<AnyStage | null>(null)
+  const [signingOff, setSigningOff] = useState<AnyStage | null>(null)
   const [signOffNotes, setSignOffNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [constructionSiteId, setConstructionSiteId] = useState<string | null>(null)
   const supabase = createClient()
 
-  function getStage(name: StageName) {
+  function getStage(name: AnyStage) {
     return stages.find(s => s.stage === name)!
   }
 
-  function updateStageLocal(name: StageName, patch: Partial<ProjectStage>) {
+  function updateStageLocal(name: AnyStage, patch: Partial<ProjectStage>) {
     setStages(prev => prev.map(s => s.stage === name ? { ...s, ...patch } : s))
   }
 
-  async function saveStage(name: StageName, patch: Partial<ProjectStage>) {
+  async function saveStage(name: AnyStage, patch: Partial<ProjectStage>) {
     const stage = getStage(name)
     const { data } = await supabase
       .from('project_stages')
@@ -57,7 +55,7 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
     if (data) updateStageLocal(name, data)
   }
 
-  async function setStatus(name: StageName, status: StageStatus) {
+  async function setStatus(name: AnyStage, status: StageStatus) {
     if (!canEdit) return
     setSaving(true)
     const now = new Date().toISOString()
@@ -69,7 +67,7 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
     setSaving(false)
   }
 
-  async function toggleChecklistItem(stageName: StageName, itemId: string) {
+  async function toggleChecklistItem(stageName: AnyStage, itemId: string) {
     if (!canEdit) return
     const stage = getStage(stageName)
     const now = new Date().toISOString()
@@ -86,7 +84,7 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
       .eq('id', stage.id)
   }
 
-  async function signOff(stageName: StageName) {
+  async function signOff(stageName: AnyStage) {
     if (!canEdit) return
     setSaving(true)
     const now = new Date().toISOString()
@@ -143,9 +141,8 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
 
       {/* Stage pills row */}
       <div className="p-4 grid grid-cols-3 gap-2" style={{ background: 'var(--bg-elevated)' }}>
-        {STAGE_ORDER.map(name => {
-          const stage = getStage(name)
-          if (!stage) return null
+        {stages.map(stage => {
+          const name = stage.stage as AnyStage
           const cfg = STATUS_CFG[stage.status]
           const done    = stage.checklist.filter(i => i.checked).length
           const total   = stage.checklist.length

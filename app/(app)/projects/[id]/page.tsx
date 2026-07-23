@@ -12,7 +12,7 @@ import InternalCommentPanel from '@/components/InternalCommentPanel'
 import ProjectStageTracker from '@/components/ProjectStageTracker'
 import ClientAccessPanel from '@/components/ClientAccessPanel'
 import TeamAccessPanel from '@/components/TeamAccessPanel'
-import { makeDefaultStages, STAGE_ORDER as STAGE_NAMES } from '@/lib/stageDefaults'
+import { makeDefaultStages, getStageOrder } from '@/lib/stageDefaults'
 import ProjectITPUpload from '@/components/ProjectITPUpload'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,7 +23,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   if (!user) redirect('/login')
 
   const [{ data: project }, { data: profile }] = await Promise.all([
-    supabase.from('projects').select('*').eq('id', id).single(),
+    supabase.from('projects').select('*, companies(industry)').eq('id', id).single(),
     supabase.from('profiles').select('role').eq('id', user.id).single(),
   ])
 
@@ -176,18 +176,21 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     responder_name: c.responded_by ? (nameMap[c.responded_by] ?? null) : null,
   }))
 
+  const industry = (project as any)?.companies?.industry ?? 'bess'
+
   // Seed project_stages if this project has none yet
   let projectStages = projectStageRows ?? []
   if (projectStages.length === 0) {
-    const defaults = makeDefaultStages(id)
+    const defaults = makeDefaultStages(id, industry)
     const { data: seeded } = await supabase
       .from('project_stages')
       .insert(defaults)
       .select()
     projectStages = seeded ?? []
   }
-  // Ensure all 6 stages present (handles projects created before migration)
-  const stagesOrdered = STAGE_NAMES.map(name =>
+  // Order stages by the industry's stage order
+  const stageOrder = getStageOrder(industry)
+  const stagesOrdered = stageOrder.map(name =>
     projectStages.find((s: any) => s.stage === name)
   ).filter(Boolean) as any[]
 
