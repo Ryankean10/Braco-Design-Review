@@ -14,6 +14,16 @@
   --minor: #eab308;
   --observation: #6b7280;
   --success: #22c55e;
+
+  /* Sidebar — light theme */
+  --bg-sidebar: #ffffff;
+  --sidebar-border: #e2e8f0;
+  --sidebar-text: #1e3a6b;
+  --sidebar-muted: #4a5e8a;
+  --sidebar-subtext: #64748b;
+  --sidebar-active-bg: rgba(220, 38, 38, 0.08);
+  --sidebar-active-text: #dc2626;
+  --sidebar-hover-bg: rgba(30, 58, 107, 0.06);
 }
 
 body {

@@ -79,10 +79,10 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   return (
     <aside
       className="w-56 flex flex-col shrink-0 border-r"
-      style={{ background: 'var(--bg-sidebar, var(--bg-surface))', borderColor: 'var(--border)', color: 'var(--sidebar-text, inherit)' }}
+      style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--sidebar-border)', color: 'var(--sidebar-text)' }}
     >
       {/* Company logo / name */}
-      <div className="px-4 py-5 border-b flex items-center gap-2.5" style={{ borderColor: 'var(--border)' }}>
+      <div className="px-4 py-5 border-b flex items-center gap-2.5" style={{ borderColor: 'var(--sidebar-border)' }}>
         {company?.logo_url ? (
           <img src={company.logo_url} alt={companyName} className="w-7 h-7 rounded-md object-contain" />
         ) : (
@@ -94,10 +94,10 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
           </div>
         )}
         <div className="min-w-0">
-          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+          <p className="text-sm font-semibold truncate" style={{ color: 'var(--sidebar-text)' }}>
             {companyName}
           </p>
-          <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{company?.tagline ?? 'BESS Project Platform'}</p>
+          <p className="text-[10px] truncate" style={{ color: 'var(--sidebar-subtext)' }}>{company?.tagline ?? 'BESS Project Platform'}</p>
         </div>
       </div>
 
@@ -115,8 +115,8 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
                   onClick={() => { setProjectsOpen(v => !v) }}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left"
                   style={{
-                    color: active ? 'var(--accent)' : 'var(--text-muted)',
-                    background: active ? 'rgba(108,114,245,0.12)' : 'transparent',
+                    color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-muted)',
+                    background: active ? 'var(--sidebar-active-bg)' : 'transparent',
                   }}
                 >
                   <Icon size={15} />
@@ -129,9 +129,9 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
                 </button>
 
                 {projectsOpen && (
-                  <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: 'var(--border)' }}>
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: 'var(--sidebar-border)' }}>
                     {projects.length === 0 && (
-                      <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>No projects</p>
+                      <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--sidebar-subtext)' }}>No projects</p>
                     )}
                     {projects.map(p => {
                       const pActive = pathname === `/projects/${p.id}` || pathname.startsWith(`/projects/${p.id}/`)
@@ -141,8 +141,8 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
                           href={`/projects/${p.id}`}
                           className="flex items-center px-2 py-1.5 rounded-md text-xs transition-colors truncate"
                           style={{
-                            color: pActive ? 'var(--accent)' : 'var(--text-muted)',
-                            background: pActive ? 'rgba(108,114,245,0.10)' : 'transparent',
+                            color: pActive ? 'var(--sidebar-active-text)' : 'var(--sidebar-subtext)',
+                            background: pActive ? 'var(--sidebar-active-bg)' : 'transparent',
                           }}
                         >
                           {p.name}
@@ -162,8 +162,8 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
                   onClick={() => setConstructionOpen(v => !v)}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left"
                   style={{
-                    color: active ? 'var(--accent)' : 'var(--text-muted)',
-                    background: active ? 'rgba(108,114,245,0.12)' : 'transparent',
+                    color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-muted)',
+                    background: active ? 'var(--sidebar-active-bg)' : 'transparent',
                   }}
                 >
                   <Icon size={15} />
@@ -176,9 +176,9 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
                 </button>
 
                 {constructionOpen && (
-                  <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: 'var(--border)' }}>
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: 'var(--sidebar-border)' }}>
                     {sites.length === 0 && (
-                      <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>No sites</p>
+                      <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--sidebar-subtext)' }}>No sites</p>
                     )}
                     {sites.map(s => {
                       const sActive = pathname === `/construction/${s.id}` || pathname.startsWith(`/construction/${s.id}/`)
@@ -188,8 +188,8 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
                           href={`/construction/${s.id}`}
                           className="flex items-center px-2 py-1.5 rounded-md text-xs transition-colors truncate"
                           style={{
-                            color: sActive ? 'var(--accent)' : 'var(--text-muted)',
-                            background: sActive ? 'rgba(108,114,245,0.10)' : 'transparent',
+                            color: sActive ? 'var(--sidebar-active-text)' : 'var(--sidebar-subtext)',
+                            background: sActive ? 'var(--sidebar-active-bg)' : 'transparent',
                           }}
                         >
                           {s.name}
@@ -223,7 +223,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
         {isSuperadmin && (
           <>
             <div className="pt-3 pb-1 px-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--sidebar-subtext)' }}>
                 Super Admin
               </p>
             </div>
@@ -235,8 +235,8 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
                   href={href}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
                   style={{
-                    color: active ? 'var(--accent)' : 'var(--text-muted)',
-                    background: active ? 'rgba(108,114,245,0.12)' : 'transparent',
+                    color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-muted)',
+                    background: active ? 'var(--sidebar-active-bg)' : 'transparent',
                   }}
                 >
                   <Icon size={15} />
@@ -250,19 +250,19 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
       </nav>
 
       {/* User */}
-      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
+      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--sidebar-border)' }}>
         <div className="flex items-center gap-2 px-2 mb-2">
           <div
             className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-            style={{ background: 'var(--accent)' }}
+            style={{ background: 'var(--sidebar-active-text)' }}
           >
             {profile?.full_name?.[0]?.toUpperCase() ?? profile?.email?.[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+            <p className="text-xs font-medium truncate" style={{ color: 'var(--sidebar-text)' }}>
               {profile?.full_name ?? profile?.email}
             </p>
-            <p className="text-[10px] capitalize" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[10px] capitalize" style={{ color: 'var(--sidebar-subtext)' }}>
               {profile?.role ?? 'engineer'}
             </p>
           </div>
@@ -271,7 +271,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
           <button
             onClick={() => setBugPanelOpen(true)}
             className="flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-80"
-            style={{ color: '#64748b' }}
+            style={{ color: 'var(--sidebar-subtext)' }}
             title="Bug reports"
           >
             <Bug size={13} />
@@ -281,7 +281,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
         <button
           onClick={signOut}
           className="flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-80"
-          style={{ color: 'var(--text-muted)' }}
+          style={{ color: 'var(--sidebar-subtext)' }}
         >
           <LogOut size={13} />
           Sign out

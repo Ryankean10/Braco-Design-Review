@@ -38,13 +38,13 @@ export default function LoginForm({ companyName, companySlug, logoUrl, accentCol
 
   const initial = companyName.charAt(0).toUpperCase()
 
-  const pageBg    = isLight ? '#f8fafc' : 'var(--bg-base)'
+  const pageBg    = isLight ? '#f0f4f8' : 'var(--bg-base)'
   const cardBg    = isLight ? '#ffffff' : 'var(--bg-surface)'
   const cardBorder = isLight ? '#e2e8f0' : 'var(--border)'
-  const inputBg   = isLight ? '#f1f5f9' : 'var(--bg-elevated)'
+  const inputBg   = isLight ? '#f8fafc' : 'var(--bg-elevated)'
   const inputBorder = isLight ? '#cbd5e1' : 'var(--border)'
-  const textPrimary = isLight ? '#0f172a' : 'var(--text-primary)'
-  const textMuted   = isLight ? '#64748b' : 'var(--text-muted)'
+  const textPrimary = isLight ? '#1e3a6b' : 'var(--text-primary)'
+  const textMuted   = isLight ? '#4a5e8a' : 'var(--text-muted)'
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4" style={{ background: pageBg }}>
