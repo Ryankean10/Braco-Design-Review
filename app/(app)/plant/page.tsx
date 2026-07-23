@@ -20,8 +20,8 @@ export default async function PlantPage() {
       .eq('company_id', effectiveCompanyId ?? '')
       .order('name'),
     supabase.from('projects').select('id, name, location').eq('company_id', effectiveCompanyId ?? '').order('name'),
-    supabase.from('construction_sites').select('id, name').order('name'),
-    supabase.from('people').select('id, name, role').order('name'),
+    supabase.from('construction_sites').select('id, name, project_id, projects!inner(company_id)').eq('projects.company_id', effectiveCompanyId ?? '').order('name'),
+    supabase.from('people').select('id, name, role').order('name'), // RLS scopes to company
   ])
 
   return (

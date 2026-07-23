@@ -8,8 +8,9 @@ export default async function UsersPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   if (!['superadmin', 'admin'].includes(profile?.role ?? '')) redirect('/dashboard')
+  const companyId: string = (profile as any)?.company_id ?? ''
 
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,8 +23,9 @@ export default async function UsersPage() {
     { data: members },
     { data: clients },
   ] = await Promise.all([
-    admin.from('profiles').select('id, email, full_name, role, created_at').order('created_at', { ascending: false }),
-    supabase.from('projects').select('id, name, client').order('name'),
+    // Service role — filter by company_id explicitly
+    admin.from('profiles').select('id, email, full_name, role, created_at').eq('company_id', companyId).order('created_at', { ascending: false }),
+    supabase.from('projects').select('id, name, client').eq('company_id', companyId).order('name'),
     supabase.from('project_members').select('project_id, user_id'),
     supabase.from('project_clients').select('project_id, user_id'),
   ])

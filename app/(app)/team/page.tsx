@@ -8,17 +8,18 @@ export default async function TeamPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
+  const companyId: string = (profile as any)?.company_id ?? ''
   if (!['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)) redirect('/dashboard')
 
-  // Fetch people library (all authenticated can read)
+  // RLS on people already scopes to company_id via get_user_company_id()
   const { data: people } = await supabase
     .from('people')
     .select('*')
     .order('name')
 
-  // Fetch this user's appointments with joined person + project/site names
+  // Fetch appointments for this company's projects/sites
   const { data: appointments } = await supabase
     .from('job_appointments')
     .select(`
@@ -30,10 +31,10 @@ export default async function TeamPage() {
     .eq('appointed_by', user.id)
     .order('created_at', { ascending: false })
 
-  // Fetch projects + sites for appointment dropdown
+  // Fetch projects + sites scoped to this company
   const [{ data: projects }, { data: sites }] = await Promise.all([
-    supabase.from('projects').select('id, name, client').order('name'),
-    supabase.from('construction_sites').select('id, name, client').order('name'),
+    supabase.from('projects').select('id, name, client').eq('company_id', companyId).order('name'),
+    supabase.from('construction_sites').select('id, name, client, project_id, projects!inner(company_id)').eq('projects.company_id', companyId).order('name'),
   ])
 
   return (

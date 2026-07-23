@@ -8,25 +8,29 @@ export default async function ConstructionIndexPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
+  const companyId: string = (profile as any)?.company_id ?? ''
   if (!['superadmin', 'admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
 
-  // Project managers and operatives can only see sites for their allocated projects
-  let allowedProjectIds: string[] | null = null
+  // Get all project IDs belonging to this company (+ role-based restriction)
+  let projectIdsQuery = supabase.from('projects').select('id').eq('company_id', companyId)
   if (role === 'project_manager' || role === 'operative') {
     const { data: memberships } = await supabase
       .from('project_members')
       .select('project_id')
       .eq('user_id', user.id)
-    allowedProjectIds = (memberships ?? []).map((m: any) => m.project_id)
+    const memberIds = (memberships ?? []).map((m: any) => m.project_id)
+    projectIdsQuery = projectIdsQuery.in('id', memberIds.length > 0 ? memberIds : [''])
   }
+  const { data: companyProjects } = await projectIdsQuery
+  const allowedProjectIds = (companyProjects ?? []).map((p: any) => p.id)
 
-  let sitesQuery = supabase.from('construction_sites').select('*').order('created_at', { ascending: false })
-  if (allowedProjectIds !== null) {
-    sitesQuery = sitesQuery.in('project_id', allowedProjectIds.length > 0 ? allowedProjectIds : [''])
-  }
-  const { data: sites } = await sitesQuery
+  const { data: sites } = await supabase
+    .from('construction_sites')
+    .select('*')
+    .in('project_id', allowedProjectIds.length > 0 ? allowedProjectIds : [''])
+    .order('created_at', { ascending: false })
 
   const siteSummaries = await Promise.all((sites ?? []).map(async site => {
     const [
