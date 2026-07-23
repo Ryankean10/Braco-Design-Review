@@ -92,9 +92,6 @@ Return ONLY valid JSON, no other text:
 
 CONTRACT / SCOPE DOCUMENT:
 ${erTextTruncated}`
-
-CONTRACT / ER DOCUMENT:
-${erTextTruncated}`
     }]
   })
 
