@@ -52,18 +52,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     max_tokens: 3000,
     messages: [{
       role: 'user',
-      content: `You are an experienced UK civil engineering project manager. Read this contract/Employer's Requirements document and extract all specific tasks, deliverables, and actions that the contractor is required to complete.
+      content: `You are an experienced UK civil engineering site manager and quantity surveyor. Read this contract/Employer's Requirements document and extract the physical construction works and site activities described in the scope of works.
 
-Focus on concrete, actionable tasks — not general obligations. Examples: "Submit traffic management plan for approval", "Install 600mm diameter drainage pipe", "Carry out ground investigation survey", "Provide weekly progress reports to client".
+Focus ONLY on tangible construction activities — things that happen on site or directly support site delivery. Examples: "Excavate and install 600mm diameter HDPE drainage pipe", "Construct reinforced concrete retaining wall to drawing ref X", "Install temporary traffic signals on A96", "Break out and remove existing hardstanding", "Install CCTV drainage survey", "Lay Type 1 sub-base to car park area", "Erect and maintain site compound including welfare facilities".
 
-Group tasks by stage: Tender, Awarded, Mobilised, Handover, or Complete.
+Do NOT include: contractual admin tasks (submitting plans, attending meetings, reporting), design obligations, insurance/bond requirements, or general programme duties — those are commercial/contractual, not construction activities.
+
+Group by stage: Tender, Awarded, Mobilised, Handover, or Complete.
 
 Return ONLY valid JSON, no other text:
 {
   "tasks": [
     {
-      "task_text": "Concise task description (max 120 chars)",
-      "category": "one of: Programme & Planning, Ground Investigation, Drainage, Structural, Traffic Management, H&S / CDM, Reporting, Environmental, Testing & Commissioning, Handover, General",
+      "task_text": "Concise construction activity description (max 120 chars)",
+      "category": "one of: Earthworks & Excavation, Drainage, Structural & Concrete, Surfacing & Hardstanding, Traffic Management, Services & Utilities, Fencing & Boundary, Landscaping, Temporary Works, Mechanical & Electrical, Testing & Commissioning, Handover & Reinstatement, General",
       "stage": "one of: Tender, Awarded, Mobilised, Handover, Complete"
     }
   ]

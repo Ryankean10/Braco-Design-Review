@@ -46,36 +46,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     max_tokens: 4000,
     messages: [{
       role: 'user',
-      content: `You are a senior UK commercial manager and contracts specialist. You have already produced a quick RAG risk assessment for this contract on behalf of ${companyName}. Now produce a full commercial analysis digging into the issues, risks, and gaps.
+      content: `You are a senior UK contracts manager and commercial director. You have already produced a quick RAG contractual risk assessment for this contract on behalf of ${companyName}. Now produce a full contractual analysis digging into the specific clauses, financial exposure, and negotiation points.
 
 Prior RAG summary: ${ragSummary}
 
-For each Red or Amber risk area, provide:
-- Detailed analysis of the specific clauses and issues
-- Risks if unmitigated
-- Suggested mitigations and negotiation points
+Focus on CONTRACTUAL issues — payment, liability, risk allocation, programme obligations, termination rights, scope gaps. Do not summarise the physical scope of works.
 
-Also produce a risk register.
+For each Red or Amber risk area from the RAG:
+- Quote or reference the specific clause(s) that create the risk
+- Explain the financial or legal exposure in plain English
+- Suggest specific wording changes, qualifications, or commercial mitigations
+
+Also produce a contractual risk register suitable for presenting to the board or client.
 
 Return ONLY valid JSON, no other text:
 {
-  "overview": "2-3 paragraph executive overview of the commercial position",
+  "overview": "2-3 paragraph executive summary of the contractual position and overall risk level for ${companyName}",
   "risks": [
     {
-      "area": "Risk area name",
+      "area": "Risk area name (match the RAG area)",
       "rating": "red"|"amber",
-      "detail": "Detailed analysis of the clauses, risks and issues (2-3 paragraphs)",
-      "clauses": ["Relevant clause references found in the document"],
-      "mitigations": ["Mitigation 1", "Mitigation 2", "Mitigation 3"]
+      "detail": "Detailed analysis: which clause, what it means, what the exposure is, and why it matters (2-3 paragraphs)",
+      "clauses": ["Clause X.X — quoted or paraphrased text"],
+      "mitigations": ["Specific mitigation or negotiation point 1", "Point 2", "Point 3"]
     }
   ],
   "register": [
     {
-      "risk": "Risk description",
+      "risk": "Concise risk description",
       "likelihood": "High"|"Medium"|"Low",
       "impact": "High"|"Medium"|"Low",
-      "mitigation": "Suggested mitigation",
-      "owner": "Contracts Manager"|"Commercial Manager"|"Site Manager"|"Legal"
+      "mitigation": "Specific action to reduce the risk",
+      "owner": "Contracts Manager"|"Commercial Manager"|"Director"|"Legal"
     }
   ]
 }

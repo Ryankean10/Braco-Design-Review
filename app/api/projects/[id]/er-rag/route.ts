@@ -46,23 +46,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     max_tokens: 2000,
     messages: [{
       role: 'user',
-      content: `You are a senior UK commercial manager reviewing a contract/ER document on behalf of ${companyName}, a ${industry} contractor. Your job is to give a quick Red/Amber/Green commercial risk rating across key risk areas.
+      content: `You are a senior UK contracts manager and commercial director reviewing a contract/ER document on behalf of ${companyName}, a ${industry} contractor. Your job is to give a quick Red/Amber/Green rating across key CONTRACTUAL risk areas — not construction activities.
 
-Rate each area as "red" (significant risk, needs attention), "amber" (moderate risk or ambiguity), or "green" (acceptable/low risk or not applicable). Give a single brief reason (max 15 words) — no details.
+Focus on the contractual and commercial terms: what does the contract say about money, time, liability, risk allocation, and dispute? Flag anything that exposes ${companyName} to financial or legal risk.
+
+Rate each area as "red" (significant contractual exposure, needs urgent attention), "amber" (moderate risk or ambiguous wording), or "green" (acceptable terms or not applicable). Give a single brief reason (max 15 words) — no details yet.
 
 Return ONLY valid JSON, no other text:
 {
   "items": [
-    { "area": "Payment Terms & Cash Flow", "rating": "red"|"amber"|"green", "brief": "brief reason max 15 words" },
-    { "area": "Variations & Change Management", "rating": "...", "brief": "..." },
+    { "area": "Payment Terms & Retention", "rating": "red"|"amber"|"green", "brief": "brief reason max 15 words" },
+    { "area": "Variations & Dayworks", "rating": "...", "brief": "..." },
     { "area": "Liquidated Damages / Delay Penalties", "rating": "...", "brief": "..." },
-    { "area": "Design & Professional Indemnity", "rating": "...", "brief": "..." },
+    { "area": "Design Responsibility & PI", "rating": "...", "brief": "..." },
     { "area": "Ground Conditions & Unforeseen Risk", "rating": "...", "brief": "..." },
-    { "area": "Insurance & Bonds", "rating": "...", "brief": "..." },
-    { "area": "Programme & Time Obligations", "rating": "...", "brief": "..." },
-    { "area": "CDM / H&S Obligations", "rating": "...", "brief": "..." },
-    { "area": "Dispute Resolution", "rating": "...", "brief": "..." },
-    { "area": "Subcontractor Flow-Down", "rating": "...", "brief": "..." }
+    { "area": "Insurance & Performance Bond", "rating": "...", "brief": "..." },
+    { "area": "Programme & Time at Large", "rating": "...", "brief": "..." },
+    { "area": "Scope Definition & Ambiguity", "rating": "...", "brief": "..." },
+    { "area": "Termination & Suspension Rights", "rating": "...", "brief": "..." },
+    { "area": "Dispute Resolution & Adjudication", "rating": "...", "brief": "..." }
   ]
 }
 
