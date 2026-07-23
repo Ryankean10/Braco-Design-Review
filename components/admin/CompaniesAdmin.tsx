@@ -10,19 +10,29 @@ const MODULE_GROUPS: {
   modules: { key: string; label: string; subFeatures?: { key: string; label: string }[] }[]
 }[] = [
   {
-    label: 'Core',
+    label: 'Projects',
     modules: [
-      { key: 'projects',          label: 'Projects' },
-      { key: 'documents',         label: 'Documents' },
-      { key: 'reviews',           label: 'Reviews' },
-      { key: 'reference_library', label: 'Reference Library' },
+      {
+        key: 'projects', label: 'Projects',
+        subFeatures: [
+          { key: 'projects.documents',    label: 'Document Library' },
+          { key: 'projects.assurance',    label: 'Assurance (ITP & QCS)' },
+          { key: 'projects.reviews',      label: 'AI Reviews & Findings' },
+          { key: 'projects.procurement',  label: 'Procurement Register' },
+          { key: 'projects.tests',        label: 'Test Register' },
+          { key: 'projects.er',           label: "Employer's Requirements" },
+          { key: 'projects.references',   label: 'Standards & References' },
+          { key: 'projects.work_planner', label: 'Work Planner' },
+          { key: 'projects.comments',     label: 'Client Comments' },
+        ],
+      },
     ],
   },
   {
     label: 'Construction',
     modules: [
       {
-        key: 'construction', label: 'Construction (top-level)',
+        key: 'construction', label: 'Construction',
         subFeatures: [
           { key: 'construction.itp',        label: 'ITP (Inspection & Test Plan)' },
           { key: 'construction.civils',     label: 'Civils Works' },
@@ -37,16 +47,8 @@ const MODULE_GROUPS: {
   {
     label: 'Resources',
     modules: [
-      { key: 'team',        label: 'Team' },
-      { key: 'plant',       label: 'Plant' },
-    ],
-  },
-  {
-    label: 'Compliance',
-    modules: [
-      { key: 'procurement', label: 'Procurement' },
-      { key: 'tests',       label: 'Tests' },
-      { key: 'assurance',   label: 'Assurance' },
+      { key: 'team',  label: 'Team' },
+      { key: 'plant', label: 'Plant' },
     ],
   },
 ]
