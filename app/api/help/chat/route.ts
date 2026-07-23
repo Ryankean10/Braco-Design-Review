@@ -182,31 +182,37 @@ export async function POST(req: NextRequest) {
 
   const rawText = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // Remove any markdown code fences, then extract the JSON metadata object
+  // Strip code fences then find the metadata JSON by locating the last { } block
   const withoutFences = rawText.replace(/```(?:json)?/g, '').replace(/```/g, '')
-  const jsonMatch = withoutFences.match(/\{[^{}]*"isBugReport"[^{}]*\}/)
+  const lastOpen = withoutFences.lastIndexOf('{')
+  const lastClose = withoutFences.lastIndexOf('}')
 
   let isBugReport = false
   let isSuggestion = false
   let bugSummary: string | null = null
   let suggestedActions: string[] = []
   let displayText = rawText
+  let jsonStr: string | null = null
+  let parseError: string | null = null
 
-  if (jsonMatch) {
-    try {
-      const meta = JSON.parse(jsonMatch[0])
-      isBugReport = meta.isBugReport === true
-      isSuggestion = meta.isSuggestion === true
-      bugSummary = meta.bugSummary ?? null
-      suggestedActions = meta.suggestedActions ?? []
-    } catch (e) {
-      console.error('JSON parse error:', e, jsonMatch[0])
+  if (lastOpen !== -1 && lastClose > lastOpen) {
+    jsonStr = withoutFences.slice(lastOpen, lastClose + 1)
+    if (jsonStr.includes('isBugReport')) {
+      try {
+        const meta = JSON.parse(jsonStr)
+        isBugReport = meta.isBugReport === true
+        isSuggestion = meta.isSuggestion === true
+        bugSummary = meta.bugSummary ?? null
+        suggestedActions = Array.isArray(meta.suggestedActions) ? meta.suggestedActions : []
+        // Strip JSON block from display (handle code fence or bare)
+        displayText = rawText
+          .slice(0, rawText.lastIndexOf('{'))
+          .replace(/```(?:json)?/g, '').replace(/```/g, '')
+          .trim()
+      } catch (e: any) {
+        parseError = e?.message
+      }
     }
-    // Strip the JSON block and any surrounding code fences from the display text
-    displayText = rawText
-      .replace(/```(?:json)?\s*\{[^{}]*"isBugReport"[^{}]*\}\s*```/g, '')
-      .replace(/\{[^{}]*"isBugReport"[^{}]*\}/g, '')
-      .trim()
   }
 
   const shouldLog = (isBugReport || isSuggestion) && bugSummary
@@ -230,7 +236,6 @@ export async function POST(req: NextRequest) {
     message: displayText,
     isBugReport: isBugReport || isSuggestion,
     bugSummary,
-    // Debug fields — visible in browser network tab
-    _debug: { shouldLog, logError, rawTextLength: rawText.length, jsonFound: !!jsonMatch },
+    _debug: { shouldLog, logError, jsonFound: !!jsonStr, parseError, rawText, jsonStr },
   })
 }
