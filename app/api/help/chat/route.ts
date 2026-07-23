@@ -77,7 +77,7 @@ Both bugs and suggestions are logged and the team is notified.
 
 ## Response format
 Respond in plain conversational English, 2-4 sentences. At the END output a raw JSON object on its own line — NO markdown, NO code fences, just the object:
-{"isBugReport": true/false, "isSuggestion": true/false, "bugSummary": "one sentence or null", "suggestedActions": ["action 1", "action 2"] or []}`
+{"isBugReport": true/false, "isSuggestion": true/false, "bugSummary": "one sentence summary — ALWAYS provide this, never null", "suggestedActions": ["action 1", "action 2"] or []}`
 }
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
@@ -202,8 +202,9 @@ export async function POST(req: NextRequest) {
         const meta = JSON.parse(jsonStr)
         isBugReport = meta.isBugReport === true
         isSuggestion = meta.isSuggestion === true
-        bugSummary = meta.bugSummary ?? null
         suggestedActions = Array.isArray(meta.suggestedActions) ? meta.suggestedActions : []
+        // Fall back to first suggested action or a generic label if model returns null
+        bugSummary = meta.bugSummary ?? suggestedActions[0] ?? (isSuggestion ? 'User suggestion' : 'Bug report')
         // Strip JSON block from display (handle code fence or bare)
         displayText = rawText
           .slice(0, rawText.lastIndexOf('{'))
