@@ -208,8 +208,8 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
               href={href}
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
               style={{
-                color: active ? 'var(--accent)' : 'var(--text-muted)',
-                background: active ? 'rgba(108,114,245,0.12)' : 'transparent',
+                color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-muted)',
+                background: active ? 'var(--sidebar-active-bg)' : 'transparent',
               }}
             >
               <Icon size={15} />
