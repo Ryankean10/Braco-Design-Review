@@ -3,12 +3,12 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight,
+  LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, ChevronDown,
   Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, Company, Module } from '@/lib/types'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 
 const BugPanel = dynamic(() => import('@/components/admin/BugPanel'), { ssr: false })
@@ -43,6 +43,19 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   const isSuperadmin = role === 'superadmin'
   const enabledModules = company?.modules ?? []
   const [bugPanelOpen, setBugPanelOpen] = useState(false)
+  const [projectsOpen, setProjectsOpen] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/projects')
+  )
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('projects')
+      .select('id, name')
+      .order('name')
+      .then(({ data }) => setProjects(data ?? []))
+  }, [])
 
   async function signOut() {
     const supabase = createClient()
@@ -89,6 +102,55 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
         {NAV.filter(isVisible).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
+          const isProjects = href === '/projects'
+
+          if (isProjects) {
+            return (
+              <div key={href}>
+                <button
+                  onClick={() => { setProjectsOpen(v => !v) }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left"
+                  style={{
+                    color: active ? 'var(--accent)' : 'var(--text-muted)',
+                    background: active ? 'rgba(108,114,245,0.12)' : 'transparent',
+                  }}
+                >
+                  <Icon size={15} />
+                  <Link href="/projects" onClick={e => e.stopPropagation()} className="flex-1">
+                    {label}
+                  </Link>
+                  {projectsOpen
+                    ? <ChevronDown size={12} className="ml-auto shrink-0" />
+                    : <ChevronRight size={12} className="ml-auto shrink-0" />}
+                </button>
+
+                {projectsOpen && (
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: 'var(--border)' }}>
+                    {projects.length === 0 && (
+                      <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>No projects</p>
+                    )}
+                    {projects.map(p => {
+                      const pActive = pathname === `/projects/${p.id}` || pathname.startsWith(`/projects/${p.id}/`)
+                      return (
+                        <Link
+                          key={p.id}
+                          href={`/projects/${p.id}`}
+                          className="flex items-center px-2 py-1.5 rounded-md text-xs transition-colors truncate"
+                          style={{
+                            color: pActive ? 'var(--accent)' : 'var(--text-muted)',
+                            background: pActive ? 'rgba(108,114,245,0.10)' : 'transparent',
+                          }}
+                        >
+                          {p.name}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
           return (
             <Link
               key={href}
