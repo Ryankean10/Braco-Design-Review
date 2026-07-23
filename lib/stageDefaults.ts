@@ -16,10 +16,9 @@ export type StageName = typeof STAGE_ORDER[number]
 export const CIVILS_STAGE_ORDER = [
   'Tender',
   'Awarded',
-  'Mobilisation',
-  'On Site',
-  'Defects',
+  'Mobilised',
   'Handover',
+  'Complete',
 ] as const
 
 export type CivilsStageName = typeof CIVILS_STAGE_ORDER[number]
@@ -136,41 +135,32 @@ export const CIVILS_DEFAULT_CHECKLISTS: Record<CivilsStageName, string[]> = {
     'Procurement list raised — long-lead items identified',
     'Project manager and site manager appointed',
     'Programme issued to client',
+    'Pre-start meeting held with client',
   ],
-  'Mobilisation': [
+  'Mobilised': [
     'Plant allocated and delivery dates confirmed',
     'Crew appointed and inducted',
     'RAMS and method statements prepared and approved',
     'Traffic management plan approved',
     'Site establishment and welfare set up',
     'Temporary works design approved (if required)',
-    'Groundworks drawings issued for construction',
-    'Pre-start meeting held with client',
+    'Drawings issued for construction',
+    'Daily site diaries and timesheets in place',
   ],
-  'On Site': [
-    'Daily site diaries being completed',
-    'Timesheets submitted weekly',
-    'COSHH and material deliveries recorded',
-    'Weekly progress report issued to client',
-    'Open issues / RFIs tracked and responded to',
-    'ITP hold and witness points completed as applicable',
-    'Variations agreed and instructed in writing',
-  ],
-  'Defects': [
+  'Handover': [
     'Practical completion certificate issued',
     'Snagging list issued and agreed with client',
     'All snagging items rectified and signed off',
     'As-built drawings issued',
     'O&M manuals issued (if applicable)',
-    'Retention amount confirmed',
+    'Final account submitted and agreed',
   ],
-  'Handover': [
-    'Final account submitted',
-    'Final account agreed and signed off',
+  'Complete': [
+    'Final account signed off by client',
     'Retention released (or retention bond in place)',
     'Defects liability period expired',
-    'Project file archived',
     'Lessons learned review completed',
+    'Project file archived',
   ],
 }
 
@@ -186,12 +176,11 @@ export const STAGE_COLOURS: Record<StageName, string> = {
 }
 
 export const CIVILS_STAGE_COLOURS: Record<CivilsStageName, string> = {
-  'Tender':       '#6366f1',
-  'Awarded':      '#0ea5e9',
-  'Mobilisation': '#f59e0b',
-  'On Site':      '#f97316',
-  'Defects':      '#dc2626',
-  'Handover':     '#16a34a',
+  'Tender':    '#6366f1',
+  'Awarded':   '#0ea5e9',
+  'Mobilised': '#f59e0b',
+  'Handover':  '#16a34a',
+  'Complete':  '#10b981',
 }
 
 export function getStageColour(stage: string, industry = 'bess'): string {

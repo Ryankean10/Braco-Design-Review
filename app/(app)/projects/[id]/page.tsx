@@ -23,8 +23,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   if (!user) redirect('/login')
 
   const [{ data: project }, { data: profile }] = await Promise.all([
-    supabase.from('projects').select('*, companies(industry)').eq('id', id).single(),
-    supabase.from('profiles').select('role').eq('id', user.id).single(),
+    supabase.from('projects').select('*').eq('id', id).single(),
+    supabase.from('profiles').select('role, company_id').eq('id', user.id).single(),
   ])
 
   if (!project) notFound()
@@ -176,7 +176,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     responder_name: c.responded_by ? (nameMap[c.responded_by] ?? null) : null,
   }))
 
-  const industry = (project as any)?.companies?.industry ?? 'bess'
+  // Look up company industry via profile's company_id
+  const companyId = (profile as any)?.company_id ?? project?.company_id
+  const { data: companyRow } = companyId
+    ? await supabase.from('companies').select('industry').eq('id', companyId).single()
+    : { data: null }
+  const industry: string = (companyRow as any)?.industry ?? 'bess'
 
   // Seed project_stages if this project has none yet
   let projectStages = projectStageRows ?? []
