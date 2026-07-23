@@ -52,24 +52,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     max_tokens: 3000,
     messages: [{
       role: 'user',
-      content: `You are an experienced UK civil engineering site manager and quantity surveyor. Read this contract/Employer's Requirements document and extract the physical construction works and site activities described in the scope of works.
+      content: `You are a UK site manager and quantity surveyor reading a construction contract. Your job is to extract the physical scope of works — the actual construction activities that will be carried out on site.
 
-Focus ONLY on tangible construction activities — things that happen on site or directly support site delivery. Examples: "Excavate and install 600mm diameter HDPE drainage pipe", "Construct reinforced concrete retaining wall to drawing ref X", "Install temporary traffic signals on A96", "Break out and remove existing hardstanding", "Install CCTV drainage survey", "Lay Type 1 sub-base to car park area", "Erect and maintain site compound including welfare facilities".
+IMPORTANT: The scope of works is almost never in the main contract conditions. Look for it in sections labelled: "Scope of Works", "Works Information", "Annexure 1", "Appendix 1", "Activity Schedule", "Bill of Quantities", "Schedule of Works", or similar. These sections contain the real construction items.
 
-Do NOT include: contractual admin tasks (submitting plans, attending meetings, reporting), design obligations, insurance/bond requirements, or general programme duties — those are commercial/contractual, not construction activities.
+The main contract body (NEC, JCT, bespoke conditions, Z-clauses etc.) contains legal obligations and programme requirements — IGNORE those entirely. Do not extract anything from numbered contract clauses like "The Subcontractor shall...", "In accordance with clause...", etc.
 
-Group by stage: Tender, Awarded, Mobilised, Handover, or Complete.
+WHAT TO EXTRACT — physical site activities only. For BESS/energy projects these typically include:
+- Pile cropping or pile installation
+- Foundations (battery unit, inverter, transformer, DNO, substation — typically with quantities e.g. "7no")
+- Drainage (attenuation tanks, twinwall pipe, ACO channels, manholes/catchpits)
+- Retaining walls (Legato block, concrete, gabion — with dimensions)
+- Surfacing (Type 1 subbase, tarmac binder + surface course, stone chips, kerbs)
+- Cable ducting and draw pits
+- Fencing (palisade, security, gates) and boundary walls
+- Landscaping (trees, shrubs, grass seeding)
+- Earthworks and site levelling
+- Access roads and bellmouths
+
+For general civils projects these typically include:
+- Excavation and earthworks
+- Drainage pipework and structures
+- Road construction (subbase, binder, surface, kerbs, markings)
+- Structures (bridges, culverts, retaining walls)
+- Services diversions and reinstatement
+
+Each task should correspond to a distinct scope item, ideally with quantities or dimensions where stated in the document.
 
 Return ONLY valid JSON, no other text:
 {
   "tasks": [
     {
-      "task_text": "Concise construction activity description (max 120 chars)",
-      "category": "one of: Earthworks & Excavation, Drainage, Structural & Concrete, Surfacing & Hardstanding, Traffic Management, Services & Utilities, Fencing & Boundary, Landscaping, Temporary Works, Mechanical & Electrical, Testing & Commissioning, Handover & Reinstatement, General",
-      "stage": "one of: Tender, Awarded, Mobilised, Handover, Complete"
+      "task_text": "Concise description of the construction activity including key quantities/dimensions (max 140 chars)",
+      "category": "one of: Piling & Foundations, Drainage & Attenuation, Earthworks & Levelling, Surfacing & Roads, Retaining Walls & Structures, Fencing & Boundary, Cable Ducting & Draw Pits, Landscaping, Temporary Works & Prelims, Mechanical & Electrical, Testing & Commissioning, General",
+      "stage": "one of: Awarded, Mobilised, Handover, Complete"
     }
   ]
 }
+
+CONTRACT / SCOPE DOCUMENT:
+${erTextTruncated}`
 
 CONTRACT / ER DOCUMENT:
 ${erTextTruncated}`
