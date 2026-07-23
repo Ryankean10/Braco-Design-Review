@@ -208,7 +208,8 @@ export async function POST(req: NextRequest) {
   if (shouldLog) {
     const reportType = isSuggestion ? 'suggestion' : 'bug'
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content ?? ''
-    Promise.all([
+    // Must await — Vercel terminates the function as soon as the response is sent
+    await Promise.all([
       logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType),
       sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
     ]).catch(e => console.error('Report logging error:', e))
