@@ -46,15 +46,16 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   const [projectsOpen, setProjectsOpen] = useState(() =>
     typeof window !== 'undefined' && window.location.pathname.startsWith('/projects')
   )
+  const [constructionOpen, setConstructionOpen] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/construction')
+  )
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
+  const [sites, setSites] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     const supabase = createClient()
-    supabase
-      .from('projects')
-      .select('id, name')
-      .order('name')
-      .then(({ data }) => setProjects(data ?? []))
+    supabase.from('projects').select('id, name').order('name').then(({ data }) => setProjects(data ?? []))
+    supabase.from('construction_sites').select('id, name').order('name').then(({ data }) => setSites(data ?? []))
   }, [])
 
   async function signOut() {
@@ -103,6 +104,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
         {NAV.filter(isVisible).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           const isProjects = href === '/projects'
+          const isConstruction = href === '/construction'
 
           if (isProjects) {
             return (
@@ -142,6 +144,53 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
                           }}
                         >
                           {p.name}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          if (isConstruction) {
+            return (
+              <div key={href}>
+                <button
+                  onClick={() => setConstructionOpen(v => !v)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left"
+                  style={{
+                    color: active ? 'var(--accent)' : 'var(--text-muted)',
+                    background: active ? 'rgba(108,114,245,0.12)' : 'transparent',
+                  }}
+                >
+                  <Icon size={15} />
+                  <Link href="/construction" onClick={e => e.stopPropagation()} className="flex-1">
+                    {label}
+                  </Link>
+                  {constructionOpen
+                    ? <ChevronDown size={12} className="ml-auto shrink-0" />
+                    : <ChevronRight size={12} className="ml-auto shrink-0" />}
+                </button>
+
+                {constructionOpen && (
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: 'var(--border)' }}>
+                    {sites.length === 0 && (
+                      <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>No sites</p>
+                    )}
+                    {sites.map(s => {
+                      const sActive = pathname === `/construction/${s.id}` || pathname.startsWith(`/construction/${s.id}/`)
+                      return (
+                        <Link
+                          key={s.id}
+                          href={`/construction/${s.id}`}
+                          className="flex items-center px-2 py-1.5 rounded-md text-xs transition-colors truncate"
+                          style={{
+                            color: sActive ? 'var(--accent)' : 'var(--text-muted)',
+                            background: sActive ? 'rgba(108,114,245,0.10)' : 'transparent',
+                          }}
+                        >
+                          {s.name}
                         </Link>
                       )
                     })}
