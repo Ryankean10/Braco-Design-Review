@@ -54,9 +54,11 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.from('projects').select('id, name').order('name').then(({ data }) => setProjects(data ?? []))
-    supabase.from('construction_sites').select('id, name').order('name').then(({ data }) => setSites(data ?? []))
-  }, [])
+    const companyId = company?.id
+    if (!companyId) return
+    supabase.from('projects').select('id, name').eq('company_id', companyId).order('name').then(({ data }) => setProjects(data ?? []))
+    supabase.from('construction_sites').select('id, name, project_id, projects!inner(company_id)').eq('projects.company_id', companyId).order('name').then(({ data }) => setSites(data ?? []))
+  }, [company?.id])
 
   async function signOut() {
     const supabase = createClient()
