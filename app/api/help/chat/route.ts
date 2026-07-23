@@ -76,7 +76,7 @@ If the user makes a suggestion, feature request, or improvement idea — set isS
 Both bugs and suggestions are logged and the team is notified.
 
 ## Response format
-Respond in plain conversational English, 2-4 sentences. At the END output a JSON block on its own line:
+Respond in plain conversational English, 2-4 sentences. At the END output a raw JSON object on its own line — NO markdown, NO code fences, just the object:
 {"isBugReport": true/false, "isSuggestion": true/false, "bugSummary": "one sentence or null", "suggestedActions": ["action 1", "action 2"] or []}`
 }
 
@@ -180,12 +180,19 @@ export async function POST(req: NextRequest) {
   })
 
   const rawText = response.content[0].type === 'text' ? response.content[0].text : ''
-  const jsonMatch = rawText.match(/\{[\s\S]*"isBugReport"[\s\S]*\}/)
+  // Strip any markdown code fence wrapping the JSON block, then extract the JSON object
+  const stripped = rawText.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1')
+  const jsonMatch = stripped.match(/\{[\s\S]*"isBugReport"[\s\S]*\}/)
   let isBugReport = false
   let isSuggestion = false
   let bugSummary: string | null = null
   let suggestedActions: string[] = []
-  let displayText = rawText
+  // Remove the JSON block (and any wrapping code fence) from display text
+  let displayText = rawText.replace(/```(?:json)?\s*\{[\s\S]*?"isBugReport"[\s\S]*?\}\s*```/g, '').trim()
+  if (!jsonMatch || displayText === rawText) {
+    // Fallback: JSON wasn't in a code fence, strip the bare object
+    displayText = jsonMatch ? rawText.replace(jsonMatch[0], '').trim() : rawText
+  }
 
   if (jsonMatch) {
     try {
@@ -195,7 +202,6 @@ export async function POST(req: NextRequest) {
       bugSummary = meta.bugSummary ?? null
       suggestedActions = meta.suggestedActions ?? []
     } catch {}
-    displayText = rawText.replace(jsonMatch[0], '').trim()
   }
 
   const shouldLog = (isBugReport || isSuggestion) && bugSummary
