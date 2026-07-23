@@ -32,8 +32,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `PDF extraction failed: ${e.message}` }, { status: 500 })
   }
 
-  // Find the scope section (usually deep in the document — e.g. Annexure 1 / Activity Schedule)
-  // Search the full text for scope keywords and extract from there
+  // Find the scope section — use the LAST occurrence of each keyword because contracts
+  // typically list "Annexure 1" in the table of contents first, then again at the actual section.
+  // The last occurrence is the real heading; TOC references appear early and would send boilerplate.
   const SCOPE_KEYWORDS = [
     'Annexure 1', 'ANNEXURE 1', 'Annexure 01',
     'Appendix 1', 'APPENDIX 1',
@@ -44,9 +45,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     'Scope of Works', 'SCOPE OF WORKS',
   ]
 
+  function lastIndexOf(text: string, keyword: string): number {
+    let last = -1
+    let idx = 0
+    while ((idx = text.indexOf(keyword, idx)) !== -1) { last = idx; idx++ }
+    return last
+  }
+
   let scopeText = ''
   for (const kw of SCOPE_KEYWORDS) {
-    const idx = erText.indexOf(kw)
+    const idx = lastIndexOf(erText, kw)
     if (idx !== -1) {
       // Take from 200 chars before the keyword up to 50,000 chars after
       const start = Math.max(0, idx - 200)
