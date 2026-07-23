@@ -70,37 +70,42 @@ ${planningSection}
 **Documents** (/documents)
 - Project document library with version control and comment loop
 
-## Bug reporting
-If the user describes something that isn't working correctly, is broken, shows an error, or behaves unexpectedly — that is a bug.
+## Bug reporting and suggestions
+If the user describes something that isn't working correctly, is broken, shows an error, or behaves unexpectedly — that is a bug. Set isBugReport: true.
+If the user makes a suggestion, feature request, or improvement idea — set isSuggestion: true (not isBugReport). Tell them the team will review it.
+Both bugs and suggestions are logged and the team is notified.
 
 ## Response format
 Respond in plain conversational English, 2-4 sentences. At the END output a JSON block on its own line:
-{"isBugReport": true/false, "bugSummary": "one sentence or null", "suggestedActions": ["action 1", "action 2"] or []}`
+{"isBugReport": true/false, "isSuggestion": true/false, "bugSummary": "one sentence or null", "suggestedActions": ["action 1", "action 2"] or []}`
 }
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'MRRK <onboarding@resend.dev>'
 
-async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[]) {
+async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug') {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return
   const resend = new Resend(apiKey)
   const actionsHtml = suggestedActions.length
     ? `<ul style="margin:8px 0 0;padding-left:16px;">${suggestedActions.map(a => `<li style="color:#94a3b8;font-size:13px;margin-bottom:4px">${a}</li>`).join('')}</ul>`
     : ''
+  const isSuggestion = reportType === 'suggestion'
   await resend.emails.send({
     from: FROM_EMAIL,
     to: BUG_EMAIL,
-    subject: `🐛 MRRK Bug Report — ${new Date().toLocaleDateString('en-GB')}`,
+    subject: isSuggestion
+      ? `💡 MRRK Suggestion — ${new Date().toLocaleDateString('en-GB')}`
+      : `🐛 MRRK Bug Report — ${new Date().toLocaleDateString('en-GB')}`,
     html: `
 <!DOCTYPE html><html><body style="margin:0;padding:0;background:#0f172a;font-family:system-ui,sans-serif">
 <div style="max-width:600px;margin:32px auto;background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155">
-  <div style="background:#8b5cf6;padding:16px 24px">
-    <p style="margin:0;color:#fff;font-weight:700;font-size:15px">🐛 Bug Report — MRRK</p>
+  <div style="background:${isSuggestion ? '#0ea5e9' : '#8b5cf6'};padding:16px 24px">
+    <p style="margin:0;color:#fff;font-weight:700;font-size:15px">${isSuggestion ? '💡 Suggestion' : '🐛 Bug Report'} — MRRK</p>
     <p style="margin:4px 0 0;color:#ddd6fe;font-size:12px">${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}</p>
   </div>
   <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">
-    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #8b5cf6">
+    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid ${isSuggestion ? '#0ea5e9' : '#8b5cf6'}">
       <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Reported by</p>
       <p style="margin:0;color:#e2e8f0;font-size:13px">${userName}${userEmail ? ` &lt;${userEmail}&gt;` : ''}</p>
     </div>
@@ -128,7 +133,7 @@ async function sendBugEmail(summary: string, userMessage: string, userName: stri
   })
 }
 
-async function logBugToDb(summary: string, userMessage: string, userName: string, userEmail: string, userId: string, suggestedActions: string[]) {
+async function logBugToDb(summary: string, userMessage: string, userName: string, userEmail: string, userId: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug') {
   const sb = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -142,6 +147,8 @@ async function logBugToDb(summary: string, userMessage: string, userName: string
     summary,
     suggested_actions: suggestedActions,
     status: 'open',
+    report_type: reportType,
+    priority: reportType === 'suggestion' ? 'low' : 'medium',
   })
 }
 
@@ -175,6 +182,7 @@ export async function POST(req: NextRequest) {
   const rawText = response.content[0].type === 'text' ? response.content[0].text : ''
   const jsonMatch = rawText.match(/\{[\s\S]*"isBugReport"[\s\S]*\}/)
   let isBugReport = false
+  let isSuggestion = false
   let bugSummary: string | null = null
   let suggestedActions: string[] = []
   let displayText = rawText
@@ -183,19 +191,22 @@ export async function POST(req: NextRequest) {
     try {
       const meta = JSON.parse(jsonMatch[0])
       isBugReport = meta.isBugReport === true
+      isSuggestion = meta.isSuggestion === true
       bugSummary = meta.bugSummary ?? null
       suggestedActions = meta.suggestedActions ?? []
     } catch {}
     displayText = rawText.replace(jsonMatch[0], '').trim()
   }
 
-  if (isBugReport && bugSummary) {
+  const shouldLog = (isBugReport || isSuggestion) && bugSummary
+  if (shouldLog) {
+    const reportType = isSuggestion ? 'suggestion' : 'bug'
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content ?? ''
     Promise.all([
-      logBugToDb(bugSummary, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions),
-      sendBugEmail(bugSummary, lastUserMsg, userName, user.email ?? '', suggestedActions),
-    ]).catch(e => console.error('Bug report error:', e))
+      logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType),
+      sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
+    ]).catch(e => console.error('Report logging error:', e))
   }
 
-  return NextResponse.json({ message: displayText, isBugReport, bugSummary })
+  return NextResponse.json({ message: displayText, isBugReport: isBugReport || isSuggestion, bugSummary })
 }

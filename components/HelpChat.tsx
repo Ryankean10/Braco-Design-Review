@@ -109,7 +109,7 @@ export default function HelpChat() {
                     <div className="flex items-center gap-1 mt-1.5 pt-1.5"
                       style={{ borderTop: '1px solid rgba(255,255,255,0.25)', color: '#fde68a', fontSize: 10 }}>
                       <Bug size={9} />
-                      <span>Bug logged — team notified</span>
+                      <span>Logged — team notified</span>
                     </div>
                   )}
                 </div>

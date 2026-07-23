@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, CheckCircle, Clock, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
+import { X, CheckCircle, Clock, ChevronDown, ChevronUp, AlertCircle, Lightbulb } from 'lucide-react'
 
 interface BugReport {
   id: string
@@ -12,6 +12,8 @@ interface BugReport {
   summary: string
   suggested_actions: string[]
   status: 'open' | 'resolved'
+  report_type: 'bug' | 'suggestion'
+  priority: 'low' | 'medium' | 'high' | 'critical'
   resolved_at: string | null
   resolved_by_name: string | null
   notes: string | null
@@ -65,7 +67,7 @@ export default function BugPanel({ onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ background: '#1e293b', borderBottom: '1px solid #334155' }}>
           <div>
-            <p style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 15, margin: 0 }}>Bug Reports</p>
+            <p style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 15, margin: 0 }}>Bug Reports & Suggestions</p>
             <p style={{ color: '#64748b', fontSize: 12, margin: 0 }}>Admin panel · {showResolved ? 'Resolved' : 'Open'}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -97,21 +99,31 @@ export default function BugPanel({ onClose }: Props) {
             </div>
           )}
 
-          {!loading && bugs.map(bug => (
+          {!loading && bugs.map(bug => {
+            const isSuggestion = bug.report_type === 'suggestion'
+            return (
             <div key={bug.id}
               className="rounded-xl overflow-hidden"
-              style={{ background: '#1e293b', border: '1px solid #334155' }}
+              style={{ background: '#1e293b', border: `1px solid ${isSuggestion ? '#164e63' : '#334155'}` }}
             >
-              {/* Bug header */}
+              {/* Bug/suggestion header */}
               <button
                 className="w-full text-left px-4 py-3 flex items-start gap-3"
                 onClick={() => setExpanded(expanded === bug.id ? null : bug.id)}
               >
-                <AlertCircle size={14} color={bug.status === 'open' ? '#f87171' : '#22c55e'} className="mt-0.5 shrink-0" />
+                {isSuggestion
+                  ? <Lightbulb size={14} color={bug.status === 'open' ? '#0ea5e9' : '#22c55e'} className="mt-0.5 shrink-0" />
+                  : <AlertCircle size={14} color={bug.status === 'open' ? '#f87171' : '#22c55e'} className="mt-0.5 shrink-0" />
+                }
                 <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    {isSuggestion && (
+                      <span className="rounded px-1.5 py-0.5" style={{ background: '#0c4a6e', color: '#38bdf8', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Suggestion</span>
+                    )}
+                  </div>
                   <p style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600, margin: 0, lineHeight: 1.3 }}>{bug.summary}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span style={{ color: '#8b5cf6', fontSize: 11 }}>{bug.reporter_name ?? bug.reporter_email ?? 'Unknown'}</span>
+                    <span style={{ color: isSuggestion ? '#38bdf8' : '#8b5cf6', fontSize: 11 }}>{bug.reporter_name ?? bug.reporter_email ?? 'Unknown'}</span>
                     <span style={{ color: '#475569', fontSize: 11 }}>·</span>
                     <Clock size={10} color="#475569" />
                     <span style={{ color: '#475569', fontSize: 11 }}>{fmt(bug.reported_at)}</span>
@@ -172,7 +184,7 @@ export default function BugPanel({ onClose }: Props) {
                 </div>
               )}
             </div>
-          ))}
+          )})}
         </div>
       </div>
     </div>
