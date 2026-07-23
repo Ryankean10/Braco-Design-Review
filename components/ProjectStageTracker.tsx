@@ -109,6 +109,18 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
       }
     }
 
+    // Auto-advance the next stage to In Progress
+    const currentIndex = stages.findIndex(s => s.stage === stageName)
+    if (currentIndex !== -1 && currentIndex < stages.length - 1) {
+      const nextStage = stages[currentIndex + 1]
+      if (nextStage.status === 'Not Started') {
+        await saveStage(nextStage.stage as AnyStage, {
+          status: 'In Progress',
+          started_at: now,
+        })
+      }
+    }
+
     setSigningOff(null)
     setSignOffNotes('')
     setSaving(false)

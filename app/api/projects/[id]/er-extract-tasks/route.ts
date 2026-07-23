@@ -32,9 +32,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `PDF extraction failed: ${e.message}` }, { status: 500 })
   }
 
-  const erTextTruncated = erText.length > 45000
-    ? erText.slice(0, 45000) + '\n\n[... document truncated ...]'
-    : erText
+  // Find the scope section (usually deep in the document — e.g. Annexure 1 / Activity Schedule)
+  // Search the full text for scope keywords and extract from there
+  const SCOPE_KEYWORDS = [
+    'Annexure 1', 'ANNEXURE 1', 'Annexure 01',
+    'Appendix 1', 'APPENDIX 1',
+    'Activity Schedule', 'ACTIVITY SCHEDULE',
+    'Bill of Quantities', 'BILL OF QUANTITIES',
+    'Schedule of Works', 'SCHEDULE OF WORKS',
+    'Works Information', 'WORKS INFORMATION',
+    'Scope of Works', 'SCOPE OF WORKS',
+  ]
+
+  let scopeText = ''
+  for (const kw of SCOPE_KEYWORDS) {
+    const idx = erText.indexOf(kw)
+    if (idx !== -1) {
+      // Take from 200 chars before the keyword up to 50,000 chars after
+      const start = Math.max(0, idx - 200)
+      scopeText = erText.slice(start, start + 50000)
+      break
+    }
+  }
+
+  // Fall back to first 45,000 chars if no scope section found
+  const erTextTruncated = scopeText
+    ? scopeText + (scopeText.length >= 50000 ? '\n\n[... document truncated ...]' : '')
+    : erText.slice(0, 45000) + (erText.length > 45000 ? '\n\n[... document truncated ...]' : '')
 
   // Load existing tasks for this revision to avoid duplicates
   const { data: existingTasks } = await supabase
