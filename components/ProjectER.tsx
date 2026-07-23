@@ -137,6 +137,11 @@ export default function ProjectER({
   const [deepOpen, setDeepOpen] = useState(false)
   const [expandedRisk, setExpandedRisk] = useState<string | null>(null)
 
+  // ── Combined run state ─────────────────────────────────────────────────────
+  const [runningAll, setRunningAll] = useState(false)
+  const [allProgress, setAllProgress] = useState<{ standards: 'idle'|'running'|'done'|'error', tasks: 'idle'|'running'|'done'|'error', rag: 'idle'|'running'|'done'|'error' }>({ standards: 'idle', tasks: 'idle', rag: 'idle' })
+  const [allError, setAllError] = useState('')
+
   // ── Interrogator state ─────────────────────────────────────────────────────
   const [question, setQuestion] = useState('')
   const [interrogating, setInterrogating] = useState(false)
@@ -246,6 +251,59 @@ export default function ProjectER({
       setRagAt(new Date().toISOString())
     } catch (e: any) { setRagError(e.message) }
     finally { setRunningRag(false) }
+  }
+
+  // ── Combined analyse all ───────────────────────────────────────────────────
+
+  async function runAll() {
+    setRunningAll(true)
+    setAllError('')
+    setAllProgress({ standards: 'running', tasks: 'running', rag: 'running' })
+
+    const [stdRes, taskRes, ragRes] = await Promise.allSettled([
+      fetch(`/api/projects/${projectId}/analyse-er`, { method: 'POST' })
+        .then(r => r.json()),
+      fetch(`/api/projects/${projectId}/er-extract-tasks`, { method: 'POST' })
+        .then(r => r.json()),
+      fetch(`/api/projects/${projectId}/er-rag`, { method: 'POST' })
+        .then(r => r.json()),
+    ])
+
+    const errors: string[] = []
+
+    if (stdRes.status === 'fulfilled') {
+      const d = stdRes.value
+      setAnalyseResult({ linked: d.linked ?? 0 })
+      setMissing(d.missing ?? [])
+      setAnalysedAt(new Date().toISOString())
+      setExpandedMissing(true)
+      setDismissedMissing(new Set())
+      setAllProgress(p => ({ ...p, standards: 'done' }))
+    } else {
+      errors.push(`Standards: ${stdRes.reason?.message ?? 'failed'}`)
+      setAllProgress(p => ({ ...p, standards: 'error' }))
+    }
+
+    if (taskRes.status === 'fulfilled') {
+      setTasks(taskRes.value.tasks ?? [])
+      setTaskSection(true)
+      setAllProgress(p => ({ ...p, tasks: 'done' }))
+    } else {
+      errors.push(`Tasks: ${taskRes.reason?.message ?? 'failed'}`)
+      setAllProgress(p => ({ ...p, tasks: 'error' }))
+    }
+
+    if (ragRes.status === 'fulfilled') {
+      setRagItems(ragRes.value.items ?? [])
+      setRagAt(new Date().toISOString())
+      setAllProgress(p => ({ ...p, rag: 'done' }))
+    } else {
+      errors.push(`Risk: ${ragRes.reason?.message ?? 'failed'}`)
+      setAllProgress(p => ({ ...p, rag: 'error' }))
+    }
+
+    if (errors.length) setAllError(errors.join(' · '))
+    setRunningAll(false)
   }
 
   // ── Deep analysis ──────────────────────────────────────────────────────────
@@ -383,44 +441,58 @@ export default function ProjectER({
           </div>
         )}
 
-        {/* ── Standards analysis button + progress ── */}
-        {storagePath && !analysing && (
-          <button onClick={analyse} disabled={uploading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-60 transition-opacity"
+        {/* ── Combined analyse button ── */}
+        {storagePath && !runningAll && (
+          <button onClick={runAll} disabled={uploading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-60 transition-opacity"
             style={{ background: 'linear-gradient(135deg, var(--accent), #a855f7)' }}>
             <Sparkles size={15} />
-            {analysedAt ? 'Re-analyse standards' : 'Analyse standards with AI'}
+            {analysedAt || tasks.length > 0 || ragItems.length > 0 ? 'Re-analyse contract' : 'Analyse contract'}
           </button>
         )}
 
-        {analysing && (
-          <AIProgressBar stages={[
-            { pct: 8,  label: 'Downloading document from storage…', ms: 800  },
-            { pct: 20, label: 'Extracting text from PDF…',          ms: 1200 },
-            { pct: 35, label: 'Loading standards library…',         ms: 600  },
-            { pct: 50, label: 'Sending to AI for analysis…',        ms: 1000 },
-            { pct: 65, label: 'Reading document…',                  ms: 8000 },
-            { pct: 78, label: 'Cross-referencing standards…',       ms: 8000 },
-            { pct: 90, label: 'Identifying gaps…',                  ms: 5000 },
-          ]} note="This takes 30–60 seconds" />
-        )}
-
-        {analyseError && (
-          <div className="flex items-start gap-2 rounded-lg px-3 py-2.5" style={{ background: '#3f1212', border: '1px solid #7f1d1d' }}>
-            <AlertCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: '#f87171' }} />
-            <p className="text-xs" style={{ color: '#fca5a5' }}>{analyseError}</p>
+        {runningAll && (
+          <div className="rounded-xl border p-4 space-y-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+            <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Analysing contract — running 3 analyses in parallel…</p>
+            {(['standards', 'tasks', 'rag'] as const).map(key => {
+              const labels = { standards: 'Standards & gaps', tasks: 'Construction tasks', rag: 'Contractual risk (RAG)' }
+              const st = allProgress[key]
+              return (
+                <div key={key} className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{
+                    background: st === 'done' ? '#22c55e' : st === 'error' ? '#ef4444' : st === 'running' ? 'var(--accent)' : 'var(--border)',
+                    animation: st === 'running' ? 'pulse 1.5s infinite' : undefined,
+                  }} />
+                  <span className="text-xs flex-1" style={{ color: st === 'done' ? '#86efac' : st === 'error' ? '#fca5a5' : 'var(--text-muted)' }}>
+                    {labels[key]}
+                  </span>
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {st === 'done' ? '✓ Done' : st === 'error' ? '✗ Failed' : st === 'running' ? 'Running…' : '—'}
+                  </span>
+                </div>
+              )
+            })}
+            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>All three run simultaneously — typically 30–60 seconds</p>
           </div>
         )}
 
-        {analyseResult && (
+        {allError && (
+          <div className="flex items-start gap-2 rounded-lg px-3 py-2.5" style={{ background: '#3f1212', border: '1px solid #7f1d1d' }}>
+            <AlertCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: '#f87171' }} />
+            <p className="text-xs" style={{ color: '#fca5a5' }}>{allError}</p>
+          </div>
+        )}
+
+        {analyseResult && !runningAll && (
           <div className="flex items-start gap-2 rounded-lg px-3 py-2.5" style={{ background: '#052e16', border: '1px solid #166534' }}>
             <CheckCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: '#22c55e' }} />
             <p className="text-xs" style={{ color: '#86efac' }}>
               {analyseResult.linked > 0
-                ? `${analyseResult.linked} standard${analyseResult.linked !== 1 ? 's' : ''} automatically linked.`
-                : 'Analysis complete — all standards reviewed.'
+                ? `${analyseResult.linked} standard${analyseResult.linked !== 1 ? 's' : ''} linked.`
+                : 'Standards reviewed.'
               }
-              {visibleMissing.length > 0 && ` ${visibleMissing.length} gap${visibleMissing.length !== 1 ? 's' : ''} identified.`}
+              {` ${tasks.length} construction tasks extracted.`}
+              {ragItems.length > 0 && ` ${ragItems.filter(r => r.rating === 'red').length} red / ${ragItems.filter(r => r.rating === 'amber').length} amber risks identified.`}
             </p>
           </div>
         )}
@@ -500,13 +572,10 @@ export default function ProjectER({
                     {taskSection ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                   </button>
                 )}
-                <button
-                  onClick={extractTasks}
-                  disabled={extractingTasks}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg, #059669, #34d399)' }}>
-                  <FileSearch size={11} />
-                  {extractingTasks ? 'Extracting…' : tasks.length > 0 ? 'Re-extract' : 'Extract tasks'}
+                <button onClick={extractTasks} disabled={extractingTasks || runningAll}
+                  className="text-[10px] px-2 py-1 rounded border disabled:opacity-40"
+                  style={{ borderColor: '#34d39944', color: '#34d399' }}>
+                  {extractingTasks ? 'Re-running…' : 'Re-run'}
                 </button>
               </div>
             </div>
@@ -602,13 +671,10 @@ export default function ProjectER({
                   <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>· {fmtDate(ragAt)}</span>
                 )}
               </div>
-              <button
-                onClick={runRag}
-                disabled={runningRag}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}>
-                <Sparkles size={11} />
-                {runningRag ? 'Assessing…' : ragItems.length > 0 ? 'Re-assess' : 'Assess risk'}
+              <button onClick={runRag} disabled={runningRag || runningAll}
+                className="text-[10px] px-2 py-1 rounded border disabled:opacity-40"
+                style={{ borderColor: '#a78bfa44', color: '#a78bfa' }}>
+                {runningRag ? 'Re-running…' : 'Re-run'}
               </button>
             </div>
 
