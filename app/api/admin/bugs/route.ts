@@ -12,7 +12,8 @@ async function getAdminClient() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized', supabase, user: null }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if ((profile as any)?.role !== 'admin') return { error: 'Forbidden', supabase, user: null }
+  const role = (profile as any)?.role
+  if (!['admin', 'superadmin'].includes(role)) return { error: 'Forbidden', supabase, user: null }
   return { error: null, supabase, user }
 }
 
