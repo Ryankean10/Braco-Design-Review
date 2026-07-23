@@ -124,7 +124,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     { data: constructionSite },
     { data: projectMembers },
     { data: allInternalProfiles },
-
+    { data: erTaskRows },
   ] = await Promise.all([
     supabase.from('client_comments')
       .select('*, comment_attachments(*)')
@@ -152,6 +152,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     supabase.from('construction_sites').select('id').eq('project_id', id).maybeSingle(),
     supabase.from('project_members').select('id, user_id').eq('project_id', id),
     supabase.from('profiles').select('id, full_name, email, role').in('role', ['admin', 'engineer', 'project_manager', 'operative']),
+    supabase.from('er_tasks').select('*').eq('project_id', id).order('stage').order('created_at'),
   ])
 
   const linkedStandards = (linkedStandardRows ?? []).map((r: any) => r.standards).filter(Boolean)
@@ -418,6 +419,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             erFileName={project.er_file_name ?? null}
             erMissingStandards={project.er_missing_standards ?? []}
             erAnalysedAt={project.er_analysed_at ?? null}
+            erRevisions={(project as any).er_revisions ?? []}
+            erRagSummary={(project as any).er_rag_summary ?? null}
+            erRagAnalysedAt={(project as any).er_rag_analysed_at ?? null}
+            erDeepAnalysis={(project as any).er_deep_analysis ?? null}
+            erDeepAnalysedAt={(project as any).er_deep_analysed_at ?? null}
+            initialTasks={(erTaskRows ?? []) as any[]}
+            constructionSiteId={(constructionSite as any)?.id ?? null}
+            canUpload={(profile as any)?.role === 'admin' && industry === 'civils'}
+            linkedStandardRefs={linkedStandards.map((s: any) => ({ ref: s.ref, title: s.title }))}
           />
         </div>
       )}
