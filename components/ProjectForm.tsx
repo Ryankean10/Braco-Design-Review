@@ -4,24 +4,28 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Project, Stage } from '@/lib/types'
+import { getStageOrder } from '@/lib/stageDefaults'
 
-const STAGES: Stage[] = [
+const BESS_STAGES: Stage[] = [
   'Feasibility', 'Design', 'Procure', 'Build & Install', 'Test & Commission', 'Energise & Handover'
 ]
 
 interface Props {
   project?: Project
+  industry?: string
 }
 
-export default function ProjectForm({ project }: Props) {
+export default function ProjectForm({ project, industry = 'bess' }: Props) {
   const router = useRouter()
   const isEdit = !!project
+  const isCivils = industry === 'civils'
+  const stages = isCivils ? (getStageOrder('civils') as string[]) : BESS_STAGES
 
   const [name, setName] = useState(project?.name ?? '')
   const [client, setClient] = useState(project?.client ?? '')
   const [location, setLocation] = useState(project?.location ?? '')
   const [capacityMw, setCapacityMw] = useState(project?.capacity_mw?.toString() ?? '')
-  const [stage, setStage] = useState<Stage>(project?.stage ?? 'Feasibility')
+  const [stage, setStage] = useState<string>(project?.stage ?? stages[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -32,13 +36,15 @@ export default function ProjectForm({ project }: Props) {
 
     const supabase = createClient()
 
-    const payload = {
+    const payload: any = {
       name: name.trim(),
       client: client.trim(),
       location: location.trim(),
-      capacity_mw: capacityMw ? parseFloat(capacityMw) : null,
       stage,
       updated_at: new Date().toISOString(),
+    }
+    if (!isCivils && capacityMw) {
+      payload.capacity_mw = parseFloat(capacityMw)
     }
 
     if (isEdit) {
@@ -84,7 +90,7 @@ export default function ProjectForm({ project }: Props) {
             required
             className="w-full rounded-lg px-3 py-2 text-sm outline-none"
             style={fieldStyle}
-            placeholder="e.g. Braco 50 MW BESS"
+            placeholder={isCivils ? 'e.g. A9 Drainage Upgrade' : 'e.g. Braco 50 MW BESS'}
           />
         </div>
 
@@ -117,33 +123,35 @@ export default function ProjectForm({ project }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={isCivils ? '' : 'grid grid-cols-2 gap-4'}>
+          {!isCivils && (
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                Capacity (MW)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                value={capacityMw}
+                onChange={e => setCapacityMw(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                style={fieldStyle}
+                placeholder="e.g. 50"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-              Capacity (MW)
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={capacityMw}
-              onChange={e => setCapacityMw(e.target.value)}
-              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-              style={fieldStyle}
-              placeholder="e.g. 50"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-              Lifecycle stage *
+              {isCivils ? 'Starting stage *' : 'Lifecycle stage *'}
             </label>
             <select
               value={stage}
-              onChange={e => setStage(e.target.value as Stage)}
+              onChange={e => setStage(e.target.value)}
               className="w-full rounded-lg px-3 py-2 text-sm outline-none"
               style={fieldStyle}
             >
-              {STAGES.map(s => (
+              {stages.map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
