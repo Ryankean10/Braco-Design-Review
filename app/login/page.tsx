@@ -1,15 +1,20 @@
 export const dynamic = 'force-dynamic'
 
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import LoginForm from '@/components/LoginForm'
 
 export default async function LoginPage() {
   const headersList = await headers()
   const slug = headersList.get('x-company-slug') ?? 'braco'
 
-  const supabase = await createClient()
-  const { data: company } = await supabase
+  // Use service role to bypass RLS — login page has no auth session yet
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+  const { data: company } = await admin
     .from('companies')
     .select('name, logo_url, accent_color')
     .eq('slug', slug)
