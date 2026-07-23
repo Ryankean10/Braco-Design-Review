@@ -22,9 +22,18 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
-  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(role)) notFound()
+  if (!['admin', 'engineer', 'project_manager', 'operative', 'superadmin'].includes(role)) notFound()
+
+  // Fetch company modules to gate sub-features
+  const { data: company } = profile?.company_id
+    ? await supabase.from('companies').select('modules').eq('id', profile.company_id).single()
+    : { data: null }
+  const companyModules: string[] = (company as any)?.modules ?? []
+  // If no sub-feature flags set at all, default everything on (backwards compat)
+  const hasSubFeatures = companyModules.some(m => m.startsWith('construction.'))
+  const feat = (key: string) => !hasSubFeatures || companyModules.includes(key)
 
   const { data: site } = await supabase
     .from('construction_sites')
@@ -232,16 +241,16 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
       </div>
 
       {/* Agency timesheet upload */}
-      <CollapsibleSection
+      {feat('construction.timesheets') && <CollapsibleSection
         title="Agency Timesheets"
         badge={undefined}
         summary="Upload agency XLS timesheets — auto-analysed, matched to staff, discrepancies flagged"
       >
         <TimesheetUploadPanel siteId={siteId} />
-      </CollapsibleSection>
+      </CollapsibleSection>}
 
       {/* ITP — top-level, anchored so project page link lands here */}
-      <div id="itp" style={{ scrollMarginTop: '80px' }}>
+      {feat('construction.itp') && <div id="itp" style={{ scrollMarginTop: '80px' }}>
         <CollapsibleSection
           title="Inspection & Test Plan (ITP)"
           badge={undefined}
@@ -249,18 +258,18 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
         >
           <ItpPanel siteId={siteId} canEdit={canEdit} />
         </CollapsibleSection>
-      </div>
+      </div>}
 
       {/* P6 Programme */}
-      <ProgrammePanel
+      {feat('construction.programme') && <ProgrammePanel
         siteId={siteId}
         initialProgrammes={programmes ?? []}
         signedUrls={signedUrls}
         canEdit={canEdit}
-      />
+      />}
 
       {/* Civils Works (ECV) */}
-      {(() => {
+      {feat('construction.civils') && (() => {
         const acts = (civilsActivities ?? []).filter(a => !a.discipline || a.discipline === 'Civils')
         const bg   = acts.filter(a => a.category === 'Below Ground')
         const ag   = acts.filter(a => a.category !== 'Below Ground')
@@ -280,7 +289,7 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
       })()}
 
       {/* Electrical Works (EME) */}
-      {(() => {
+      {feat('construction.civils') && (() => {
         const acts = (civilsActivities ?? []).filter(a => a.discipline === 'Electrical' || a.discipline === 'HV')
         const complete = acts.filter(a => a.status === 'Complete').length
         const pct = acts.length ? Math.round(acts.reduce((s,a)=>s+a.progress_pct,0)/acts.length) : 0
@@ -296,7 +305,7 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
       })()}
 
       {/* Test & Commissioning */}
-      {(() => {
+      {feat('construction.civils') && (() => {
         const acts = (civilsActivities ?? []).filter(a => a.discipline === 'Commissioning')
         const complete = acts.filter(a => a.status === 'Complete').length
         const pct = acts.length ? Math.round(acts.reduce((s,a)=>s+a.progress_pct,0)/acts.length) : 0
@@ -312,7 +321,7 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
       })()}
 
       {/* Unified cable register */}
-      <CollapsibleSection
+      {feat('construction.cable') && <CollapsibleSection
         title="Cable Schedule"
         badge={(cables ?? []).length}
         summary={(() => {
@@ -329,7 +338,7 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
           packages={(site as any).construction_packages ?? []}
           canEdit={canEdit}
         />
-      </CollapsibleSection>
+      </CollapsibleSection>}
     </div>
   )
 }
