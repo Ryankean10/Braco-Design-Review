@@ -46,9 +46,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const headersList = await headers()
   const companySlug = headersList.get('x-company-slug') ?? 'braco'
 
+  // Use service role for profile so superadmin visiting any subdomain
+  // always gets their own profile/role, regardless of company RLS.
+  const admin = createAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+
   const [{ data: profile }, { data: company }] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
-    supabase.from('companies').select('*').eq('slug', companySlug).single(),
+    admin.from('profiles').select('*').eq('id', user.id).single(),
+    admin.from('companies').select('*').eq('slug', companySlug).single(),
   ])
 
   const accent    = (company as any)?.accent_color    ?? '#6C72F5'
