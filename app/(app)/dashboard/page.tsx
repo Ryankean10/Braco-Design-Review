@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic'
 
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import Link from 'next/link'
+import { getCompanyContext } from '@/lib/getCompanyContext'
 import { FolderOpen, Plus, MessageSquare } from 'lucide-react'
 import ClientDashboard from '@/components/ClientDashboard'
 import { STAGE_ORDER } from '@/lib/stageDefaults'
@@ -22,20 +22,8 @@ function stageColour(stage: StageName) {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const headersList = await headers()
-  const companySlug = headersList.get('x-company-slug') ?? 'braco'
-
-  const [{ data: profile }, { data: company }] = await Promise.all([
-    supabase.from('profiles').select('role, full_name, email, company_id').eq('id', user.id).single(),
-    supabase.from('companies').select('tagline, industry').eq('slug', companySlug).single(),
-  ])
-  const role = profile?.role ?? 'engineer'
-  const userCompanyId = (profile as any)?.company_id as string | null
-  const industry = (company as any)?.industry ?? 'bess'
+  const { supabase, user, profile, role, company, effectiveCompanyId } = await getCompanyContext()
+  const industry = company?.industry ?? 'bess'
   const dashboardSubtitle = industry === 'civils'
     ? 'Construction management overview'
     : 'BESS project review overview'
@@ -89,11 +77,10 @@ export default async function DashboardPage() {
 
   // ── Internal dashboard ─────────────────────────────────────────────────────
 
-  // Non-admin roles only see their assigned projects
+  // Always scope to the subdomain company — even superadmin
   let projectQuery = supabase.from('projects').select('*').order('updated_at', { ascending: false })
-  // Explicit company filter — belt-and-suspenders on top of RLS
-  if (role !== 'superadmin' && userCompanyId) {
-    projectQuery = projectQuery.eq('company_id', userCompanyId)
+  if (effectiveCompanyId) {
+    projectQuery = projectQuery.eq('company_id', effectiveCompanyId)
   }
   if (!['superadmin', 'admin'].includes(role)) {
     const { data: memberships } = await supabase
@@ -119,8 +106,8 @@ export default async function DashboardPage() {
     projectIds.length > 0
       ? supabase.from('project_stages').select('project_id, stage, status, checklist').in('project_id', projectIds)
       : Promise.resolve({ data: [] }),
-    role !== 'operative'
-      ? supabase.from('client_comments').select('id, project_id, subject_label, created_at, status').eq('status', 'Open').order('created_at', { ascending: false })
+    role !== 'operative' && projectIds.length > 0
+      ? supabase.from('client_comments').select('id, project_id, subject_label, created_at, status').eq('status', 'Open').in('project_id', projectIds).order('created_at', { ascending: false })
       : Promise.resolve({ data: [] }),
   ])
 

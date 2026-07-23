@@ -1,17 +1,12 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect, notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { getCompanyContext } from '@/lib/getCompanyContext'
 import PlantDetail from '@/components/plant/PlantDetail'
 
 export default async function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
-  const role = (profile as any)?.role ?? ''
+  const { supabase, role, effectiveCompanyId, canEdit } = await getCompanyContext()
   if (!['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)) redirect('/dashboard')
 
   const [
@@ -30,7 +25,7 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
     supabase.from('plant_manuals').select('*').eq('plant_id', id).order('created_at', { ascending: false }),
     supabase.from('plant_maintenance_tasks').select('*').eq('plant_id', id).order('next_due_date'),
     supabase.from('plant_maintenance_log').select('*').eq('plant_id', id).order('carried_out_date', { ascending: false }),
-    supabase.from('projects').select('id, name').order('name'),
+    supabase.from('projects').select('id, name').eq('company_id', effectiveCompanyId ?? '').order('name'),
     supabase.from('people').select('id, name, role').order('name'),
   ])
 
@@ -46,7 +41,7 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
       logs={logs ?? []}
       projects={projects ?? []}
       people={people ?? []}
-      canEdit={['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)}
+      canEdit={canEdit}
     />
   )
 }

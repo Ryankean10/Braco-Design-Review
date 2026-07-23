@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { getCompanyContext } from '@/lib/getCompanyContext'
 import { Plus, FolderOpen } from 'lucide-react'
 import { STAGE_ORDER } from '@/lib/stageDefaults'
 import type { StageName } from '@/lib/stageDefaults'
@@ -15,13 +15,7 @@ const STAGE_COLOUR: Record<StageName, string> = {
 }
 
 export default async function ProjectsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
-  const role = profile?.role ?? 'engineer'
-  const userCompanyId = (profile as any)?.company_id as string | null
+  const { supabase, user, role, effectiveCompanyId } = await getCompanyContext()
 
   let projectIds: string[] | null = null
   if (!['superadmin', 'admin'].includes(role)) {
@@ -30,11 +24,9 @@ export default async function ProjectsPage() {
     projectIds = (memberships ?? []).map((m: any) => m.project_id)
   }
 
+  // Always scope to subdomain company
   let projectQuery = supabase.from('projects').select('*').order('updated_at', { ascending: false })
-  // Explicit company filter — belt-and-suspenders on top of RLS
-  if (role !== 'superadmin' && userCompanyId) {
-    projectQuery = projectQuery.eq('company_id', userCompanyId)
-  }
+  if (effectiveCompanyId) projectQuery = projectQuery.eq('company_id', effectiveCompanyId)
   if (projectIds !== null) {
     if (projectIds.length === 0) projectQuery = projectQuery.in('id', ['none'])
     else projectQuery = projectQuery.in('id', projectIds)
