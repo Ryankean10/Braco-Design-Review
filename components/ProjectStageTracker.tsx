@@ -96,8 +96,8 @@ export default function ProjectStageTracker({ stages: initStages, canEdit, userI
       completed_at: now,
     })
 
-    // Auto-provision construction site when Feasibility gate is signed off
-    if (stageName === 'Feasibility') {
+    // Auto-provision construction site when Feasibility (BESS) or Tender (civils) is signed off
+    if (stageName === 'Feasibility' || stageName === 'Tender') {
       const res = await fetch('/api/construction/provision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
