@@ -16,7 +16,7 @@ export default async function LoginPage() {
   )
   const { data: company } = await admin
     .from('companies')
-    .select('name, logo_url, accent_color')
+    .select('name, logo_url, accent_color, login_bg')
     .eq('slug', slug)
     .single()
 
@@ -26,6 +26,7 @@ export default async function LoginPage() {
       companySlug={slug}
       logoUrl={company?.logo_url ?? null}
       accentColor={company?.accent_color ?? '#2563eb'}
+      loginBg={(company as any)?.login_bg ?? 'dark'}
     />
   )
 }

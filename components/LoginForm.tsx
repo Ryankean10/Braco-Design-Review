@@ -10,9 +10,11 @@ interface Props {
   companySlug: string
   logoUrl: string | null
   accentColor: string
+  loginBg?: string
 }
 
-export default function LoginForm({ companyName, companySlug, logoUrl, accentColor }: Props) {
+export default function LoginForm({ companyName, companySlug, logoUrl, accentColor, loginBg = 'dark' }: Props) {
+  const isLight = loginBg === 'light'
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -36,8 +38,16 @@ export default function LoginForm({ companyName, companySlug, logoUrl, accentCol
 
   const initial = companyName.charAt(0).toUpperCase()
 
+  const pageBg    = isLight ? '#f8fafc' : 'var(--bg-base)'
+  const cardBg    = isLight ? '#ffffff' : 'var(--bg-surface)'
+  const cardBorder = isLight ? '#e2e8f0' : 'var(--border)'
+  const inputBg   = isLight ? '#f1f5f9' : 'var(--bg-elevated)'
+  const inputBorder = isLight ? '#cbd5e1' : 'var(--border)'
+  const textPrimary = isLight ? '#0f172a' : 'var(--text-primary)'
+  const textMuted   = isLight ? '#64748b' : 'var(--text-muted)'
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--bg-base)' }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: pageBg }}>
       <div className="w-full max-w-sm">
         {/* Company branding */}
         <div className="mb-8 text-center">
@@ -57,34 +67,34 @@ export default function LoginForm({ companyName, companySlug, logoUrl, accentCol
               </div>
             )}
           </div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>{companyName}</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Sign in to your account</p>
+          <h1 className="text-xl font-semibold" style={{ color: textPrimary }}>{companyName}</h1>
+          <p className="text-sm mt-1" style={{ color: textMuted }}>Sign in to your account</p>
         </div>
 
         {/* Card */}
-        <div className="rounded-xl p-6 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        <div className="rounded-xl p-6 border" style={{ background: cardBg, borderColor: cardBorder }}>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Email</label>
+              <label className="block text-sm font-medium mb-1.5" style={{ color: textMuted }}>Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
                 className="w-full rounded-lg px-3 py-2 text-sm outline-none transition-all"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                style={{ background: inputBg, border: `1px solid ${inputBorder}`, color: textPrimary }}
                 placeholder="you@example.com"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Password</label>
+              <label className="block text-sm font-medium mb-1.5" style={{ color: textMuted }}>Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
                 className="w-full rounded-lg px-3 py-2 text-sm outline-none transition-all"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                style={{ background: inputBg, border: `1px solid ${inputBorder}`, color: textPrimary }}
                 placeholder="••••••••"
               />
             </div>
@@ -102,7 +112,7 @@ export default function LoginForm({ companyName, companySlug, logoUrl, accentCol
           </form>
         </div>
 
-        <p className="text-center text-xs mt-4" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-center text-xs mt-4" style={{ color: textMuted }}>
           Invite-only access. Contact your administrator.
         </p>
       </div>
