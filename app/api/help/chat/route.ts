@@ -139,7 +139,7 @@ async function logBugToDb(summary: string, userMessage: string, userName: string
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   )
-  await sb.from('bug_reports').insert({
+  const { error } = await sb.from('bug_reports').insert({
     reporter_id: userId,
     reporter_name: userName,
     reporter_email: userEmail,
@@ -150,6 +150,7 @@ async function logBugToDb(summary: string, userMessage: string, userName: string
     report_type: reportType,
     priority: reportType === 'suggestion' ? 'low' : 'medium',
   })
+  if (error) throw new Error(`DB insert failed: ${error.message}`)
 }
 
 export async function POST(req: NextRequest) {
@@ -180,19 +181,16 @@ export async function POST(req: NextRequest) {
   })
 
   const rawText = response.content[0].type === 'text' ? response.content[0].text : ''
-  // Strip any markdown code fence wrapping the JSON block, then extract the JSON object
-  const stripped = rawText.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1')
-  const jsonMatch = stripped.match(/\{[\s\S]*"isBugReport"[\s\S]*\}/)
+
+  // Remove any markdown code fences, then extract the JSON metadata object
+  const withoutFences = rawText.replace(/```(?:json)?/g, '').replace(/```/g, '')
+  const jsonMatch = withoutFences.match(/\{[^{}]*"isBugReport"[^{}]*\}/)
+
   let isBugReport = false
   let isSuggestion = false
   let bugSummary: string | null = null
   let suggestedActions: string[] = []
-  // Remove the JSON block (and any wrapping code fence) from display text
-  let displayText = rawText.replace(/```(?:json)?\s*\{[\s\S]*?"isBugReport"[\s\S]*?\}\s*```/g, '').trim()
-  if (!jsonMatch || displayText === rawText) {
-    // Fallback: JSON wasn't in a code fence, strip the bare object
-    displayText = jsonMatch ? rawText.replace(jsonMatch[0], '').trim() : rawText
-  }
+  let displayText = rawText
 
   if (jsonMatch) {
     try {
@@ -201,19 +199,38 @@ export async function POST(req: NextRequest) {
       isSuggestion = meta.isSuggestion === true
       bugSummary = meta.bugSummary ?? null
       suggestedActions = meta.suggestedActions ?? []
-    } catch {}
+    } catch (e) {
+      console.error('JSON parse error:', e, jsonMatch[0])
+    }
+    // Strip the JSON block and any surrounding code fences from the display text
+    displayText = rawText
+      .replace(/```(?:json)?\s*\{[^{}]*"isBugReport"[^{}]*\}\s*```/g, '')
+      .replace(/\{[^{}]*"isBugReport"[^{}]*\}/g, '')
+      .trim()
   }
 
   const shouldLog = (isBugReport || isSuggestion) && bugSummary
+  let logError: string | null = null
+
   if (shouldLog) {
     const reportType = isSuggestion ? 'suggestion' : 'bug'
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content ?? ''
-    // Must await — Vercel terminates the function as soon as the response is sent
-    await Promise.all([
-      logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType),
-      sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
-    ]).catch(e => console.error('Report logging error:', e))
+    try {
+      await Promise.all([
+        logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType),
+        sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
+      ])
+    } catch (e: any) {
+      logError = e?.message ?? 'Unknown error'
+      console.error('Report logging error:', logError)
+    }
   }
 
-  return NextResponse.json({ message: displayText, isBugReport: isBugReport || isSuggestion, bugSummary })
+  return NextResponse.json({
+    message: displayText,
+    isBugReport: isBugReport || isSuggestion,
+    bugSummary,
+    // Debug fields — visible in browser network tab
+    _debug: { shouldLog, logError, rawTextLength: rawText.length, jsonFound: !!jsonMatch },
+  })
 }
