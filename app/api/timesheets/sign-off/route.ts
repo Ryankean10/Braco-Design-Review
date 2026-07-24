@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const admin = createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
   const { data: profile } = await admin.from('profiles').select('role, full_name, company_id').eq('id', user.id).single()
   const role = profile?.role ?? ''
-  const byName = profile?.full_name ?? profile?.email ?? 'Unknown'
+  const byName = profile?.full_name ?? 'Unknown'
 
   const { personId, weekStarting, action, notes } = await req.json()
   // action: 'Submitted' | 'Approved' | 'Rejected'
