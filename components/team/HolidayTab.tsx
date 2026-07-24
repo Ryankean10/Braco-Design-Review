@@ -122,21 +122,33 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
       .reduce((s, b) => s + b.days_taken, 0)
   }
 
-  function clashCheck(personId: string, start: string, end: string, excludeId?: string): string[] {
-    const groupKey = (() => {
-      for (const [key, g] of groups) {
-        if (key !== '_unallocated' && g.people.find(p => p.id === personId)) return key
-      }
-      return null
-    })()
-    if (!groupKey) return []
-    const teammates = groups.get(groupKey)?.people.filter(p => p.id !== personId) ?? []
-    return teammates
-      .filter(t => bookings.some(b =>
-        b.person_id === t.id && b.id !== excludeId && b.status !== 'Rejected' &&
-        datesOverlap(start, end, b.start_date, b.end_date)
-      ))
-      .map(t => t.name)
+  type ClashLevel = 'green' | 'yellow' | 'red'
+  interface ClashResult {
+    level: ClashLevel
+    clashes: { name: string; discipline: string | null; sameType: boolean }[]
+  }
+
+  function clashCheck(personId: string, start: string, end: string, excludeId?: string): ClashResult {
+    const person = activePeople.find(p => p.id === personId)
+    const personDiscipline = person?.discipline ?? null
+
+    const clashes = activePeople
+      .filter(p => p.id !== personId)
+      .flatMap(p => {
+        const overlaps = bookings.some(b =>
+          b.person_id === p.id &&
+          b.id !== excludeId &&
+          b.status !== 'Rejected' &&
+          datesOverlap(start, end, b.start_date, b.end_date)
+        )
+        if (!overlaps) return []
+        const sameType = personDiscipline !== null && p.discipline === personDiscipline
+        return [{ name: p.name, discipline: p.discipline, sameType }]
+      })
+
+    if (clashes.length === 0) return { level: 'green', clashes: [] }
+    if (clashes.some(c => c.sameType)) return { level: 'red', clashes }
+    return { level: 'yellow', clashes }
   }
 
   async function submitBooking() {
@@ -483,14 +495,28 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   {countWorkingDays(booking.start, booking.end)} working day(s)
                 </p>
-                {clashCheck(booking.personId, booking.start, booking.end).length > 0 && (
-                  <div className="flex items-start gap-2 rounded-lg p-2.5" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' }}>
-                    <AlertTriangle size={13} style={{ color: '#f59e0b', flexShrink: 0, marginTop: 1 }} />
-                    <p className="text-xs" style={{ color: '#f59e0b' }}>
-                      Clash with: {clashCheck(booking.personId, booking.start, booking.end).join(', ')}
-                    </p>
-                  </div>
-                )}
+                {(() => {
+                  const { level, clashes } = clashCheck(booking.personId, booking.start, booking.end)
+                  const clashCfg = {
+                    green:  { bg: 'rgba(34,197,94,0.08)',   border: 'rgba(34,197,94,0.3)',   color: '#22c55e', label: 'No clashes' },
+                    yellow: { bg: 'rgba(245,158,11,0.1)',   border: 'rgba(245,158,11,0.35)', color: '#f59e0b', label: 'Cover clash' },
+                    red:    { bg: 'rgba(239,68,68,0.1)',    border: 'rgba(239,68,68,0.35)',  color: '#ef4444', label: 'Same role clash' },
+                  }[level]
+                  return (
+                    <div className="flex items-start gap-2 rounded-lg p-2.5"
+                      style={{ background: clashCfg.bg, border: `1px solid ${clashCfg.border}` }}>
+                      <div className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: clashCfg.color }} />
+                      <div>
+                        <p className="text-xs font-medium" style={{ color: clashCfg.color }}>{clashCfg.label}</p>
+                        {clashes.length > 0 && (
+                          <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            {clashes.map(c => `${c.name}${c.discipline ? ` (${c.discipline})` : ''}`).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
               </>
             )}
             <div>
@@ -578,7 +604,7 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
                   .sort((a, b) => a.start_date.localeCompare(b.start_date))
                   .map(b => {
                     const person = activePeople.find(p => p.id === b.person_id)
-                    const clashes = clashCheck(b.person_id, b.start_date, b.end_date, b.id)
+                    const clashResult = clashCheck(b.person_id, b.start_date, b.end_date, b.id)
                     const used = approvedDaysUsed(b.person_id)
                     const total = person?.holiday_allowance ?? 28
                     const remaining = total - used
@@ -617,13 +643,23 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
                           )}
                         </div>
 
-                        {clashes.length > 0 && (
-                          <div className="flex items-center gap-1.5 rounded-lg px-3 py-2"
-                            style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' }}>
-                            <AlertTriangle size={12} style={{ color: '#f59e0b', flexShrink: 0 }} />
-                            <p className="text-xs" style={{ color: '#f59e0b' }}>Clash with {clashes.join(', ')}</p>
-                          </div>
-                        )}
+                        {clashResult.level !== 'green' && (() => {
+                          const cfg = clashResult.level === 'red'
+                            ? { bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)', color: '#ef4444', label: 'Same role clash' }
+                            : { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)', color: '#f59e0b', label: 'Cover clash' }
+                          return (
+                            <div className="flex items-start gap-1.5 rounded-lg px-3 py-2"
+                              style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}>
+                              <div className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: cfg.color }} />
+                              <div>
+                                <p className="text-xs font-medium" style={{ color: cfg.color }}>{cfg.label}</p>
+                                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                  {clashResult.clashes.map(c => `${c.name}${c.discipline ? ` (${c.discipline})` : ''}`).join(', ')}
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        })()}
 
                         <div className="flex gap-2 pt-1">
                           <button onClick={() => approveBooking(b.id)} disabled={actionId === b.id}
