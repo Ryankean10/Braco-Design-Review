@@ -156,7 +156,7 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
     const current = getDayEntry(personId, date)
     const updated = { ...current, [field]: value }
     const { data: dayData } = await supabase.from('timesheet_days')
-      .upsert({ timesheet_id: tsId, work_date: date, ...updated }, { onConflict: 'timesheet_id,work_date' })
+      .upsert({ ...updated, timesheet_id: tsId, work_date: date }, { onConflict: 'timesheet_id,work_date' })
       .select().single()
 
     setSheets(prev => {
