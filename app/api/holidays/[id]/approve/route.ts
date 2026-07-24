@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
         if (action === 'Approved') {
           await resend.emails.send({
-            from: 'Scotplant Contractors <onboarding@resend.dev>',
+            from: 'Scotplant Contractors <scotplantai@yacht-gitana.com>',
             to: person.email,
             subject: `✅ Holiday approved — ${fmtDate(booking.start_date)} to ${fmtDate(booking.end_date)}`,
             html: `
@@ -89,7 +89,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           })
         } else {
           await resend.emails.send({
-            from: 'Scotplant Contractors <onboarding@resend.dev>',
+            from: 'Scotplant Contractors <scotplantai@yacht-gitana.com>',
             to: person.email,
             subject: `❌ Holiday request not approved — ${fmtDate(booking.start_date)} to ${fmtDate(booking.end_date)}`,
             html: `

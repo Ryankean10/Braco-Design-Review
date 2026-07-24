@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
           : `<p style="color:#64748b">No performance bonus was awarded this week.</p>`
 
         await resend.emails.send({
-          from: 'Scotplant Contractors <onboarding@resend.dev>',
+          from: 'Scotplant Contractors <scotplantai@yacht-gitana.com>',
           to: person.email,
           subject: `✅ Timesheet approved — week ending ${weekEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`,
           html: `
