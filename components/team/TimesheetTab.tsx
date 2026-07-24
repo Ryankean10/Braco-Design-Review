@@ -47,6 +47,8 @@ interface HolidayBooking {
   person_id: string
   days_taken: number
   status: string
+  start_date?: string
+  end_date?: string
 }
 
 interface Props {
@@ -108,7 +110,8 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
   const [auditPersonId, setAuditPersonId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [holidayBookings, setHolidayBookings] = useState<HolidayBooking[]>([])
+  const [holidayBookings, setHolidayBookings] = useState<HolidayBooking[]>([])  // full-year, for remaining calc
+  const [weekHolidays, setWeekHolidays] = useState<HolidayBooking[]>([])        // this week's approved bookings
 
   const dates = weekDates(monday)
   const weekKey = monday.toISOString().slice(0, 10)
@@ -121,17 +124,27 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
     const personIds = activePeople.map(p => p.id)
     if (!personIds.length) { setLoading(false); return }
 
-    const { data: tsRows } = await supabase
-      .from('weekly_timesheets')
-      .select('*, timesheet_days(*)')
-      .in('person_id', personIds)
-      .eq('week_starting', weekKey)
+    const weekEnd = dates[6]  // Sunday
+
+    const [{ data: tsRows }, { data: holRows }] = await Promise.all([
+      supabase.from('weekly_timesheets')
+        .select('*, timesheet_days(*)')
+        .in('person_id', personIds)
+        .eq('week_starting', weekKey),
+      supabase.from('holiday_bookings')
+        .select('person_id, days_taken, status, start_date, end_date')
+        .in('person_id', personIds)
+        .eq('status', 'Approved')
+        .lte('start_date', weekEnd)
+        .gte('end_date', weekKey),
+    ])
 
     const map: Record<string, WeeklyTimesheet> = {}
     for (const ts of tsRows ?? []) {
       map[ts.person_id] = { ...ts, days: ts.timesheet_days ?? [] }
     }
     setSheets(map)
+    setWeekHolidays(holRows ?? [])
     setLoading(false)
   }, [weekKey, activePeople.map(p => p.id).join(',')])
 
@@ -153,6 +166,38 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
 
   function getSheet(personId: string): WeeklyTimesheet | null {
     return sheets[personId] ?? null
+  }
+
+  function isApprovedHoliday(personId: string, date: string): boolean {
+    const dow = new Date(date).getDay()
+    if (dow === 0 || dow === 6) return false  // weekends never count as holiday days
+    return weekHolidays.some(b =>
+      b.person_id === personId &&
+      b.start_date! <= date && date <= b.end_date!
+    )
+  }
+
+  function calcWeekPay(person: Person): number {
+    let pay = 0
+    for (const date of dates) {
+      if (isApprovedHoliday(person.id, date)) {
+        pay += 10 * (person.standard_rate ?? 0)
+      } else {
+        const day = getDayEntry(person.id, date)
+        pay += day.hours_regular * (person.standard_rate ?? 0)
+             + day.hours_ot1 * (person.ot_rate_1 ?? person.standard_rate ?? 0)
+             + day.hours_ot2 * (person.ot_rate_2 ?? person.standard_rate ?? 0)
+      }
+    }
+    return pay
+  }
+
+  function calcWeekHours(person: Person): number {
+    return dates.reduce((s, date) => {
+      if (isApprovedHoliday(person.id, date)) return s + 10
+      const day = getDayEntry(person.id, date)
+      return s + day.hours_regular + day.hours_ot1 + day.hours_ot2
+    }, 0)
   }
 
   function holidayRemaining(person: Person): { used: number; total: number; remaining: number } {
@@ -288,8 +333,8 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
             const expanded = expandedRows.has(person.id)
 
             const dayEntries = dates.map(d => getDayEntry(person.id, d))
-            const totalHrs = dayEntries.reduce((s, d) => s + (d.is_holiday ? 10 : d.hours_regular + d.hours_ot1 + d.hours_ot2), 0)
-            const totalPay = calcPay(dayEntries, person)
+            const totalHrs = calcWeekHours(person)
+            const totalPay = calcWeekPay(person)
 
             return (
               <div key={person.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--border)' }}>
@@ -307,11 +352,17 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                       <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{person.role ?? ''}</p>
                     </div>
                   </div>
-                  {dayEntries.map((day, i) => (
-                    <div key={dates[i]} className="text-center text-xs" style={{ color: day.is_holiday ? '#f59e0b' : day.hours_regular + day.hours_ot1 + day.hours_ot2 > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      {day.is_holiday ? 'HOL' : (day.hours_regular + day.hours_ot1 + day.hours_ot2 || '—')}
-                    </div>
-                  ))}
+                  {dates.map((date, i) => {
+                    const isHol = isApprovedHoliday(person.id, date)
+                    const day = dayEntries[i]
+                    const hrs = day.hours_regular + day.hours_ot1 + day.hours_ot2
+                    return (
+                      <div key={date} className="text-center text-xs"
+                        style={{ color: isHol ? '#f59e0b' : hrs > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                        {isHol ? 'HOL' : (hrs || '—')}
+                      </div>
+                    )
+                  })}
                   <div className="text-right text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{totalHrs > 0 ? totalHrs.toFixed(1) : '—'}</div>
                   <div className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>
                     {totalPay > 0 ? `£${totalPay.toFixed(0)}` : '—'}
@@ -330,28 +381,39 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                     {/* Day entry grid */}
                     <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
                       {dates.map((date, i) => {
+                        const isHol = isApprovedHoliday(person.id, date)
                         const day = getDayEntry(person.id, date)
                         const isWeekend = i >= 5
+                        const dimmed = isWeekend && !isHol && !day.hours_regular && !day.hours_ot1 && !day.hours_ot2
                         return (
                           <div key={date} className="rounded-lg p-2 border space-y-1.5"
-                            style={{ borderColor: day.is_holiday ? 'rgba(245,158,11,0.4)' : 'var(--border)', background: day.is_holiday ? 'rgba(245,158,11,0.06)' : 'var(--bg-surface)', opacity: isWeekend && !day.hours_regular && !day.hours_ot1 && !day.hours_ot2 && !day.is_holiday ? 0.5 : 1 }}>
+                            style={{
+                              borderColor: isHol ? 'rgba(245,158,11,0.4)' : 'var(--border)',
+                              background: isHol ? 'rgba(245,158,11,0.06)' : 'var(--bg-surface)',
+                              opacity: dimmed ? 0.45 : 1,
+                            }}>
                             <p className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>{DAYS[i]} {date.slice(8)}</p>
 
-                            {isEditable && (
-                              <label className="flex items-center gap-1 cursor-pointer">
-                                <input type="checkbox" checked={day.is_holiday}
-                                  onChange={e => upsertDay(person.id, date, 'is_holiday', e.target.checked)}
-                                  className="rounded" />
-                                <span className="text-[10px]" style={{ color: '#f59e0b' }}>Holiday</span>
-                              </label>
-                            )}
-
-                            {!day.is_holiday && (
+                            {isHol ? (
+                              // Auto-detected from approved holiday booking — locked, no manual entry needed
+                              <div className="space-y-0.5">
+                                <p className="text-[10px] font-medium" style={{ color: '#f59e0b' }}>HOL — approved</p>
+                                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                  10h @ {person.standard_rate ? `£${person.standard_rate}/hr` : 'no rate set'}
+                                </p>
+                                {person.standard_rate && (
+                                  <p className="text-[10px] font-semibold" style={{ color: '#f59e0b' }}>
+                                    £{(10 * person.standard_rate).toFixed(2)}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              // Working day — editable
                               <>
                                 {[
                                   { key: 'hours_regular', label: 'Reg', value: day.hours_regular },
-                                  { key: 'hours_ot1', label: 'OT1', value: day.hours_ot1 },
-                                  { key: 'hours_ot2', label: 'OT2', value: day.hours_ot2 },
+                                  { key: 'hours_ot1',     label: 'OT1', value: day.hours_ot1     },
+                                  { key: 'hours_ot2',     label: 'OT2', value: day.hours_ot2     },
                                 ].map(({ key, label, value }) => (
                                   <div key={key} className="flex items-center gap-1">
                                     <span className="text-[10px] w-6 shrink-0" style={{ color: 'var(--text-muted)' }}>{label}</span>
@@ -375,9 +437,6 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                                 )}
                               </>
                             )}
-                            {day.is_holiday && (
-                              <p className="text-[10px]" style={{ color: '#f59e0b' }}>10 hrs @ std rate</p>
-                            )}
                           </div>
                         )
                       })}
@@ -398,7 +457,7 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                           </div>
                         )
                       })()}
-                      {!person.standard_rate && dayEntries.some(d => d.is_holiday) && (
+                      {!person.standard_rate && dates.some(d => isApprovedHoliday(person.id, d)) && (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px]"
                           style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}>
                           <AlertCircle size={12} /> No standard rate set — edit person to add pay rate for holiday cost
