@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, Bell, X } from 'lucide-react'
 
 interface Person {
   id: string; name: string; role: string | null; discipline: string | null
@@ -72,8 +72,10 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
   const [actionId, setActionId] = useState<string | null>(null)
   const [rejectionNote, setRejectionNote] = useState('')
   const [showRejectModal, setShowRejectModal] = useState<string | null>(null)
+  const [showApprovals, setShowApprovals] = useState(false)
 
   const activePeople = people.filter(p => p.is_active !== false)
+  const pendingCount = bookings.filter(b => b.status === 'Pending').length
 
   // Group people by their project/site appointment
   const groups = new Map<string, { label: string; people: Person[] }>()
@@ -213,11 +215,31 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
             </>
           )}
         </div>
-        <button onClick={() => setBooking({ personId: activePeople[0]?.id ?? '', start: '', end: '', description: '' })}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white"
-          style={{ background: 'var(--accent)' }}>
-          <Plus size={13} /> Book holiday
-        </button>
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <button onClick={() => setShowApprovals(true)}
+              className="relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-all hover:opacity-80"
+              style={{
+                borderColor: pendingCount > 0 ? 'rgba(245,158,11,0.5)' : 'var(--border)',
+                background: pendingCount > 0 ? 'rgba(245,158,11,0.08)' : 'transparent',
+                color: pendingCount > 0 ? '#f59e0b' : 'var(--text-muted)',
+              }}>
+              <Bell size={13} />
+              Approvals
+              {pendingCount > 0 && (
+                <span className="flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold text-white"
+                  style={{ background: '#f59e0b' }}>
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          )}
+          <button onClick={() => setBooking({ personId: activePeople[0]?.id ?? '', start: '', end: '', description: '' })}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white"
+            style={{ background: 'var(--accent)' }}>
+            <Plus size={13} /> Book holiday
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -466,6 +488,106 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
                 style={{ background: 'var(--accent)' }}>
                 {saving ? <Loader2 size={13} className="animate-spin" /> : 'Submit request'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approvals panel */}
+      {showApprovals && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
+          <div className="w-full max-w-lg rounded-2xl border flex flex-col" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', maxHeight: '85vh' }}>
+            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Holiday approvals</h3>
+                {pendingCount > 0 && (
+                  <span className="flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
+                    style={{ background: '#f59e0b' }}>
+                    {pendingCount} pending
+                  </span>
+                )}
+              </div>
+              <button onClick={() => setShowApprovals(false)} className="p-1 rounded hover:opacity-70">
+                <X size={16} style={{ color: 'var(--text-muted)' }} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-5 space-y-3">
+              {bookings.filter(b => b.status === 'Pending').length === 0 ? (
+                <div className="text-center py-12">
+                  <CheckCircle2 size={28} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No pending requests</p>
+                </div>
+              ) : (
+                bookings
+                  .filter(b => b.status === 'Pending')
+                  .sort((a, b) => a.start_date.localeCompare(b.start_date))
+                  .map(b => {
+                    const person = activePeople.find(p => p.id === b.person_id)
+                    const clashes = clashCheck(b.person_id, b.start_date, b.end_date, b.id)
+                    const used = approvedDaysUsed(b.person_id)
+                    const total = person?.holiday_allowance ?? 28
+                    const remaining = total - used
+                    return (
+                      <div key={b.id} className="rounded-xl border p-4 space-y-3"
+                        style={{ borderColor: 'rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.04)' }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                              {person?.name ?? 'Unknown'}
+                            </p>
+                            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                              {person?.role ?? ''}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-semibold" style={{ color: '#f59e0b' }}>
+                              {new Date(b.start_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                              {b.start_date !== b.end_date && ` – ${new Date(b.end_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}
+                            </p>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{b.days_taken} working day{b.days_taken !== 1 ? 's' : ''}</p>
+                          </div>
+                        </div>
+
+                        {b.description && (
+                          <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>{b.description}</p>
+                        )}
+
+                        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          <span>{remaining} days remaining of {total} allowance</span>
+                          {remaining < b.days_taken && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                              style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>
+                              Exceeds allowance
+                            </span>
+                          )}
+                        </div>
+
+                        {clashes.length > 0 && (
+                          <div className="flex items-center gap-1.5 rounded-lg px-3 py-2"
+                            style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' }}>
+                            <AlertTriangle size={12} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                            <p className="text-xs" style={{ color: '#f59e0b' }}>Clash with {clashes.join(', ')}</p>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={() => approveBooking(b.id)} disabled={actionId === b.id}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-50"
+                            style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>
+                            {actionId === b.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                            Approve
+                          </button>
+                          <button onClick={() => { setShowApprovals(false); setShowRejectModal(b.id) }}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium"
+                            style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+                            <XCircle size={13} /> Reject
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })
+              )}
             </div>
           </div>
         </div>
