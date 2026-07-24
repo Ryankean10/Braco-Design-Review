@@ -500,33 +500,74 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
 
   function openCredTab() { setProfileTab('credentials'); loadCredentials() }
 
-  // ── Timesheets state ──
-  interface TSEntry {
-    id: string; entry_date: string; hours: number | null; role: string | null; notes: string | null
-    discrepancy_flag: boolean; discrepancy_note: string | null
-    signed_off_by: string | null; signed_off_at: string | null; signed_off_name: string | null
-    site: { id: string; name: string } | null
-    timesheet: { source: string; week_start: string; file_name: string | null } | null
+  // ── Weekly timesheets state ──
+  interface WTSDay {
+    work_date: string; hours_regular: number; hours_ot1: number; hours_ot2: number; is_holiday: boolean
   }
-  interface TSWeek {
-    week_start: string; site_name: string; site_id: string
-    diary_hours: number; agency_hours: number; discrepancy: number; all_signed_off: boolean
-    diary_entries: TSEntry[]; agency_entries: TSEntry[]
+  interface WTS {
+    id: string; week_starting: string
+    status: 'Draft' | 'Submitted' | 'Approved' | 'Rejected'
+    signed_off_by_name: string | null; signed_off_at: string | null; sign_off_notes: string | null
+    bonus: number; days: WTSDay[]
   }
-  const [tsWeeks, setTsWeeks] = useState<TSWeek[]>([])
+  interface HolBooking { start_date: string; end_date: string; days_taken: number }
+  const [wtsSheets, setWtsSheets] = useState<WTS[]>([])
+  const [wtsHolidays, setWtsHolidays] = useState<HolBooking[]>([])
   const [tsLoading, setTsLoading] = useState(false)
   const [tsLoaded, setTsLoaded] = useState(false)
 
   async function loadTimesheets() {
     if (tsLoaded) return
     setTsLoading(true)
-    const res = await fetch(`/api/team/people/${person.id}/timesheets`)
-    if (res.ok) setTsWeeks(await res.json())
+    const res = await fetch(`/api/team/people/${person.id}/weekly-timesheets`)
+    if (res.ok) {
+      const data = await res.json()
+      setWtsSheets(data.timesheets ?? [])
+      setWtsHolidays(data.holidays ?? [])
+    }
     setTsLoaded(true)
     setTsLoading(false)
   }
 
   function openTsTab() { setProfileTab('timesheets'); loadTimesheets() }
+
+  function isHolDay(date: string): boolean {
+    const dow = new Date(date + 'T00:00:00').getDay()
+    if (dow === 0 || dow === 6) return false
+    return wtsHolidays.some(b => b.start_date <= date && date <= b.end_date)
+  }
+
+  function wtsWeekPay(sheet: WTS): number {
+    const std = person.standard_rate ?? 0
+    const ot1 = person.ot_rate_1 ?? std
+    const ot2 = person.ot_rate_2 ?? std
+    // Mon–Sun for this week
+    const dates = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(sheet.week_starting + 'T00:00:00'); d.setDate(d.getDate() + i)
+      return d.toISOString().slice(0, 10)
+    })
+    let pay = 0
+    for (const date of dates) {
+      if (isHolDay(date)) { pay += 10 * std; continue }
+      const day = sheet.days.find(d => d.work_date === date)
+      if (day) pay += day.hours_regular * std + day.hours_ot1 * ot1 + day.hours_ot2 * ot2
+    }
+    return pay + (sheet.bonus ?? 0)
+  }
+
+  function wtsWeekHours(sheet: WTS): { reg: number; ot1: number; ot2: number; hol: number } {
+    const dates = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(sheet.week_starting + 'T00:00:00'); d.setDate(d.getDate() + i)
+      return d.toISOString().slice(0, 10)
+    })
+    let reg = 0, ot1 = 0, ot2 = 0, hol = 0
+    for (const date of dates) {
+      if (isHolDay(date)) { hol += 1; continue }
+      const day = sheet.days.find(d => d.work_date === date)
+      if (day) { reg += day.hours_regular; ot1 += day.hours_ot1; ot2 += day.hours_ot2 }
+    }
+    return { reg, ot1, ot2, hol }
+  }
 
   function credExpiryStatus(expiry: string | null): 'valid' | 'soon' | 'expired' | 'none' {
     if (!expiry) return 'none'
@@ -989,177 +1030,117 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
 
           {/* ── Timesheets tab ── */}
           {profileTab === 'timesheets' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {tsLoading && (
                 <div className="flex items-center gap-2 py-8 justify-center">
                   <Loader2 size={16} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading timesheets…</span>
                 </div>
               )}
-              {tsLoaded && tsWeeks.length === 0 && (
+              {tsLoaded && wtsSheets.length === 0 && (
                 <div className="text-center py-8">
                   <Clock size={24} className="mx-auto mb-2 opacity-20" style={{ color: 'var(--text-muted)' }} />
                   <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No timesheet records yet.</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Hours are populated from diary records and timesheet uploads.</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Timesheets appear here once created in the Timesheets tab.</p>
                 </div>
               )}
-              {tsLoaded && tsWeeks.length > 0 && tsWeeks.map(w => {
-                const hasDiscrepancy = w.discrepancy > 0.5
-                const borderColor = hasDiscrepancy ? '#f8712244' : w.all_signed_off ? '#4ade8033' : 'var(--border)'
-                const bgColor = hasDiscrepancy ? '#f8712211' : w.all_signed_off ? '#4ade8009' : 'var(--bg-elevated)'
-
-                function EntryRow({ e }: { e: TSEntry }) {
-                  const [flagging, setFlagging] = useState(false)
-                  const [signingOff, setSigningOff] = useState(false)
-                  const [showFlagInput, setShowFlagInput] = useState(false)
-                  const [flagNote, setFlagNote] = useState(e.discrepancy_note ?? '')
-                  const [localEntry, setLocalEntry] = useState(e)
-
-                  async function doAction(action: string, note?: string) {
-                    if (action === 'flag') setFlagging(true); else setSigningOff(true)
-                    const res = await fetch(`/api/team/timesheet-entries/${e.id}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action, discrepancy_note: note }),
-                    })
-                    if (res.ok) {
-                      const updated = await res.json()
-                      setLocalEntry(updated)
-                      setTsWeeks(prev => prev.map(wk => ({
-                        ...wk,
-                        diary_entries: wk.diary_entries.map(x => x.id === e.id ? updated : x),
-                        agency_entries: wk.agency_entries.map(x => x.id === e.id ? updated : x),
-                        all_signed_off: [...wk.diary_entries, ...wk.agency_entries]
-                          .map(x => x.id === e.id ? updated : x)
-                          .every(x => x.signed_off_at),
-                      })))
-                    }
-                    setFlagging(false); setSigningOff(false); setShowFlagInput(false)
-                  }
-
-                  const src = (Array.isArray(localEntry.timesheet) ? localEntry.timesheet[0] : localEntry.timesheet) as any
-                  const isAgency = src?.source === 'agency'
-                  return (
-                    <div className="border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
-                      <div className="px-4 py-2.5 flex items-center gap-2 flex-wrap text-xs"
-                        style={{ background: localEntry.discrepancy_flag ? '#f8712208' : 'var(--bg-surface)' }}>
-                        {/* Date */}
-                        <span className="shrink-0 w-[72px]" style={{ color: 'var(--text-muted)' }}>
-                          {new Date(localEntry.entry_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                        </span>
-                        {/* Source badge */}
-                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium"
-                          style={{
-                            background: isAgency ? 'rgba(96,165,250,0.15)' : 'rgba(74,222,128,0.15)',
-                            color: isAgency ? '#60a5fa' : '#4ade80',
-                          }}>{isAgency ? 'Agency' : 'Diary'}</span>
-                        {/* Hours */}
-                        <span className="shrink-0 font-semibold w-10 text-right"
-                          style={{ color: isAgency ? '#60a5fa' : '#4ade80' }}>
-                          {localEntry.hours != null ? `${localEntry.hours}h` : '—'}
-                        </span>
-                        {/* Role */}
-                        {localEntry.role && <span className="flex-1 truncate" style={{ color: 'var(--text-muted)' }}>{localEntry.role}</span>}
-                        <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                          {/* Discrepancy flag */}
-                          {localEntry.discrepancy_flag
-                            ? <button onClick={() => doAction('unflag')} disabled={flagging}
-                                className="text-[10px] px-2 py-1 rounded border font-medium"
-                                style={{ borderColor: '#f87171', color: '#f87171' }}>
-                                {flagging ? '…' : '⚑ Flagged'}
-                              </button>
-                            : canEdit && <button onClick={() => setShowFlagInput(v => !v)} disabled={flagging}
-                                className="text-[10px] px-2 py-1 rounded border font-medium hover:opacity-80"
-                                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                                Flag
-                              </button>
-                          }
-                          {/* Sign-off */}
-                          {localEntry.signed_off_at
-                            ? <span className="text-[10px] px-2 py-1 rounded font-medium flex items-center gap-1"
-                                style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
-                                <CheckCircle2 size={10} /> {localEntry.signed_off_name ?? 'Signed off'}
-                              </span>
-                            : canEdit && <button onClick={() => doAction('signoff')} disabled={signingOff}
-                                className="text-[10px] px-2 py-1 rounded font-medium hover:opacity-80"
-                                style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
-                                {signingOff ? <Loader2 size={10} className="animate-spin" /> : 'Sign off'}
-                              </button>
-                          }
-                        </div>
-                      </div>
-                      {/* Flag note input */}
-                      {showFlagInput && (
-                        <div className="px-4 pb-2.5 flex items-center gap-2"
-                          style={{ background: '#f8712208' }}>
-                          <input value={flagNote} onChange={e => setFlagNote(e.target.value)}
-                            placeholder="Note reason for flag…"
-                            className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border"
-                            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
-                          <button onClick={() => doAction('flag', flagNote)}
-                            className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                            style={{ background: '#f87171', color: '#fff' }}>Flag</button>
-                          <button onClick={() => setShowFlagInput(false)}
-                            className="text-xs px-2 py-1.5 rounded-lg"
-                            style={{ color: 'var(--text-muted)' }}>Cancel</button>
-                        </div>
-                      )}
-                      {/* Flag note display */}
-                      {localEntry.discrepancy_flag && localEntry.discrepancy_note && (
-                        <div className="px-4 pb-2 text-[11px] italic" style={{ color: '#f87171', background: '#f8712208' }}>
-                          {localEntry.discrepancy_note}
-                        </div>
-                      )}
-                      {/* Sign-off audit trail */}
-                      {localEntry.signed_off_at && (
-                        <div className="px-4 pb-1.5 text-[10px]" style={{ color: 'var(--text-muted)', background: 'var(--bg-surface)' }}>
-                          Signed off by {localEntry.signed_off_name} · {new Date(localEntry.signed_off_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      )}
-                    </div>
-                  )
+              {tsLoaded && wtsSheets.map(sheet => {
+                const STATUS_CFG = {
+                  Draft:     { label: 'Draft',     color: '#64748b', bg: 'rgba(100,116,139,0.1)' },
+                  Submitted: { label: 'Submitted', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+                  Approved:  { label: 'Approved',  color: '#22c55e', bg: 'rgba(34,197,94,0.12)'  },
+                  Rejected:  { label: 'Rejected',  color: '#ef4444', bg: 'rgba(239,68,68,0.12)'  },
                 }
+                const cfg = STATUS_CFG[sheet.status]
+                const weekEnd = new Date(sheet.week_starting + 'T00:00:00'); weekEnd.setDate(weekEnd.getDate() + 6)
+                const weekLabel = `${new Date(sheet.week_starting + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${weekEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                const hrs = wtsWeekHours(sheet)
+                const totalHrs = hrs.reg + hrs.ot1 + hrs.ot2 + hrs.hol * 10
+                const pay = wtsWeekPay(sheet)
+                const isApproved = sheet.status === 'Approved'
+                const borderColor = isApproved ? 'rgba(34,197,94,0.3)' : 'var(--border)'
+                const bgColor = isApproved ? 'rgba(34,197,94,0.04)' : 'var(--bg-elevated)'
+
+                // Days Mon–Sun for the week
+                const weekDates = Array.from({ length: 7 }, (_, i) => {
+                  const d = new Date(sheet.week_starting + 'T00:00:00'); d.setDate(d.getDate() + i)
+                  return d.toISOString().slice(0, 10)
+                })
+                const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
                 return (
-                  <div key={`${w.week_start}-${w.site_id}`} className="rounded-xl border overflow-hidden"
-                    style={{ borderColor }}>
-                    {/* Week header */}
-                    <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2" style={{ background: bgColor }}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        {hasDiscrepancy && <AlertTriangle size={12} style={{ color: '#f87171', flexShrink: 0 }} />}
-                        {w.all_signed_off && <CheckCircle2 size={12} style={{ color: '#4ade80', flexShrink: 0 }} />}
-                        <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{w.site_name}</span>
-                        <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
-                          w/c {new Date(w.week_start + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <div className="text-right">
-                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Diary</p>
-                          <p className="text-xs font-semibold" style={{ color: w.diary_hours > 0 ? '#4ade80' : 'var(--text-muted)' }}>
-                            {w.diary_hours > 0 ? `${w.diary_hours}h` : '—'}
+                  <div key={sheet.id} className="rounded-xl border overflow-hidden"
+                    style={{ borderColor, background: bgColor }}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
+                      <div>
+                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{weekLabel}</p>
+                        {sheet.signed_off_by_name && (
+                          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            Approved by {sheet.signed_off_by_name}
+                            {sheet.signed_off_at && ` · ${new Date(sheet.signed_off_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                           </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Agency</p>
-                          <p className="text-xs font-semibold" style={{ color: w.agency_hours > 0 ? '#60a5fa' : 'var(--text-muted)' }}>
-                            {w.agency_hours > 0 ? `${w.agency_hours}h` : '—'}
-                          </p>
-                        </div>
-                        {hasDiscrepancy && (
-                          <div className="text-right">
-                            <p className="text-[10px]" style={{ color: '#f87171' }}>Diff</p>
-                            <p className="text-xs font-semibold" style={{ color: '#f87171' }}>{w.discrepancy.toFixed(1)}h</p>
-                          </div>
                         )}
                       </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {totalHrs > 0 && (
+                          <div className="text-right">
+                            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Hours</p>
+                            <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{totalHrs.toFixed(1)}h</p>
+                          </div>
+                        )}
+                        {pay > 0 && (
+                          <div className="text-right">
+                            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Pay</p>
+                            <p className="text-xs font-semibold" style={{ color: '#22c55e' }}>
+                              £{pay.toFixed(0)}
+                              {(sheet.bonus ?? 0) > 0 && <span className="ml-1 text-[9px] px-1 py-0.5 rounded font-semibold" style={{ background: 'rgba(124,58,237,0.12)', color: '#7c3aed' }}>+£{sheet.bonus} bonus</span>}
+                            </p>
+                          </div>
+                        )}
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                          style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
+                      </div>
                     </div>
-                    {/* Entries */}
-                    <div>
-                      {[...w.diary_entries, ...w.agency_entries]
-                        .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
-                        .map(e => <EntryRow key={e.id} e={e} />)}
+
+                    {/* Day breakdown */}
+                    <div className="border-t grid gap-0" style={{ borderColor: 'var(--border)', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+                      {weekDates.map((date, i) => {
+                        const isHol = isHolDay(date)
+                        const day = sheet.days.find(d => d.work_date === date)
+                        const h = isHol ? 10 : (day ? day.hours_regular + day.hours_ot1 + day.hours_ot2 : 0)
+                        const isWeekend = i >= 5
+                        return (
+                          <div key={date} className="px-1.5 py-2 text-center border-r last:border-r-0"
+                            style={{ borderColor: 'var(--border)', opacity: isWeekend && !h ? 0.35 : 1 }}>
+                            <p className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{DAYS[i]}</p>
+                            <p className="text-[10px] font-semibold mt-0.5"
+                              style={{ color: isHol ? '#f59e0b' : h > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                              {isHol ? 'HOL' : h > 0 ? `${h}h` : '—'}
+                            </p>
+                            {day && !isHol && (day.hours_ot1 > 0 || day.hours_ot2 > 0) && (
+                              <p className="text-[8px] mt-0.5" style={{ color: '#f59e0b' }}>
+                                {day.hours_ot1 > 0 ? `+${day.hours_ot1}OT` : ''}{day.hours_ot2 > 0 ? ` +${day.hours_ot2}OT2` : ''}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
+
+                    {/* Hol days / sign-off note */}
+                    {(hrs.hol > 0 || sheet.sign_off_notes) && (
+                      <div className="border-t px-4 py-2 flex items-center gap-4 flex-wrap" style={{ borderColor: 'var(--border)' }}>
+                        {hrs.hol > 0 && (
+                          <span className="text-[11px]" style={{ color: '#f59e0b' }}>
+                            {hrs.hol} holiday day{hrs.hol !== 1 ? 's' : ''} included
+                          </span>
+                        )}
+                        {sheet.sign_off_notes && (
+                          <span className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>"{sheet.sign_off_notes}"</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
