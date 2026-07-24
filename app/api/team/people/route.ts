@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
   // ── Send welcome email ────────────────────────────────────────────────────
   if (person.email) {
     try {
+      console.log('Sending welcome email to', person.email)
       const firstName = person.name.split(' ')[0]
       const roleLabel = person.role ?? 'team member'
 
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
           </div>`,
       })
     } catch (emailErr: any) {
-      console.error('Welcome email failed:', emailErr.message)
+      console.error('Welcome email failed:', JSON.stringify(emailErr))
     }
   }
 
