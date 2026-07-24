@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import TimesheetTab from '@/components/team/TimesheetTab'
 import HolidayTab from '@/components/team/HolidayTab'
+import InboxTab from '@/components/team/InboxTab'
 import {
   UsersRound, Plus, Search, X, ChevronDown, ChevronRight,
   Briefcase, HardHat, Star, Mail, Phone, Building2,
@@ -1407,7 +1408,7 @@ function EditAppointmentModal({ appt, onClose, onSaved }: {
 export default function TeamClient({ people: init, appointments: initAppts, projects, sites, currentUserId, canEdit, userRole }: Props) {
   const supabase = createClient()
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState<'library' | 'teams' | 'timesheets' | 'holidays'>('library')
+  const [tab, setTab] = useState<'library' | 'teams' | 'timesheets' | 'holidays' | 'inbox'>('library')
   const [people, setPeople] = useState(init)
   const [appointments, setAppointments] = useState(initAppts)
   const [search, setSearch] = useState('')
@@ -1488,11 +1489,12 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
       {/* Tabs */}
       <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
         {([
-          { key: 'library',    label: `People Library (${people.length})` },
-          { key: 'teams',      label: `My Teams (${Object.keys(byJob).length} jobs)` },
-          { key: 'timesheets', label: 'Timesheets' },
-          { key: 'holidays',   label: 'Holidays' },
-        ] as const).map(t => (
+          { key: 'library'    as const, label: `People Library (${people.length})` },
+          { key: 'teams'      as const, label: `My Teams (${Object.keys(byJob).length} jobs)` },
+          { key: 'timesheets' as const, label: 'Timesheets' },
+          { key: 'holidays'   as const, label: 'Holidays' },
+          ...(canEdit ? [{ key: 'inbox' as const, label: '📬 Email Inbox' }] : []),
+        ]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
             style={{
@@ -1823,6 +1825,11 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
       {/* ── Holidays tab ──────────────────────────────────────────────────────── */}
       {tab === 'holidays' && (
         <HolidayTab people={people} appointments={appointments} canManage={canEdit} />
+      )}
+
+      {/* ── Email Inbox tab ───────────────────────────────────────────────────── */}
+      {tab === 'inbox' && canEdit && (
+        <InboxTab />
       )}
 
       {/* Modals */}
