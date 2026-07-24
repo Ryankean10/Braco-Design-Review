@@ -156,13 +156,24 @@ function PersonModal({ person, onClose, onSaved }: {
       ot_rate_2: form.ot_rate_2 ? parseFloat(form.ot_rate_2) : null,
       holiday_allowance: form.holiday_allowance ? parseInt(form.holiday_allowance) : 28,
     }
-    const q = person
-      ? supabase.from('people').update(payload).eq('id', person.id).select().single()
-      : supabase.from('people').insert(payload).select().single()
-    const { data, error: err } = await q
-    setSaving(false)
-    if (err) { setError(err.message); return }
-    onSaved(data as Person)
+    let data: Person | null = null
+    if (person) {
+      const { data: d, error: err } = await supabase.from('people').update(payload).eq('id', person.id).select().single()
+      setSaving(false)
+      if (err) { setError(err.message); return }
+      data = d as Person
+    } else {
+      const res = await fetch('/api/team/people', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      setSaving(false)
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Failed to add person'); return }
+      data = json.person as Person
+    }
+    onSaved(data!)
   }
 
   return (
