@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import TimesheetTab from '@/components/team/TimesheetTab'
+import HolidayTab from '@/components/team/HolidayTab'
 import {
   UsersRound, Plus, Search, X, ChevronDown, ChevronRight,
   Briefcase, HardHat, Star, Mail, Phone, Building2,
@@ -16,6 +18,8 @@ interface Person {
   id: string; name: string; role: string | null; discipline: string | null
   company: string | null; email: string | null; phone: string | null; notes: string | null
   person_group: string | null; is_active: boolean
+  standard_rate: number | null; ot_rate_1: number | null; ot_rate_2: number | null
+  holiday_allowance: number | null
 }
 
 const PERSON_GROUPS = [
@@ -39,7 +43,7 @@ interface JobRef { id: string; name: string; client: string | null }
 interface Props {
   people: Person[]; appointments: Appointment[]
   projects: JobRef[]; sites: JobRef[]
-  currentUserId: string; canEdit: boolean
+  currentUserId: string; canEdit: boolean; userRole: string
 }
 
 const DISCIPLINES = ['Electrical', 'Civils', 'Management', 'T&C', 'HSEQ', 'Other']
@@ -127,6 +131,10 @@ function PersonModal({ person, onClose, onSaved }: {
     company: person?.company ?? '', email: person?.email ?? '', phone: person?.phone ?? '',
     notes: person?.notes ?? '', person_group: person?.person_group ?? '',
     is_active: person?.is_active ?? true,
+    standard_rate: person?.standard_rate?.toString() ?? '',
+    ot_rate_1: person?.ot_rate_1?.toString() ?? '',
+    ot_rate_2: person?.ot_rate_2?.toString() ?? '',
+    holiday_allowance: person?.holiday_allowance?.toString() ?? '28',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -140,6 +148,10 @@ function PersonModal({ person, onClose, onSaved }: {
       company: form.company || null, email: form.email || null, phone: form.phone || null,
       notes: form.notes || null, person_group: form.person_group || null,
       is_active: form.is_active,
+      standard_rate: form.standard_rate ? parseFloat(form.standard_rate) : null,
+      ot_rate_1: form.ot_rate_1 ? parseFloat(form.ot_rate_1) : null,
+      ot_rate_2: form.ot_rate_2 ? parseFloat(form.ot_rate_2) : null,
+      holiday_allowance: form.holiday_allowance ? parseInt(form.holiday_allowance) : 28,
     }
     const q = person
       ? supabase.from('people').update(payload).eq('id', person.id).select().single()
@@ -217,6 +229,28 @@ function PersonModal({ person, onClose, onSaved }: {
               className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none resize-none"
               style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             />
+          </div>
+
+          <div className="col-span-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Pay rates & holiday</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { key: 'standard_rate', label: 'Standard rate (£/hr)' },
+                { key: 'holiday_allowance', label: 'Holiday allowance (days)' },
+                { key: 'ot_rate_1', label: 'OT Rate 1 (£/hr)' },
+                { key: 'ot_rate_2', label: 'OT Rate 2 (£/hr)' },
+              ].map(({ key, label }) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
+                  <input type="number" min="0" step={key === 'holiday_allowance' ? '1' : '0.01'}
+                    value={(form as any)[key]}
+                    onChange={e => set(key, e.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none"
+                    style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1341,7 +1375,7 @@ function EditAppointmentModal({ appt, onClose, onSaved }: {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function TeamClient({ people: init, appointments: initAppts, projects, sites, currentUserId, canEdit }: Props) {
+export default function TeamClient({ people: init, appointments: initAppts, projects, sites, currentUserId, canEdit, userRole }: Props) {
   const supabase = createClient()
   const searchParams = useSearchParams()
   const [tab, setTab] = useState<'library' | 'teams'>('library')
@@ -1425,8 +1459,10 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
       {/* Tabs */}
       <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
         {([
-          { key: 'library', label: `People Library (${people.length})` },
-          { key: 'teams',   label: `My Teams (${Object.keys(byJob).length} jobs)` },
+          { key: 'library',    label: `People Library (${people.length})` },
+          { key: 'teams',      label: `My Teams (${Object.keys(byJob).length} jobs)` },
+          { key: 'timesheets', label: 'Timesheets' },
+          { key: 'holidays',   label: 'Holidays' },
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
@@ -1749,6 +1785,16 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
           </div>
         )
       })()}
+
+      {/* ── Timesheets tab ────────────────────────────────────────────────────── */}
+      {tab === 'timesheets' && (
+        <TimesheetTab people={people} canSignOff={canEdit} userRole={userRole} />
+      )}
+
+      {/* ── Holidays tab ──────────────────────────────────────────────────────── */}
+      {tab === 'holidays' && (
+        <HolidayTab people={people} appointments={appointments} canManage={canEdit} />
+      )}
 
       {/* Modals */}
       {(addingPerson || editingPerson) && (

@@ -46,6 +46,7 @@ export default async function TeamPage() {
         sites={sites ?? []}
         currentUserId={user.id}
         canEdit={['admin', 'engineer', 'project_manager'].includes(role)}
+        userRole={role}
       />
     </Suspense>
   )
