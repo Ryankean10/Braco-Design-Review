@@ -65,8 +65,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const brandVars = [
     `--accent: ${accent};`,
     `--accent-rgb: ${hexToRgb(accent)};`,
-    secondary ? `--bg-sidebar: ${secondary};` : '',
-    secondary ? `--sidebar-text: #ffffff;` : '',
   ].filter(Boolean).join(' ')
 
   return (
