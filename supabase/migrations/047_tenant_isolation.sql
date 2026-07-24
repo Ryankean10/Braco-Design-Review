@@ -138,6 +138,10 @@ ALTER TABLE public.people ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "people_read"           ON public.people;
 DROP POLICY IF EXISTS "people_write"          ON public.people;
+DROP POLICY IF EXISTS "people_select"         ON public.people;
+DROP POLICY IF EXISTS "people_insert"         ON public.people;
+DROP POLICY IF EXISTS "people_update"         ON public.people;
+DROP POLICY IF EXISTS "people_delete"         ON public.people;
 DROP POLICY IF EXISTS "internal_read_people"  ON public.people;
 DROP POLICY IF EXISTS "manager_write_people"  ON public.people;
 DROP POLICY IF EXISTS "people_company_select" ON public.people;
