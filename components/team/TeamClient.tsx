@@ -1380,7 +1380,7 @@ function EditAppointmentModal({ appt, onClose, onSaved }: {
 export default function TeamClient({ people: init, appointments: initAppts, projects, sites, currentUserId, canEdit, userRole }: Props) {
   const supabase = createClient()
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState<'library' | 'teams'>('library')
+  const [tab, setTab] = useState<'library' | 'teams' | 'timesheets' | 'holidays'>('library')
   const [people, setPeople] = useState(init)
   const [appointments, setAppointments] = useState(initAppts)
   const [search, setSearch] = useState('')
