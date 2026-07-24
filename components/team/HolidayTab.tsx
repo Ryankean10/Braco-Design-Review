@@ -429,6 +429,20 @@ export default function HolidayTab({ people, appointments, canManage, userRole }
                                           </button>
                                         </>
                                       )}
+                                      {isAdmin && b.status === 'Rejected' && (
+                                        <>
+                                          <button onClick={() => approveBooking(b.id)} disabled={actionId === b.id}
+                                            className="p-1 rounded hover:opacity-70" title="Approve (admin override)">
+                                            <CheckCircle2 size={14} style={{ color: '#22c55e' }} />
+                                          </button>
+                                          <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
+                                            className="p-1 rounded hover:opacity-70" title="Reset to pending">
+                                            {revokingId === b.id
+                                              ? <Loader2 size={13} className="animate-spin" style={{ color: '#f59e0b' }} />
+                                              : <RotateCcw size={13} style={{ color: '#f59e0b' }} />}
+                                          </button>
+                                        </>
+                                      )}
                                       {canManage && b.status === 'Approved' && (
                                         <>
                                           {isAdmin && (
@@ -598,6 +612,48 @@ export default function HolidayTab({ people, appointments, canManage, userRole }
                                 <XCircle size={11} /> Reject
                               </button>
                             )}
+                            <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium hover:opacity-80"
+                              style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
+                              {revokingId === b.id ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                              Reset
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  <div className="border-t pt-2" style={{ borderColor: 'var(--border)' }} />
+                </div>
+              )}
+
+              {isAdmin && bookings.filter(b => b.status === 'Rejected').length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    Rejected — override
+                  </p>
+                  {bookings.filter(b => b.status === 'Rejected')
+                    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+                    .map(b => {
+                      const person = activePeople.find(p => p.id === b.person_id)
+                      return (
+                        <div key={b.id} className="flex items-center justify-between rounded-lg px-3 py-2 gap-3"
+                          style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{person?.name}</span>
+                            <span className="text-xs ml-2" style={{ color: '#ef4444' }}>
+                              {new Date(b.start_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                              {b.start_date !== b.end_date && ` – ${new Date(b.end_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}
+                              {' '}({b.days_taken}d)
+                            </span>
+                            {b.rejection_note && <span className="text-[10px] ml-2 italic" style={{ color: 'var(--text-muted)' }}>{b.rejection_note}</span>}
+                          </div>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            <button onClick={() => approveBooking(b.id)} disabled={actionId === b.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium hover:opacity-80"
+                              style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>
+                              {actionId === b.id ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                              Approve
+                            </button>
                             <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
                               className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium hover:opacity-80"
                               style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
