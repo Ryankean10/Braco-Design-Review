@@ -538,6 +538,10 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
     return wtsHolidays.some(b => b.start_date <= date && date <= b.end_date)
   }
 
+  function localDateStr(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   function wtsWeekPay(sheet: WTS): number {
     const std = person.standard_rate ?? 0
     const ot1 = person.ot_rate_1 ?? std
@@ -545,7 +549,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
     // Mon–Sun for this week
     const dates = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(sheet.week_starting + 'T00:00:00'); d.setDate(d.getDate() + i)
-      return d.toISOString().slice(0, 10)
+      return localDateStr(d)
     })
     let pay = 0
     for (const date of dates) {
@@ -559,7 +563,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   function wtsWeekHours(sheet: WTS): { reg: number; ot1: number; ot2: number; hol: number } {
     const dates = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(sheet.week_starting + 'T00:00:00'); d.setDate(d.getDate() + i)
-      return d.toISOString().slice(0, 10)
+      return localDateStr(d)
     })
     let reg = 0, ot1 = 0, ot2 = 0, hol = 0
     for (const date of dates) {

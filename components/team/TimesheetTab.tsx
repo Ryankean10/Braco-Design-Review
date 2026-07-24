@@ -60,6 +60,14 @@ interface Props {
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+// Use local date components to avoid UTC-offset shifting on midnight dates
+function localDateStr(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function getMondayOf(date: Date): Date {
   const d = new Date(date)
   const day = d.getDay()
@@ -73,7 +81,7 @@ function weekDates(monday: Date): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(d.getDate() + i)
-    return d.toISOString().slice(0, 10)
+    return localDateStr(d)
   })
 }
 
@@ -116,7 +124,7 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
   const [weekHolidays, setWeekHolidays] = useState<HolidayBooking[]>([])        // this week's approved bookings
 
   const dates = weekDates(monday)
-  const weekKey = monday.toISOString().slice(0, 10)
+  const weekKey = localDateStr(monday)
   const activePeople = people.filter(p => p.is_active !== false)
 
   const canOverride = userRole === 'admin' || userRole === 'superadmin'
