@@ -13,13 +13,13 @@ export default async function TeamPage() {
   const companyId: string = (profile as any)?.company_id ?? ''
   if (!['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)) redirect('/dashboard')
 
-  // RLS on people already scopes to company_id via get_user_company_id()
   const { data: people } = await supabase
     .from('people')
     .select('*')
+    .eq('company_id', companyId)
     .order('name')
 
-  // Fetch appointments for this company's projects/sites
+  // Appointments scoped to this company's people
   const { data: appointments } = await supabase
     .from('job_appointments')
     .select(`

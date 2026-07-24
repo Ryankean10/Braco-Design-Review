@@ -148,10 +148,11 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
     if (data?.signedUrl) signedUrls[prog.id] = data.signedUrl
   }
 
-  // Fetch people for personnel matching dropdown
+  // Fetch people for personnel matching dropdown — scoped to this company
   const { data: allPeople } = await supabase
     .from('people')
     .select('id, name, role, company')
+    .eq('company_id', profile?.company_id ?? '')
     .eq('is_active', true)
     .order('name')
 
