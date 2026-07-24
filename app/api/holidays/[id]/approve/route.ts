@@ -16,15 +16,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { action, rejectionNote } = await req.json()
-  if (!['Approved', 'Rejected'].includes(action)) return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+  if (!['Approved', 'Rejected', 'Revoked'].includes(action)) return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   if (action === 'Rejected' && !rejectionNote?.trim()) return NextResponse.json({ error: 'Rejection note required' }, { status: 400 })
-
-  const patch: Record<string, unknown> = {
-    status: action,
-    approved_by: user.id,
-    approved_by_name: profile?.full_name ?? null,
-    approved_at: new Date().toISOString(),
+  if (action === 'Revoked' && !['admin', 'superadmin'].includes(role)) {
+    return NextResponse.json({ error: 'Only admin can remove an approval' }, { status: 403 })
   }
+
+  const patch: Record<string, unknown> = action === 'Revoked'
+    ? { status: 'Pending', approved_by: null, approved_by_name: null, approved_at: null, rejection_note: null }
+    : {
+        status: action,
+        approved_by: user.id,
+        approved_by_name: profile?.full_name ?? null,
+        approved_at: new Date().toISOString(),
+      }
   if (action === 'Rejected') patch.rejection_note = rejectionNote.trim()
 
   const { data: booking, error } = await admin.from('holiday_bookings').update(patch).eq('id', id).select().single()

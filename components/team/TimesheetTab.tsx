@@ -43,6 +43,12 @@ interface SignOffEntry {
   previous_status: string
 }
 
+interface HolidayBooking {
+  person_id: string
+  days_taken: number
+  status: string
+}
+
 interface Props {
   people: Person[]
   canSignOff: boolean
@@ -102,6 +108,7 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
   const [auditPersonId, setAuditPersonId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [holidayBookings, setHolidayBookings] = useState<HolidayBooking[]>([])
 
   const dates = weekDates(monday)
   const weekKey = monday.toISOString().slice(0, 10)
@@ -130,8 +137,28 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
 
   useEffect(() => { fetchWeek() }, [fetchWeek])
 
+  // Fetch approved holiday days for the current year so we can show remaining allowance
+  useEffect(() => {
+    const personIds = activePeople.map(p => p.id)
+    if (!personIds.length) return
+    const year = new Date().getFullYear()
+    supabase.from('holiday_bookings')
+      .select('person_id, days_taken, status')
+      .in('person_id', personIds)
+      .eq('status', 'Approved')
+      .gte('start_date', `${year}-01-01`)
+      .lte('end_date', `${year}-12-31`)
+      .then(({ data }) => setHolidayBookings(data ?? []))
+  }, [activePeople.map(p => p.id).join(',')])
+
   function getSheet(personId: string): WeeklyTimesheet | null {
     return sheets[personId] ?? null
+  }
+
+  function holidayRemaining(person: Person): { used: number; total: number; remaining: number } {
+    const used = holidayBookings.filter(b => b.person_id === person.id).reduce((s, b) => s + b.days_taken, 0)
+    const total = person.holiday_allowance ?? 28
+    return { used, total, remaining: total - used }
   }
 
   function getDayEntry(personId: string, date: string): TimesheetDay {
@@ -356,6 +383,29 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                       })}
                     </div>
 
+                    {/* Holiday remaining + rate warning */}
+                    <div className="flex items-center gap-4 flex-wrap">
+                      {(() => {
+                        const { used, total, remaining } = holidayRemaining(person)
+                        return (
+                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Holiday allowance:</span>
+                            <span className="text-xs font-semibold" style={{ color: remaining <= 5 ? '#ef4444' : remaining <= 10 ? '#f59e0b' : '#22c55e' }}>
+                              {remaining} days remaining
+                            </span>
+                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>({used}/{total} used)</span>
+                          </div>
+                        )
+                      })()}
+                      {!person.standard_rate && dayEntries.some(d => d.is_holiday) && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px]"
+                          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b' }}>
+                          <AlertCircle size={12} /> No standard rate set — edit person to add pay rate for holiday cost
+                        </div>
+                      )}
+                    </div>
+
                     {/* Sign-off strip */}
                     <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
                       <div className="space-y-0.5">
@@ -383,14 +433,14 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                             Submit for sign-off
                           </button>
                         )}
-                        {canSignOff && status === 'Submitted' && (
+                        {canSignOff && (status === 'Submitted' || status === 'Draft') && (
                           <button onClick={() => { setSignOffPersonId(person.id); setSignOffAction('Approved') }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
                             style={{ background: '#22c55e' }}>
                             <CheckCircle2 size={12} /> Approve
                           </button>
                         )}
-                        {canSignOff && status === 'Submitted' && (
+                        {canSignOff && (status === 'Submitted' || status === 'Draft') && (
                           <button onClick={() => { setSignOffPersonId(person.id); setSignOffAction('Rejected') }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
                             style={{ background: '#ef4444' }}>

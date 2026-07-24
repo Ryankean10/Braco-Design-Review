@@ -73,6 +73,7 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
   const [rejectionNote, setRejectionNote] = useState('')
   const [showRejectModal, setShowRejectModal] = useState<string | null>(null)
   const [showApprovals, setShowApprovals] = useState(false)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
 
   const activePeople = people.filter(p => p.is_active !== false)
   const pendingCount = bookings.filter(b => b.status === 'Pending').length
@@ -161,6 +162,17 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
     })
     if (res.ok) { const data = await res.json(); setBookings(prev => prev.map(b => b.id === id ? data.booking : b)) }
     setActionId(null)
+  }
+
+  async function revokeBooking(id: string) {
+    setRevokingId(id)
+    const res = await fetch(`/api/holidays/${id}/approve`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'Revoked' }),
+    })
+    if (res.ok) { const data = await res.json(); setBookings(prev => prev.map(b => b.id === id ? data.booking : b)) }
+    setRevokingId(null)
   }
 
   async function rejectBooking(id: string) {
@@ -403,6 +415,14 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
                                           </button>
                                         </>
                                       )}
+                                      {canManage && b.status === 'Approved' && (
+                                        <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
+                                          className="p-1 rounded hover:opacity-70" title="Remove approval (admin only)">
+                                          {revokingId === b.id
+                                            ? <Loader2 size={13} className="animate-spin" style={{ color: '#f59e0b' }} />
+                                            : <XCircle size={14} style={{ color: '#f59e0b' }} />}
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 )
@@ -513,6 +533,40 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
             </div>
 
             <div className="overflow-y-auto flex-1 p-5 space-y-3">
+              {/* Approved bookings that can be revoked */}
+              {bookings.filter(b => b.status === 'Approved').length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    Approved — click to remove
+                  </p>
+                  {bookings.filter(b => b.status === 'Approved')
+                    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+                    .map(b => {
+                      const person = activePeople.find(p => p.id === b.person_id)
+                      return (
+                        <div key={b.id} className="flex items-center justify-between rounded-lg px-3 py-2 gap-3"
+                          style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{person?.name}</span>
+                            <span className="text-xs ml-2" style={{ color: '#22c55e' }}>
+                              {new Date(b.start_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                              {b.start_date !== b.end_date && ` – ${new Date(b.end_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}
+                              {' '}({b.days_taken}d)
+                            </span>
+                          </div>
+                          <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
+                            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium hover:opacity-80"
+                            style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
+                            {revokingId === b.id ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
+                            Remove
+                          </button>
+                        </div>
+                      )
+                    })}
+                  <div className="border-t pt-2" style={{ borderColor: 'var(--border)' }} />
+                </div>
+              )}
+
               {bookings.filter(b => b.status === 'Pending').length === 0 ? (
                 <div className="text-center py-12">
                   <CheckCircle2 size={28} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
