@@ -97,3 +97,27 @@ export async function markAsRead(id: string): Promise<void> {
     body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
   })
 }
+
+// Cache label name → ID so we only fetch the list once per process lifetime
+const labelIdCache: Record<string, string> = {}
+
+async function getLabelId(name: string): Promise<string | null> {
+  if (labelIdCache[name]) return labelIdCache[name]
+  const data = await gmailFetch('/users/me/labels')
+  for (const label of data.labels ?? []) {
+    labelIdCache[label.name] = label.id
+  }
+  return labelIdCache[name] ?? null
+}
+
+export async function applyLabel(messageId: string, labelName: string): Promise<void> {
+  const labelId = await getLabelId(labelName)
+  if (!labelId) {
+    console.warn(`Gmail label "${labelName}" not found — skipping`)
+    return
+  }
+  await gmailFetch(`/users/me/messages/${messageId}/modify`, {
+    method: 'POST',
+    body: JSON.stringify({ addLabelIds: [labelId] }),
+  })
+}

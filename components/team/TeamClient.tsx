@@ -523,7 +523,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
     const res = await fetch(`/api/team/people/${person.id}/weekly-timesheets`)
     if (res.ok) {
       const data = await res.json()
-      setWtsSheets(data.timesheets ?? [])
+      setWtsSheets((data.timesheets ?? []).map((ts: any) => ({ ...ts, days: ts.timesheet_days ?? [] })))
       setWtsHolidays(data.holidays ?? [])
     }
     setTsLoaded(true)

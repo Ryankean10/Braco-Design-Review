@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import { listUnreadMessages, getMessage, markAsRead } from '@/lib/gmail'
+import { listUnreadMessages, getMessage, markAsRead, applyLabel } from '@/lib/gmail'
 import { parseEmail, countWorkingDays } from '@/lib/email-parser'
 
 export const dynamic = 'force-dynamic'
@@ -163,6 +163,13 @@ export async function GET(req: NextRequest) {
           results.push(`Holiday request created for ${person.name} ${parsed.startDate}–${parsed.endDate}`)
         }
       }
+
+      // File into the appropriate Gmail label
+      const gmailLabel =
+        parsed.type === 'timesheet' ? 'Timesheets'
+        : parsed.type === 'holiday' ? 'Holidays'
+        : null
+      if (gmailLabel) await applyLabel(msgId, gmailLabel).catch(() => {})
 
       await markAsRead(msgId)
     }

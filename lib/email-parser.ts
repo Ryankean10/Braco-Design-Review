@@ -51,6 +51,15 @@ Determine if this email is:
 
 For TIMESHEET: extract the week starting date (always a Monday, YYYY-MM-DD) and hours for each working day (Mon–Fri). Hours fields: hoursRegular (standard hours), hoursOt1 (overtime rate 1), hoursOt2 (overtime rate 2). If the worker just says "10 hours Monday" with no OT split, put all in hoursRegular. Infer the week from context (e.g. "this week", "week ending Friday 25 Jul" → Monday 21 Jul 2025).
 
+IMPORTANT — workers almost always give START and STOP times in 24-hour format, not hours worked. Convert these to decimal hours.
+Examples:
+  "0700-1400" = 07:00 to 14:00 = 7 hours
+  "0700-1700" = 07:00 to 17:00 = 10 hours
+  "07:00-15:30" = 8.5 hours
+  "0700 to 1800" = 11 hours
+  "started 7 finished 3" = 07:00 to 15:00 = 8 hours
+Formula: end_hour + end_min/60 - start_hour - start_min/60. Never treat a 4-digit time like "0700" as a plain number.
+
 For HOLIDAY REQUEST: extract startDate and endDate (YYYY-MM-DD). If they say "next week off" calculate from today.
 
 Respond with ONLY valid JSON, no markdown, no explanation:
