@@ -23,12 +23,12 @@ interface Person {
 }
 
 const PERSON_GROUPS = [
-  'Project Staff',
-  'OCU Site Management',
-  'OCU Electrical Staff',
-  'OCU Civils Staff',
-  'Agency Staff',
+  'SPC Permanent Staff',
+  'SPC Supervisors',
+  'Agency / Casual Staff',
   'Subcontractors',
+  'Clients',
+  'Other',
 ] as const
 interface Appointment {
   id: string; person_id: string; project_id: string | null; site_id: string | null
@@ -46,14 +46,15 @@ interface Props {
   currentUserId: string; canEdit: boolean; userRole: string
 }
 
-const DISCIPLINES = ['Electrical', 'Civils', 'Management', 'T&C', 'HSEQ', 'Other']
+const DISCIPLINES = ['Plant Operator', 'HGV Driver', 'Fitter / Mechanic', 'Supervisor', 'Management', 'Admin', 'HSEQ']
 const DISC_COLOR: Record<string, { bg: string; text: string }> = {
-  Electrical: { bg: 'rgba(59,130,246,0.12)',  text: '#60a5fa' },
-  Civils:     { bg: 'rgba(251,146,60,0.12)',  text: '#fb923c' },
-  Management: { bg: 'rgba(168,85,247,0.12)',  text: '#c084fc' },
-  'T&C':      { bg: 'rgba(34,197,94,0.12)',   text: '#4ade80' },
-  HSEQ:       { bg: 'rgba(248,113,113,0.12)', text: '#f87171' },
-  Other:      { bg: 'rgba(148,163,184,0.12)', text: '#94a3b8' },
+  'Plant Operator':   { bg: 'rgba(251,146,60,0.12)',  text: '#fb923c' },
+  'HGV Driver':       { bg: 'rgba(59,130,246,0.12)',  text: '#60a5fa' },
+  'Fitter / Mechanic':{ bg: 'rgba(250,204,21,0.12)',  text: '#facc15' },
+  Supervisor:         { bg: 'rgba(34,197,94,0.12)',   text: '#4ade80' },
+  Management:         { bg: 'rgba(168,85,247,0.12)',  text: '#c084fc' },
+  Admin:              { bg: 'rgba(148,163,184,0.12)', text: '#94a3b8' },
+  HSEQ:               { bg: 'rgba(248,113,113,0.12)', text: '#f87171' },
 }
 
 function DisciplineBadge({ d }: { d: string | null }) {
@@ -142,10 +143,11 @@ function PersonModal({ person, onClose, onSaved }: {
 
   async function save() {
     if (!form.name.trim()) { setError('Name is required'); return }
+    if (!form.email.trim()) { setError('Email is required'); return }
     setSaving(true); setError('')
     const payload = {
       name: form.name.trim(), role: form.role || null, discipline: form.discipline || null,
-      company: form.company || null, email: form.email || null, phone: form.phone || null,
+      company: form.company || null, email: form.email.trim(), phone: form.phone || null,
       notes: form.notes || null, person_group: form.person_group || null,
       is_active: form.is_active,
       standard_rate: form.standard_rate ? parseFloat(form.standard_rate) : null,
@@ -179,7 +181,7 @@ function PersonModal({ person, onClose, onSaved }: {
             { key: 'name', label: 'Full name *', span: true },
             { key: 'role', label: 'Job title', span: false },
             { key: 'company', label: 'Company', span: false },
-            { key: 'email', label: 'Email', span: false },
+            { key: 'email', label: 'Email *', span: false },
             { key: 'phone', label: 'Phone', span: false },
           ].map(({ key, label, span }) => (
             <div key={key} className={span ? 'col-span-2' : ''}>
