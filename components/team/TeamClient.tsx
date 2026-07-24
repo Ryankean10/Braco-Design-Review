@@ -444,6 +444,25 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
     .sort((a, b) => (b.end_date ?? '').localeCompare(a.end_date ?? ''))
 
   const [profileTab, setProfileTab] = useState<'appointments' | 'credentials' | 'timesheets'>('appointments')
+  const [holDaysUsed, setHolDaysUsed] = useState<number | null>(null)
+  const supabaseProfile = createClient()
+
+  useEffect(() => {
+    const year = new Date().getFullYear()
+    supabaseProfile.from('holiday_bookings')
+      .select('days_taken')
+      .eq('person_id', person.id)
+      .eq('status', 'Approved')
+      .gte('start_date', `${year}-01-01`)
+      .lte('end_date', `${year}-12-31`)
+      .then(({ data }) => {
+        setHolDaysUsed((data ?? []).reduce((s, b) => s + b.days_taken, 0))
+      })
+  }, [person.id])
+
+  const holTotal = person.holiday_allowance ?? 28
+  const holRemaining = holDaysUsed !== null ? holTotal - holDaysUsed : null
+
   const [editingNotes, setEditingNotes] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
@@ -725,14 +744,29 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {canEdit && (
-              <button onClick={() => { onClose(); onEditPerson(person) }}
-                className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
-                <Edit2 size={14} />
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              {canEdit && (
+                <button onClick={() => { onClose(); onEditPerson(person) }}
+                  className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                  <Edit2 size={14} />
+                </button>
+              )}
+              <button onClick={onClose} className="p-1.5 rounded hover:opacity-80">
+                <X size={16} style={{ color: 'var(--text-muted)' }} />
               </button>
+            </div>
+            {holRemaining !== null && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
+                style={{
+                  background: holRemaining <= 5 ? 'rgba(239,68,68,0.12)' : holRemaining <= 10 ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)',
+                  color: holRemaining <= 5 ? '#ef4444' : holRemaining <= 10 ? '#f59e0b' : '#22c55e',
+                  border: `1px solid ${holRemaining <= 5 ? 'rgba(239,68,68,0.3)' : holRemaining <= 10 ? 'rgba(245,158,11,0.3)' : 'rgba(34,197,94,0.3)'}`,
+                }}>
+                <Calendar size={10} />
+                {holRemaining}d holiday left
+              </div>
             )}
-            <button onClick={onClose}><X size={16} style={{ color: 'var(--text-muted)' }} /></button>
           </div>
         </div>
 
