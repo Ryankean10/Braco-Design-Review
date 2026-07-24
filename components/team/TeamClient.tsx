@@ -1828,7 +1828,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
 
       {/* ── Holidays tab ──────────────────────────────────────────────────────── */}
       {tab === 'holidays' && (
-        <HolidayTab people={people} appointments={appointments} canManage={canEdit} />
+        <HolidayTab people={people} appointments={appointments} canManage={canEdit} userRole={userRole} />
       )}
 
       {/* ── Email Inbox tab ───────────────────────────────────────────────────── */}

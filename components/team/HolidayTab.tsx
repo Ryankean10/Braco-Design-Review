@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, Bell, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, Bell, X, RotateCcw } from 'lucide-react'
 
 interface Person {
   id: string; name: string; role: string | null; discipline: string | null
@@ -32,6 +32,7 @@ interface Props {
   people: Person[]
   appointments: Appointment[]
   canManage: boolean
+  userRole: string
 }
 
 const STATUS_CFG = {
@@ -59,7 +60,8 @@ function datesOverlap(start1: string, end1: string, start2: string, end2: string
   return start1 <= end2 && end1 >= start2
 }
 
-export default function HolidayTab({ people, appointments, canManage }: Props) {
+export default function HolidayTab({ people, appointments, canManage, userRole }: Props) {
+  const isAdmin = ['admin', 'superadmin'].includes(userRole)
   const supabase = createClient()
   const now = new Date()
   const [view, setView] = useState<'month' | 'year'>('month')
@@ -428,12 +430,20 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
                                         </>
                                       )}
                                       {canManage && b.status === 'Approved' && (
-                                        <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
-                                          className="p-1 rounded hover:opacity-70" title="Remove approval (admin only)">
-                                          {revokingId === b.id
-                                            ? <Loader2 size={13} className="animate-spin" style={{ color: '#f59e0b' }} />
-                                            : <XCircle size={14} style={{ color: '#f59e0b' }} />}
-                                        </button>
+                                        <>
+                                          {isAdmin && (
+                                            <button onClick={() => setShowRejectModal(b.id)} title="Reject (admin override)"
+                                              className="p-1 rounded hover:opacity-70">
+                                              <XCircle size={14} style={{ color: '#ef4444' }} />
+                                            </button>
+                                          )}
+                                          <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
+                                            className="p-1 rounded hover:opacity-70" title="Reset to pending">
+                                            {revokingId === b.id
+                                              ? <Loader2 size={13} className="animate-spin" style={{ color: '#f59e0b' }} />
+                                              : <RotateCcw size={13} style={{ color: '#f59e0b' }} />}
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   </div>
@@ -580,12 +590,21 @@ export default function HolidayTab({ people, appointments, canManage }: Props) {
                               {' '}({b.days_taken}d)
                             </span>
                           </div>
-                          <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
-                            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium hover:opacity-80"
-                            style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
-                            {revokingId === b.id ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
-                            Remove
-                          </button>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            {isAdmin && (
+                              <button onClick={() => setShowRejectModal(b.id)}
+                                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium hover:opacity-80"
+                                style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+                                <XCircle size={11} /> Reject
+                              </button>
+                            )}
+                            <button onClick={() => revokeBooking(b.id)} disabled={revokingId === b.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium hover:opacity-80"
+                              style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
+                              {revokingId === b.id ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                              Reset
+                            </button>
+                          </div>
                         </div>
                       )
                     })}
