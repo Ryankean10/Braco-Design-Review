@@ -36,11 +36,11 @@ export async function POST(req: NextRequest) {
   // ── Send welcome email ────────────────────────────────────────────────────
   if (person.email) {
     try {
-      console.log('Sending welcome email to', person.email)
+      console.log('Sending welcome email to', person.email, '| RESEND_API_KEY set:', !!process.env.RESEND_API_KEY)
       const firstName = person.name.split(' ')[0]
       const roleLabel = person.role ?? 'team member'
 
-      await resend.emails.send({
+      const emailResult = await resend.emails.send({
         from: 'Scotplant Contractors <scotplantai@yacht-gitana.com>',
         to: person.email,
         subject: 'Welcome to Scotplant Contractors',
@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
             </div>
           </div>`,
       })
+      console.log('Resend result:', JSON.stringify(emailResult))
     } catch (emailErr: any) {
       console.error('Welcome email failed:', JSON.stringify(emailErr))
     }
