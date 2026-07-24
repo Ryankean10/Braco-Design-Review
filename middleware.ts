@@ -52,8 +52,11 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Webhook endpoints secured by their own secret header
-  if (pathname.startsWith('/api/construction/inbound-email')) {
+  // Webhook/cron endpoints secured by their own secret header — bypass auth
+  if (
+    pathname.startsWith('/api/construction/inbound-email') ||
+    pathname.startsWith('/api/cron/')
+  ) {
     return supabaseResponse
   }
 
