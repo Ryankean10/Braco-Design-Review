@@ -167,106 +167,118 @@ function PersonModal({ person, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.6)' }}>
-      <div className="w-full max-w-md rounded-2xl border p-6 space-y-4"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <div className="flex items-center justify-between">
+      <div className="w-full max-w-lg rounded-2xl border flex flex-col"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', maxHeight: '90vh' }}>
+
+        {/* Fixed header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0"
+          style={{ borderColor: 'var(--border)' }}>
           <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {person ? 'Edit person' : 'Add to library'}
+            {person ? 'Edit person' : 'Add person'}
           </h3>
-          <button onClick={onClose}><X size={16} style={{ color: 'var(--text-muted)' }} /></button>
+          <button onClick={onClose} className="p-1 rounded hover:opacity-70">
+            <X size={16} style={{ color: 'var(--text-muted)' }} />
+          </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { key: 'name', label: 'Full name *', span: true },
-            { key: 'role', label: 'Job title', span: false },
-            { key: 'company', label: 'Company', span: false },
-            { key: 'email', label: 'Email *', span: false },
-            { key: 'phone', label: 'Phone', span: false },
-          ].map(({ key, label, span }) => (
-            <div key={key} className={span ? 'col-span-2' : ''}>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
-              <input type="text" value={(form as any)[key]}
-                onChange={e => set(key, e.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none"
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5">
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { key: 'name',    label: 'Full name *', span: true  },
+              { key: 'email',   label: 'Email *',     span: true  },
+              { key: 'role',    label: 'Job title',   span: false },
+              { key: 'company', label: 'Company',     span: false },
+              { key: 'phone',   label: 'Phone',       span: false },
+            ].map(({ key, label, span }) => (
+              <div key={key} className={span ? 'col-span-2' : ''}>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
+                <input type={key === 'email' ? 'email' : 'text'} value={(form as any)[key]}
+                  onChange={e => set(key, e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none"
+                  style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                />
+              </div>
+            ))}
+
+            <div className="col-span-2">
+              <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Discipline</label>
+              <div className="flex flex-wrap gap-2">
+                {DISCIPLINES.map(d => (
+                  <button key={d} type="button" onClick={() => set('discipline', form.discipline === d ? '' : d)}
+                    className="px-3 py-1.5 rounded-full text-xs border transition-all"
+                    style={{
+                      borderColor: form.discipline === d ? 'var(--accent)' : 'var(--border)',
+                      background: form.discipline === d ? 'rgba(108,114,245,0.15)' : 'transparent',
+                      color: form.discipline === d ? 'var(--accent)' : 'var(--text-muted)',
+                    }}>{d}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Group</label>
+              <div className="flex flex-wrap gap-2">
+                {PERSON_GROUPS.map(g => (
+                  <button key={g} type="button" onClick={() => set('person_group', form.person_group === g ? '' : g)}
+                    className="px-3 py-1.5 rounded-full text-xs border transition-all"
+                    style={{
+                      borderColor: form.person_group === g ? 'var(--accent)' : 'var(--border)',
+                      background: form.person_group === g ? 'rgba(108,114,245,0.15)' : 'transparent',
+                      color: form.person_group === g ? 'var(--accent)' : 'var(--text-muted)',
+                    }}>{g}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Notes</label>
+              <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
+                className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none resize-none"
                 style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
             </div>
-          ))}
 
-          <div className="col-span-2">
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Discipline</label>
-            <div className="flex flex-wrap gap-2">
-              {DISCIPLINES.map(d => (
-                <button key={d} onClick={() => set('discipline', form.discipline === d ? '' : d)}
-                  className="px-2.5 py-1 rounded-full text-xs border transition-all"
-                  style={{
-                    borderColor: form.discipline === d ? 'var(--accent)' : 'var(--border)',
-                    background: form.discipline === d ? 'rgba(108,114,245,0.15)' : 'transparent',
-                    color: form.discipline === d ? 'var(--accent)' : 'var(--text-muted)',
-                  }}>{d}</button>
-              ))}
-            </div>
-          </div>
-
-          <div className="col-span-2">
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Group</label>
-            <div className="flex flex-wrap gap-2">
-              {PERSON_GROUPS.map(g => (
-                <button key={g} onClick={() => set('person_group', form.person_group === g ? '' : g)}
-                  type="button"
-                  className="px-2.5 py-1 rounded-full text-xs border transition-all"
-                  style={{
-                    borderColor: form.person_group === g ? 'var(--accent)' : 'var(--border)',
-                    background: form.person_group === g ? 'rgba(108,114,245,0.15)' : 'transparent',
-                    color: form.person_group === g ? 'var(--accent)' : 'var(--text-muted)',
-                  }}>{g}</button>
-              ))}
-            </div>
-          </div>
-
-          <div className="col-span-2">
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Notes</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-              className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none resize-none"
-              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-            />
-          </div>
-
-          <div className="col-span-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Pay rates & holiday</p>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { key: 'standard_rate', label: 'Standard rate (£/hr)' },
-                { key: 'holiday_allowance', label: 'Holiday allowance (days)' },
-                { key: 'ot_rate_1', label: 'OT Rate 1 (£/hr)' },
-                { key: 'ot_rate_2', label: 'OT Rate 2 (£/hr)' },
-              ].map(({ key, label }) => (
-                <div key={key}>
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
-                  <input type="number" min="0" step={key === 'holiday_allowance' ? '1' : '0.01'}
-                    value={(form as any)[key]}
-                    onChange={e => set(key, e.target.value)}
-                    className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none"
-                    style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  />
-                </div>
-              ))}
+            <div className="col-span-2 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Pay rates & holiday</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { key: 'standard_rate',    label: 'Standard rate (£/hr)' },
+                  { key: 'holiday_allowance', label: 'Holiday allowance (days)' },
+                  { key: 'ot_rate_1',        label: 'OT Rate 1 (£/hr)' },
+                  { key: 'ot_rate_2',        label: 'OT Rate 2 (£/hr)' },
+                ].map(({ key, label }) => (
+                  <div key={key}>
+                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
+                    <input type="number" min="0" step={key === 'holiday_allowance' ? '1' : '0.01'}
+                      value={(form as any)[key]}
+                      onChange={e => set(key, e.target.value)}
+                      className="w-full rounded-lg px-3 py-2 text-sm border focus:outline-none"
+                      style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
-        {error && <p className="text-xs" style={{ color: 'var(--critical)' }}>{error}</p>}
-
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs border hover:opacity-80"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>Cancel</button>
-          <button onClick={save} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-            style={{ background: 'var(--accent)' }}>
-            {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
-            {person ? 'Save changes' : 'Add person'}
-          </button>
+        {/* Fixed footer */}
+        <div className="px-6 py-4 border-t shrink-0 flex items-center justify-between gap-3"
+          style={{ borderColor: 'var(--border)' }}>
+          {error
+            ? <p className="text-xs flex-1" style={{ color: 'var(--critical)' }}>{error}</p>
+            : <span />}
+          <div className="flex gap-2 shrink-0">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>Cancel</button>
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+              style={{ background: 'var(--accent)' }}>
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+              {person ? 'Save changes' : 'Add person'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
