@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Download, Loader2, AlertCircle, RotateCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Download, Loader2, AlertCircle, RotateCcw, Gift } from 'lucide-react'
 
 interface Person {
   id: string; name: string; role: string | null; discipline: string | null
@@ -30,6 +30,7 @@ interface WeeklyTimesheet {
   signed_off_at: string | null
   sign_off_notes: string | null
   sign_off_history: SignOffEntry[]
+  bonus: number
   days: TimesheetDay[]
 }
 
@@ -109,6 +110,7 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
   const [signOffAction, setSignOffAction] = useState<'Approved' | 'Rejected'>('Approved')
   const [auditPersonId, setAuditPersonId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [awardingBonus, setAwardingBonus] = useState<string | null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [holidayBookings, setHolidayBookings] = useState<HolidayBooking[]>([])  // full-year, for remaining calc
   const [weekHolidays, setWeekHolidays] = useState<HolidayBooking[]>([])        // this week's approved bookings
@@ -263,6 +265,20 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
     setSignOffNotes('')
   }
 
+  async function awardBonus(personId: string, amount: number) {
+    setAwardingBonus(personId)
+    const res = await fetch('/api/timesheets/bonus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personId, weekStarting: weekKey, amount }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setSheets(prev => ({ ...prev, [personId]: { ...prev[personId], bonus: data.timesheet.bonus } }))
+    }
+    setAwardingBonus(null)
+  }
+
   async function exportPayroll() {
     setExporting(true)
     const res = await fetch(`/api/timesheets/payroll-export?week=${weekKey}`)
@@ -334,7 +350,8 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
 
             const dayEntries = dates.map(d => getDayEntry(person.id, d))
             const totalHrs = calcWeekHours(person)
-            const totalPay = calcWeekPay(person)
+            const bonus = sheet?.bonus ?? 0
+            const totalPay = calcWeekPay(person) + bonus
 
             return (
               <div key={person.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--border)' }}>
@@ -365,7 +382,12 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                   })}
                   <div className="text-right text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{totalHrs > 0 ? totalHrs.toFixed(1) : '—'}</div>
                   <div className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {totalPay > 0 ? `£${totalPay.toFixed(0)}` : '—'}
+                    {totalPay > 0 ? (
+                      <span>
+                        £{totalPay.toFixed(0)}
+                        {bonus > 0 && <span className="ml-1 text-[9px] font-semibold px-1 py-0.5 rounded" style={{ background: 'rgba(124,58,237,0.12)', color: '#7c3aed' }}>+£{bonus} bonus</span>}
+                      </span>
+                    ) : '—'}
                   </div>
                   <div className="flex justify-center">
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
@@ -507,11 +529,28 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                           </button>
                         )}
                         {canOverride && status === 'Approved' && (
-                          <button onClick={() => { setSignOffPersonId(person.id); setSignOffAction('Rejected') }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80"
-                            style={{ borderColor: '#ef4444', color: '#ef4444' }}>
-                            <RotateCcw size={12} /> Override approval
-                          </button>
+                          <>
+                            {bonus > 0 ? (
+                              <button onClick={() => awardBonus(person.id, 0)} disabled={awardingBonus === person.id}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border disabled:opacity-50"
+                                style={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+                                {awardingBonus === person.id ? <Loader2 size={12} className="animate-spin" /> : <Gift size={12} />}
+                                Remove bonus
+                              </button>
+                            ) : (
+                              <button onClick={() => awardBonus(person.id, 50)} disabled={awardingBonus === person.id}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                                style={{ background: '#7c3aed' }}>
+                                {awardingBonus === person.id ? <Loader2 size={12} className="animate-spin" /> : <Gift size={12} />}
+                                Award £50 bonus
+                              </button>
+                            )}
+                            <button onClick={() => { setSignOffPersonId(person.id); setSignOffAction('Rejected') }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80"
+                              style={{ borderColor: '#ef4444', color: '#ef4444' }}>
+                              <RotateCcw size={12} /> Override approval
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
