@@ -503,9 +503,9 @@ function HardwareTab({ hardware, setHardware, companies, bracoId }: any) {
         <div className="rounded-xl border p-4 space-y-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--accent)' }}>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Client">
-              <select value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
+              <StyledSelect value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
                 {companies.map((c: Company) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </StyledSelect>
             </Field>
             <Field label="Item name"><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></Field>
             <Field label="Cost (£)"><input type="number" value={form.amount_gbp} onChange={e => setForm(f => ({ ...f, amount_gbp: parseFloat(e.target.value) || 0 }))} /></Field>
@@ -600,15 +600,15 @@ function TimeTab({ timeEntries, setTime, companies, bracoId }: any) {
         <div className="rounded-xl border p-4 space-y-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--accent)' }}>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <Field label="Client">
-              <select value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
+              <StyledSelect value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
                 {companies.map((c: Company) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </StyledSelect>
             </Field>
             <Field label="Developer">
-              <select value={form.developer} onChange={e => setForm(f => ({ ...f, developer: e.target.value }))}>
+              <StyledSelect value={form.developer} onChange={e => setForm(f => ({ ...f, developer: e.target.value }))}>
                 {DEVELOPERS.map(d => <option key={d}>{d}</option>)}
                 <option value="Other">Other</option>
-              </select>
+              </StyledSelect>
             </Field>
             <Field label="Date"><input type="date" value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} /></Field>
             <Field label="Hours"><input type="number" step="0.5" value={form.hours} onChange={e => setForm(f => ({ ...f, hours: parseFloat(e.target.value) || 0 }))} /></Field>
@@ -687,10 +687,10 @@ function InvoicesTab({ invoices, setInvoices, companies, subs, allocs, hardware,
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Generate invoice</p>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Client">
-              <select value={selectedCompany} onChange={e => setSelectedCompany(e.target.value)}>
+              <StyledSelect value={selectedCompany} onChange={e => setSelectedCompany(e.target.value)}>
                 <option value="">Select client…</option>
                 {companies.map((c: Company) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </StyledSelect>
             </Field>
             <Field label="Period start"><input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} /></Field>
             <Field label="Period end"><input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} /></Field>
