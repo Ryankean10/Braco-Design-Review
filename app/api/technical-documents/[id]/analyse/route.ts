@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractAndParse } from '@/lib/repairJson'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 300
 
@@ -192,6 +193,7 @@ Return ONLY a JSON object with this structure — no prose before or after:
       thinking: { type: 'adaptive' },
       messages: [{ role: 'user', content: prompt }],
     })
+  logApiUsage({ companyId: null, endpoint: 'techdoc-analyse', model: response.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => {})
 
     const textBlocks = response.content.filter(b => b.type === 'text').map(b => (b as any).text).join('')
     const parsed = extractAndParse(textBlocks)

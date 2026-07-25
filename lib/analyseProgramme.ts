@@ -1,5 +1,6 @@
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -116,6 +117,7 @@ ${jsonSchema}`
     max_tokens: 5000,
     messages: [{ role: 'user', content: prompt }]
   })
+  logApiUsage({ companyId: null, endpoint: 'analyse-programme', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''
   const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()

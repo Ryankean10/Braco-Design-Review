@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { Resend } from 'resend'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 const WEBHOOK_SECRET = process.env.INBOUND_EMAIL_SECRET
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
@@ -173,6 +174,7 @@ export async function POST(req: NextRequest) {
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: `Subject: ${subject}\n\n${emailBody}` }]
   })
+  logApiUsage({ companyId: null, endpoint: 'construction-email', model: msg.model, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens }).catch(() => {})
 
   const text = (msg.content[0] as any).text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
   let parsed: any

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -115,6 +116,7 @@ Format your response as JSON with this structure:
       content: `${benchmarkSummary}${freeIssueText}${additionalNotes}\n\nNew site to plan:\n${JSON.stringify({ ...userInput, freeIssueItems: undefined, notes: undefined }, null, 2)}\n\nBased on the Dyce benchmark data above, provide a construction programme forecast for this new site. Return only valid JSON.`
     }]
   })
+  logApiUsage({ companyId: null, endpoint: 'planning-forecast', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''
   const clean = text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')

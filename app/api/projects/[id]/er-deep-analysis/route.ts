@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractAndParse } from '@/lib/repairJson'
 import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params
@@ -86,6 +87,7 @@ CONTRACT / ER DOCUMENT:
 ${erTextTruncated}`
     }]
   })
+  logApiUsage({ companyId: project?.company_id ?? null, endpoint: 'er-deep-analysis', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
   let result: { overview: string; risks: any[]; register: any[] }

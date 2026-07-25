@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import * as XLSX from 'xlsx'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 120
 
@@ -274,6 +275,7 @@ Return valid JSON only — no markdown fences:
     max_tokens: 8000,
     messages: [{ role: 'user', content: prompt }],
   })
+  logApiUsage({ companyId: null, endpoint: 'itp', model: msg.model, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens }).catch(() => {})
 
   let aiResult: any = { activities: [], diff_summary: { added: [], removed: [], completed: [], changed: [] } }
   try {

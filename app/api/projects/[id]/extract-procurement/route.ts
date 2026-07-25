@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractAndParse } from '@/lib/repairJson'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 60
 
@@ -67,6 +68,7 @@ EMPLOYER'S REQUIREMENTS:
 ${erText}`
     }]
   })
+  logApiUsage({ companyId: project?.company_id ?? null, endpoint: 'extract-procurement', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
 

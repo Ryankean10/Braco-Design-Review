@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 120
 
@@ -129,6 +130,7 @@ Only include activities in ai_activities if the diary explicitly mentions them. 
     max_tokens: 2000,
     messages: [{ role: 'user', content: prompt }],
   })
+  logApiUsage({ companyId: null, endpoint: 'civils-diary', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   let parsed: Record<string, unknown> = {}
   const rawResponse = (message.content[0] as { text: string }).text

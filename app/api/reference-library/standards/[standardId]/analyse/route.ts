@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as serviceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 120
 
@@ -88,6 +89,7 @@ ${docText.slice(0, 40000)}`
     max_tokens: 2000,
     messages: [{ role: 'user', content: prompt }],
   })
+  logApiUsage({ companyId: null, endpoint: 'standards-analyse', model: msg.model, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens }).catch(() => {})
 
   const raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
   const m = raw.match(/\{[\s\S]*\}/)

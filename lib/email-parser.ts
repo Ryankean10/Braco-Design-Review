@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -78,6 +79,7 @@ For unknown:
     max_tokens: 1024,
     messages: [{ role: 'user', content: prompt }],
   })
+  logApiUsage({ companyId: null, endpoint: 'email-parser', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
 

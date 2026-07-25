@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
 import { extractAndParse } from '@/lib/repairJson'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 90
 
@@ -87,6 +88,7 @@ EMPLOYER'S REQUIREMENTS DOCUMENT — PROJECT: ${project.name ?? projectId}
 ${erTextTruncated}`
     }]
   })
+  logApiUsage({ companyId: project?.company_id ?? null, endpoint: 'er-interrogate', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
 

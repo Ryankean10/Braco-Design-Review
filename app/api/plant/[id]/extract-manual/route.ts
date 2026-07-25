@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import Anthropic from '@anthropic-ai/sdk'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -71,6 +72,7 @@ If no clear interval is stated, use "annual" with interval_value 1.`,
       ],
     }],
   })
+  logApiUsage({ companyId: null, endpoint: 'plant-manual', model: response.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => {})
 
   const raw = response.content[0].type === 'text' ? response.content[0].text : ''
   let tasks: any[] = []

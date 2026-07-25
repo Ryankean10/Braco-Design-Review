@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as serviceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 300
 
@@ -217,6 +218,7 @@ Scale all numbers to match this project's MW capacity and MVS count relative to 
           max_tokens: 8000,
           messages: [{ role: 'user', content: prompt }],
         })
+  logApiUsage({ companyId: null, endpoint: 'project-forecast', model: msg.model, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens }).catch(() => {})
 
         let raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
         const m = raw.match(/\{[\s\S]*\}/)

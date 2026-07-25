@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractAndParse } from '@/lib/repairJson'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 300
 
@@ -237,6 +238,7 @@ ${lenses.map(l => `  "${l}": [
       messages: [{ role: 'user', content: userPrompt }],
     })
     const msg = await stream.finalMessage()
+    logApiUsage({ companyId: project?.company_id ?? null, endpoint: 'run-review', model: msg.model, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens }).catch(() => {})
     responseText = msg.content.find(b => b.type === 'text')?.text ?? ''
     stopReason = msg.stop_reason ?? ''
     console.log('[run-review] stop_reason:', stopReason, '| text length:', responseText.length, '| preview:', responseText.slice(0, 200))

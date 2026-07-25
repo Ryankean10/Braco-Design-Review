@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, ChevronDown,
-  Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck,
+  Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck, Receipt,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, Company, Module } from '@/lib/types'
@@ -34,6 +34,7 @@ const NAV: NavItem[] = [
 
 const SUPERADMIN_NAV: NavItem[] = [
   { href: '/admin/companies', label: 'Companies', icon: Building2 },
+  { href: '/admin/costs',     label: 'Cost Tracker', icon: Receipt },
 ]
 
 export default function Sidebar({ profile, company }: { profile: Profile | null; company: Company | null }) {

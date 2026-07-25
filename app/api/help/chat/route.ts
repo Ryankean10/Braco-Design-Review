@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -179,6 +180,7 @@ export async function POST(req: NextRequest) {
     system: buildSystemPrompt(industry),
     messages,
   })
+  logApiUsage({ companyId: null, endpoint: 'help-chat', model: response.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => {})
 
   const rawText = response.content[0].type === 'text' ? response.content[0].text : ''
 

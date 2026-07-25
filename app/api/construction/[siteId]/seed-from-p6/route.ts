@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import * as XLSX from 'xlsx'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 120
 
@@ -113,6 +114,7 @@ Return valid JSON only — no markdown fences:
 }`,
     }],
   })
+  logApiUsage({ companyId: null, endpoint: 'seed-from-p6', model: msg.model, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens }).catch(() => {})
 
   let activities: any[] = []
   try {
