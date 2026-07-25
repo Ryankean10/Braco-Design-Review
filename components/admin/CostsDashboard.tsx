@@ -36,7 +36,7 @@ const CATEGORIES = ['api', 'hosting', 'domain', 'tool', 'other']
 const DEVELOPERS = ['Ryan', 'Max']
 
 // ── Blank forms ───────────────────────────────────────────────────────────────
-const blankSub  = (): Omit<Sub, 'id'>  => ({ name: '', category: 'tool', amount_gbp: 0, billing_cycle: 'monthly', notes: null, active: true })
+const blankSub  = (bracoId?: string | null): Omit<Sub, 'id'> & { company_id: string | null } => ({ name: '', category: 'api', amount_gbp: 0, billing_cycle: 'monthly', notes: null, active: true, company_id: bracoId ?? null })
 const blankHw   = (): Omit<Hardware,'id'> => ({ company_id: null, name: '', description: null, amount_gbp: 0, purchase_date: null, amortise_months: null, notes: null })
 const blankTime = (): Omit<TimeEntry,'id'> => ({ company_id: null, developer: 'Ryan', hours: 0, rate_gbp: 0, entry_date: new Date().toISOString().slice(0,10), description: null })
 
@@ -213,15 +213,25 @@ function OverviewTab({ monthlySubCost, totalApiCostUsd, totalTimeValue, totalHwC
 function SubsTab({ subs, setSubs, allocs, setAllocs, companies, bracoId }: any) {
   const [adding, setAdding]         = useState(false)
   const [expandedSub, setExpanded]  = useState<string | null>(null)
-  const [form, setForm]             = useState(blankSub())
+  const [form, setForm]             = useState(blankSub(bracoId))
   const [saving, setSaving]         = useState(false)
   const [allocForm, setAllocForm]   = useState<Record<string, string>>({}) // subId → pct string
 
   async function saveSub() {
     setSaving(true)
-    const res = await fetch('/api/admin/costs/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+    const { company_id, ...subFields } = form
+    const res = await fetch('/api/admin/costs/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subFields) })
     const { data } = await res.json()
-    if (data) { setSubs((s: any) => [...s, data]); setAdding(false); setForm(blankSub()) }
+    if (data) {
+      setSubs((s: any) => [...s, data])
+      if (company_id) {
+        const allocRes = await fetch('/api/admin/costs/allocations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription_id: data.id, company_id, allocation_pct: 100 }) })
+        const { data: allocData } = await allocRes.json()
+        if (allocData) setAllocs((a: any) => [...a, allocData])
+      }
+      setAdding(false)
+      setForm(blankSub(bracoId))
+    }
     setSaving(false)
   }
 
@@ -268,7 +278,7 @@ function SubsTab({ subs, setSubs, allocs, setAllocs, companies, bracoId }: any) 
             <Field label="Name"><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Resend" /></Field>
             <Field label="Category">
               <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
               </select>
             </Field>
             <Field label="Amount (£)"><input type="number" value={form.amount_gbp} onChange={e => setForm(f => ({ ...f, amount_gbp: parseFloat(e.target.value) || 0 }))} /></Field>
@@ -278,7 +288,13 @@ function SubsTab({ subs, setSubs, allocs, setAllocs, companies, bracoId }: any) 
                 <option value="annual">Annual</option>
               </select>
             </Field>
-            <Field label="Notes" className="col-span-2"><input value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value || null }))} /></Field>
+            <Field label="Allocate to company">
+              <select value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
+                <option value="">— Split later —</option>
+                {companies.map((c: Company) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Notes"><input value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value || null }))} /></Field>
           </div>
           <div className="flex gap-2">
             <button onClick={saveSub} disabled={saving} className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: 'var(--accent)' }}>Save</button>
