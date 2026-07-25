@@ -277,22 +277,29 @@ function SubsTab({ subs, setSubs, allocs, setAllocs, companies, bracoId }: any) 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Name"><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Resend" /></Field>
             <Field label="Category">
-              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+              <StyledSelect value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                 {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-              </select>
+              </StyledSelect>
             </Field>
-            <Field label="Amount (£)"><input type="number" value={form.amount_gbp} onChange={e => setForm(f => ({ ...f, amount_gbp: parseFloat(e.target.value) || 0 }))} /></Field>
+            <Field label="Amount (£)">
+              <input
+                type="text" inputMode="decimal"
+                value={form.amount_gbp === 0 ? '' : form.amount_gbp}
+                onChange={e => setForm(f => ({ ...f, amount_gbp: parseFloat(e.target.value) || 0 }))}
+                placeholder="0.00"
+              />
+            </Field>
             <Field label="Billing cycle">
-              <select value={form.billing_cycle} onChange={e => setForm(f => ({ ...f, billing_cycle: e.target.value }))}>
+              <StyledSelect value={form.billing_cycle} onChange={e => setForm(f => ({ ...f, billing_cycle: e.target.value }))}>
                 <option value="monthly">Monthly</option>
                 <option value="annual">Annual</option>
-              </select>
+              </StyledSelect>
             </Field>
             <Field label="Allocate to company">
-              <select value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
+              <StyledSelect value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
                 <option value="">— Split later —</option>
                 {companies.map((c: Company) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </StyledSelect>
             </Field>
             <Field label="Notes"><input value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value || null }))} /></Field>
           </div>
@@ -789,6 +796,27 @@ function Field({ label, children, className = '' }: { label: string; children: R
         {children}
       </div>
     </div>
+  )
+}
+
+function StyledSelect({ value, onChange, children }: { value: string; onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void; children: React.ReactNode }) {
+  return (
+    <select
+      value={value}
+      onChange={onChange}
+      style={{
+        width: '100%',
+        padding: '6px 12px',
+        borderRadius: '8px',
+        border: '1px solid var(--border)',
+        background: 'var(--bg-base)',
+        color: 'var(--text-primary)',
+        fontSize: '14px',
+        colorScheme: 'dark',
+      }}
+    >
+      {children}
+    </select>
   )
 }
 
