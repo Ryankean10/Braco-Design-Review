@@ -214,12 +214,13 @@ function SubsTab({ subs, setSubs, allocs, setAllocs, companies, bracoId }: any) 
   const [adding, setAdding]         = useState(false)
   const [expandedSub, setExpanded]  = useState<string | null>(null)
   const [form, setForm]             = useState(blankSub(bracoId))
+  const [amountStr, setAmountStr]   = useState('')
   const [saving, setSaving]         = useState(false)
   const [allocForm, setAllocForm]   = useState<Record<string, string>>({}) // subId → pct string
 
   async function saveSub() {
     setSaving(true)
-    const { company_id, ...subFields } = form
+    const { company_id, ...subFields } = { ...form, amount_gbp: parseFloat(amountStr) || 0 }
     const res = await fetch('/api/admin/costs/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subFields) })
     const { data } = await res.json()
     if (data) {
@@ -231,6 +232,7 @@ function SubsTab({ subs, setSubs, allocs, setAllocs, companies, bracoId }: any) 
       }
       setAdding(false)
       setForm(blankSub(bracoId))
+      setAmountStr('')
     }
     setSaving(false)
   }
@@ -284,8 +286,8 @@ function SubsTab({ subs, setSubs, allocs, setAllocs, companies, bracoId }: any) 
             <Field label="Amount (£)">
               <input
                 type="text" inputMode="decimal"
-                value={form.amount_gbp === 0 ? '' : form.amount_gbp}
-                onChange={e => setForm(f => ({ ...f, amount_gbp: parseFloat(e.target.value) || 0 }))}
+                value={amountStr}
+                onChange={e => { const v = e.target.value; if (/^[\d.]*$/.test(v)) setAmountStr(v) }}
                 placeholder="0.00"
               />
             </Field>
