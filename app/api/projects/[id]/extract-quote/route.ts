@@ -77,7 +77,7 @@ QUOTATION DOCUMENT:
 ${docText}`
     }]
   })
-  logApiUsage({ companyId: project?.company_id ?? null, endpoint: 'extract-quote', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
+  logApiUsage({ companyId: null, endpoint: 'extract-quote', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
 
