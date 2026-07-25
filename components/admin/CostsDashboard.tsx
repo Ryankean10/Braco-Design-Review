@@ -66,7 +66,11 @@ export default function CostsDashboard({ companies, subscriptions: initSubs, all
     return map
   }, [usageLogs])
 
-  const companyName = (id: string | null) => companies.find(c => c.id === id)?.name ?? (id ? id.slice(0,8) : 'Unattributed')
+  const bracoId = companies.find(c => c.slug === 'braco')?.id ?? null
+  const companyName = (id: string | null) => {
+    if (!id) return 'Braco'
+    return companies.find(c => c.id === id)?.name ?? id.slice(0, 8)
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -89,24 +93,64 @@ export default function CostsDashboard({ companies, subscriptions: initSubs, all
         ))}
       </div>
 
-      {tab === 'Overview'       && <OverviewTab monthlySubCost={monthlySubCost} totalApiCostUsd={totalApiCostUsd} totalTimeValue={totalTimeValue} totalHwCost={totalHwCost} usageByCompany={usageByCompany} companyName={companyName} usageLogs={usageLogs} />}
-      {tab === 'Subscriptions'  && <SubsTab subs={subs} setSubs={setSubs} allocs={allocs} setAllocs={setAllocs} companies={companies} />}
+      {tab === 'Overview'       && <OverviewTab monthlySubCost={monthlySubCost} totalApiCostUsd={totalApiCostUsd} totalTimeValue={totalTimeValue} totalHwCost={totalHwCost} usageByCompany={usageByCompany} companyName={companyName} usageLogs={usageLogs} companies={companies} hardware={hardware} timeEntries={timeEntries} allocs={allocs} subs={subs} />}
+      {tab === 'Subscriptions'  && <SubsTab subs={subs} setSubs={setSubs} allocs={allocs} setAllocs={setAllocs} companies={companies} bracoId={bracoId} />}
       {tab === 'API Usage'      && <ApiTab usageLogs={usageLogs} usageByCompany={usageByCompany} companyName={companyName} />}
-      {tab === 'Hardware'       && <HardwareTab hardware={hardware} setHardware={setHardware} companies={companies} />}
-      {tab === 'Time'           && <TimeTab timeEntries={timeEntries} setTime={setTime} companies={companies} />}
+      {tab === 'Hardware'       && <HardwareTab hardware={hardware} setHardware={setHardware} companies={companies} bracoId={bracoId} />}
+      {tab === 'Time'           && <TimeTab timeEntries={timeEntries} setTime={setTime} companies={companies} bracoId={bracoId} />}
       {tab === 'Invoices'       && <InvoicesTab invoices={invoices} setInvoices={setInvoices} companies={companies} subs={subs} allocs={allocs} hardware={hardware} timeEntries={timeEntries} usageLogs={usageLogs} />}
     </div>
   )
 }
 
 // ── Overview ──────────────────────────────────────────────────────────────────
-function OverviewTab({ monthlySubCost, totalApiCostUsd, totalTimeValue, totalHwCost, usageByCompany, companyName, usageLogs }: any) {
+function OverviewTab({ monthlySubCost, totalApiCostUsd, totalTimeValue, totalHwCost, usageByCompany, companyName, usageLogs, companies, hardware, timeEntries, allocs, subs }: any) {
+  const USD_TO_GBP = 0.79
+
+  // Per-company cost rollup
+  const perCompany = useMemo(() => {
+    const map: Record<string, { api: number; time: number; hw: number; subs: number }> = {}
+    const ensure = (id: string) => { if (!map[id]) map[id] = { api: 0, time: 0, hw: 0, subs: 0 } }
+
+    // API
+    for (const [id, u] of Object.entries(usageByCompany) as any) {
+      const key = id === '__unknown' ? 'braco' : id
+      ensure(key)
+      map[key].api += u.cost * USD_TO_GBP
+    }
+    // Time
+    for (const t of timeEntries) {
+      const key = t.company_id ?? 'braco'
+      ensure(key)
+      map[key].time += t.hours * t.rate_gbp
+    }
+    // Hardware
+    for (const h of hardware) {
+      const key = h.company_id ?? 'braco'
+      ensure(key)
+      map[key].hw += h.amortise_months ? h.amount_gbp / h.amortise_months : h.amount_gbp
+    }
+    // Subscription allocations
+    for (const a of allocs) {
+      const sub = subs.find((s: any) => s.id === a.subscription_id)
+      if (!sub?.active) continue
+      const monthly = sub.billing_cycle === 'monthly' ? sub.amount_gbp : sub.amount_gbp / 12
+      ensure(a.company_id)
+      map[a.company_id].subs += monthly * (a.allocation_pct / 100)
+    }
+
+    return map
+  }, [usageByCompany, timeEntries, hardware, allocs, subs])
+
   const cards = [
     { label: 'Monthly subscriptions', value: GBP(monthlySubCost), sub: 'recurring run rate', icon: Package, color: '#6366f1' },
     { label: 'API cost (all time)', value: USD(totalApiCostUsd), sub: `${usageLogs.length} calls logged`, icon: Cpu, color: '#10b981' },
     { label: 'Dev time value', value: GBP(totalTimeValue), sub: 'all time logged', icon: Clock, color: '#f59e0b' },
     { label: 'Hardware spend', value: GBP(totalHwCost), sub: 'all items', icon: Package, color: '#ef4444' },
   ]
+
+  const maxTotal = Math.max(...Object.values(perCompany).map((v: any) => v.api + v.time + v.hw + v.subs), 1)
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -122,21 +166,42 @@ function OverviewTab({ monthlySubCost, totalApiCostUsd, totalTimeValue, totalHwC
         ))}
       </div>
 
+      {/* Per-company breakdown */}
       <div className="rounded-xl border p-4" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>API usage by client</h3>
-        {Object.keys(usageByCompany).length === 0 && (
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No API usage logged yet.</p>
+        <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Cost by company</h3>
+        {Object.keys(perCompany).length === 0 && (
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No costs allocated yet.</p>
         )}
-        <div className="space-y-2">
-          {Object.entries(usageByCompany).sort(([,a]: any, [,b]: any) => b.cost - a.cost).map(([id, u]: any) => (
-            <div key={id} className="flex items-center gap-3">
-              <span className="text-sm w-32 truncate" style={{ color: 'var(--text-primary)' }}>{companyName(id === '__unknown' ? null : id)}</span>
-              <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: 'var(--border)' }}>
-                <div className="h-full rounded-full" style={{ width: `${Math.min(100, (u.cost / Math.max(...Object.values(usageByCompany).map((x: any) => x.cost))) * 100)}%`, background: 'var(--accent)' }} />
-              </div>
-              <span className="text-xs w-20 text-right" style={{ color: 'var(--text-muted)' }}>{USD(u.cost)}</span>
-              <span className="text-xs w-24 text-right" style={{ color: 'var(--text-muted)' }}>{(u.tokens / 1000).toFixed(0)}k tokens</span>
-            </div>
+        <div className="space-y-3">
+          {Object.entries(perCompany)
+            .sort(([,a]: any, [,b]: any) => (b.api+b.time+b.hw+b.subs) - (a.api+a.time+a.hw+a.subs))
+            .map(([id, v]: any) => {
+              const name = id === 'braco' ? 'Braco' : companyName(id)
+              const total = v.api + v.time + v.hw + v.subs
+              return (
+                <div key={id}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{name}</span>
+                    <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{GBP(total)}</span>
+                  </div>
+                  <div className="flex gap-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                    <div style={{ width: `${(v.api / maxTotal) * 100}%`, background: '#10b981' }} title={`API: ${GBP(v.api)}`} />
+                    <div style={{ width: `${(v.time / maxTotal) * 100}%`, background: '#f59e0b' }} title={`Time: ${GBP(v.time)}`} />
+                    <div style={{ width: `${(v.hw / maxTotal) * 100}%`, background: '#ef4444' }} title={`Hardware: ${GBP(v.hw)}`} />
+                    <div style={{ width: `${(v.subs / maxTotal) * 100}%`, background: '#6366f1' }} title={`Subscriptions: ${GBP(v.subs)}`} />
+                  </div>
+                  <div className="flex gap-4 mt-1">
+                    {[['API', v.api, '#10b981'], ['Time', v.time, '#f59e0b'], ['Hardware', v.hw, '#ef4444'], ['Subs', v.subs, '#6366f1']].map(([label, val, color]: any) =>
+                      val > 0 ? <span key={label} className="text-xs" style={{ color }}>{label} {GBP(val)}</span> : null
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+        </div>
+        <div className="flex gap-4 mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+          {[['API (£)', '#10b981'], ['Dev time', '#f59e0b'], ['Hardware', '#ef4444'], ['Subscriptions', '#6366f1']].map(([l, c]) => (
+            <div key={l} className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ background: c }} /><span className="text-xs" style={{ color: 'var(--text-muted)' }}>{l}</span></div>
           ))}
         </div>
       </div>
@@ -145,12 +210,14 @@ function OverviewTab({ monthlySubCost, totalApiCostUsd, totalTimeValue, totalHwC
 }
 
 // ── Subscriptions ─────────────────────────────────────────────────────────────
-function SubsTab({ subs, setSubs, allocs, setAllocs, companies }: any) {
-  const [adding, setAdding] = useState(false)
-  const [form, setForm]     = useState(blankSub())
-  const [saving, setSaving] = useState(false)
+function SubsTab({ subs, setSubs, allocs, setAllocs, companies, bracoId }: any) {
+  const [adding, setAdding]         = useState(false)
+  const [expandedSub, setExpanded]  = useState<string | null>(null)
+  const [form, setForm]             = useState(blankSub())
+  const [saving, setSaving]         = useState(false)
+  const [allocForm, setAllocForm]   = useState<Record<string, string>>({}) // subId → pct string
 
-  async function save() {
+  async function saveSub() {
     setSaving(true)
     const res = await fetch('/api/admin/costs/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
     const { data } = await res.json()
@@ -158,12 +225,33 @@ function SubsTab({ subs, setSubs, allocs, setAllocs, companies }: any) {
     setSaving(false)
   }
 
-  async function remove(id: string) {
+  async function removeSub(id: string) {
     await fetch(`/api/admin/costs/subscriptions/${id}`, { method: 'DELETE' })
     setSubs((s: any) => s.filter((x: any) => x.id !== id))
+    setAllocs((a: any) => a.filter((x: any) => x.subscription_id !== id))
+  }
+
+  async function saveAlloc(subId: string, companyId: string, pct: number) {
+    const existing = allocs.find((a: Alloc) => a.subscription_id === subId && a.company_id === companyId)
+    if (existing) {
+      const res = await fetch(`/api/admin/costs/allocations/${existing.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allocation_pct: pct }) })
+      if (res.ok) setAllocs((a: any) => a.map((x: any) => x.id === existing.id ? { ...x, allocation_pct: pct } : x))
+    } else {
+      const res = await fetch('/api/admin/costs/allocations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription_id: subId, company_id: companyId, allocation_pct: pct }) })
+      const { data } = await res.json()
+      if (data) setAllocs((a: any) => [...a, data])
+    }
+  }
+
+  async function removeAlloc(id: string) {
+    await fetch(`/api/admin/costs/allocations/${id}`, { method: 'DELETE' })
+    setAllocs((a: any) => a.filter((x: any) => x.id !== id))
   }
 
   const total = subs.filter((s: Sub) => s.active).reduce((a: number, s: Sub) => a + (s.billing_cycle === 'monthly' ? s.amount_gbp : s.amount_gbp / 12), 0)
+
+  // All companies including Braco
+  const allCompanies = companies
 
   return (
     <div className="space-y-4">
@@ -193,38 +281,90 @@ function SubsTab({ subs, setSubs, allocs, setAllocs, companies }: any) {
             <Field label="Notes" className="col-span-2"><input value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value || null }))} /></Field>
           </div>
           <div className="flex gap-2">
-            <button onClick={save} disabled={saving} className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: 'var(--accent)' }}>Save</button>
+            <button onClick={saveSub} disabled={saving} className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: 'var(--accent)' }}>Save</button>
             <button onClick={() => setAdding(false)} className="px-3 py-1.5 rounded-lg text-sm" style={{ color: 'var(--text-muted)' }}>Cancel</button>
           </div>
         </div>
       )}
 
-      <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-              {['Name', 'Category', 'Amount', 'Cycle', 'Monthly equiv.', 'Status', ''].map(h => (
-                <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {subs.map((s: Sub) => (
-              <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--text-primary)' }}>{s.name}</td>
-                <td className="px-4 py-2.5"><Tag>{s.category}</Tag></td>
-                <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>{GBP(s.amount_gbp)}</td>
-                <td className="px-4 py-2.5" style={{ color: 'var(--text-muted)' }}>{s.billing_cycle}</td>
-                <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>{GBP(s.billing_cycle === 'monthly' ? s.amount_gbp : s.amount_gbp / 12)}</td>
-                <td className="px-4 py-2.5"><Tag color={s.active ? '#10b981' : '#94a3b8'}>{s.active ? 'Active' : 'Inactive'}</Tag></td>
-                <td className="px-4 py-2.5">
-                  <button onClick={() => remove(s.id)} className="opacity-40 hover:opacity-100"><Trash2 size={13} style={{ color: 'var(--text-muted)' }} /></button>
-                </td>
-              </tr>
-            ))}
-            {subs.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No subscriptions yet.</td></tr>}
-          </tbody>
-        </table>
+      <div className="space-y-2">
+        {subs.map((s: Sub) => {
+          const monthly = s.billing_cycle === 'monthly' ? s.amount_gbp : s.amount_gbp / 12
+          const subAllocs = allocs.filter((a: Alloc) => a.subscription_id === s.id)
+          const allocTotal = subAllocs.reduce((a: number, x: Alloc) => a + x.allocation_pct, 0)
+          const isOpen = expandedSub === s.id
+
+          return (
+            <div key={s.id} className="rounded-xl border overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{s.name}</span>
+                    <Tag>{s.category}</Tag>
+                    <Tag color={s.active ? '#10b981' : '#94a3b8'}>{s.active ? 'Active' : 'Inactive'}</Tag>
+                  </div>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {GBP(s.amount_gbp)} / {s.billing_cycle} · {GBP(monthly)}/mo
+                    {subAllocs.length > 0 && ` · allocated ${allocTotal}%`}
+                  </p>
+                </div>
+                <button onClick={() => setExpanded(isOpen ? null : s.id)} className="text-xs px-2.5 py-1 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                  {isOpen ? 'Close' : 'Allocate'}
+                </button>
+                <button onClick={() => removeSub(s.id)} className="opacity-40 hover:opacity-100 ml-1"><Trash2 size={13} style={{ color: 'var(--text-muted)' }} /></button>
+              </div>
+
+              {isOpen && (
+                <div className="border-t px-4 pb-4 pt-3 space-y-2" style={{ borderColor: 'var(--border)' }}>
+                  <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Split this subscription across companies (total allocated: {allocTotal}%)</p>
+                  {allCompanies.map((c: Company) => {
+                    const existing = subAllocs.find((a: Alloc) => a.company_id === c.id)
+                    const key = `${s.id}-${c.id}`
+                    const val = allocForm[key] ?? (existing ? String(existing.allocation_pct) : '')
+                    return (
+                      <div key={c.id} className="flex items-center gap-3">
+                        <span className="text-sm w-32 truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</span>
+                        <input
+                          type="number" min="0" max="100" placeholder="0"
+                          value={val}
+                          onChange={e => setAllocForm(f => ({ ...f, [key]: e.target.value }))}
+                          className="w-20 px-2 py-1 rounded-lg border text-sm text-right"
+                          style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                        />
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>%</span>
+                        {val && (
+                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>= {GBP(monthly * (parseFloat(val) / 100))}/mo</span>
+                        )}
+                        <button
+                          onClick={async () => {
+                            const pct = parseFloat(val)
+                            if (isNaN(pct) || pct < 0) return
+                            if (pct === 0 && existing) { await removeAlloc(existing.id); setAllocForm(f => ({ ...f, [key]: '' })); return }
+                            if (pct > 0) await saveAlloc(s.id, c.id, pct)
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium text-white"
+                          style={{ background: 'var(--accent)' }}
+                        >
+                          Save
+                        </button>
+                        {existing && (
+                          <button onClick={() => removeAlloc(existing.id)} className="opacity-40 hover:opacity-100">
+                            <X size={12} style={{ color: 'var(--text-muted)' }} />
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {subs.length === 0 && (
+          <div className="rounded-xl border p-8 text-center" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No subscriptions yet.</p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -308,16 +448,16 @@ function ApiTab({ usageLogs, usageByCompany, companyName }: any) {
 }
 
 // ── Hardware ──────────────────────────────────────────────────────────────────
-function HardwareTab({ hardware, setHardware, companies }: any) {
+function HardwareTab({ hardware, setHardware, companies, bracoId }: any) {
   const [adding, setAdding] = useState(false)
-  const [form, setForm]     = useState(blankHw())
+  const [form, setForm]     = useState(() => ({ ...blankHw(), company_id: bracoId }))
   const [saving, setSaving] = useState(false)
 
   async function save() {
     setSaving(true)
     const res = await fetch('/api/admin/costs/hardware', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
     const { data } = await res.json()
-    if (data) { setHardware((h: any) => [data, ...h]); setAdding(false); setForm(blankHw()) }
+    if (data) { setHardware((h: any) => [data, ...h]); setAdding(false); setForm({ ...blankHw(), company_id: bracoId }) }
     setSaving(false)
   }
 
@@ -339,7 +479,6 @@ function HardwareTab({ hardware, setHardware, companies }: any) {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Client">
               <select value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
-                <option value="">Unattributed</option>
                 {companies.map((c: Company) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
@@ -368,7 +507,7 @@ function HardwareTab({ hardware, setHardware, companies }: any) {
           <tbody>
             {hardware.map((h: Hardware) => (
               <tr key={h.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{companies.find((c: Company) => c.id === h.company_id)?.name ?? '—'}</td>
+                <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{companies.find((c: Company) => c.id === h.company_id)?.name ?? 'Braco'}</td>
                 <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--text-primary)' }}>{h.name}</td>
                 <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>{GBP(h.amount_gbp)}</td>
                 <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{h.purchase_date ?? '—'}</td>
@@ -388,16 +527,16 @@ function HardwareTab({ hardware, setHardware, companies }: any) {
 }
 
 // ── Time entries ──────────────────────────────────────────────────────────────
-function TimeTab({ timeEntries, setTime, companies }: any) {
+function TimeTab({ timeEntries, setTime, companies, bracoId }: any) {
   const [adding, setAdding] = useState(false)
-  const [form, setForm]     = useState(blankTime())
+  const [form, setForm]     = useState(() => ({ ...blankTime(), company_id: bracoId }))
   const [saving, setSaving] = useState(false)
 
   async function save() {
     setSaving(true)
     const res = await fetch('/api/admin/costs/time', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
     const { data } = await res.json()
-    if (data) { setTime((t: any) => [data, ...t]); setAdding(false); setForm(blankTime()) }
+    if (data) { setTime((t: any) => [data, ...t]); setAdding(false); setForm({ ...blankTime(), company_id: bracoId }) }
     setSaving(false)
   }
 
@@ -437,7 +576,6 @@ function TimeTab({ timeEntries, setTime, companies }: any) {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <Field label="Client">
               <select value={form.company_id ?? ''} onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}>
-                <option value="">Internal / Unattributed</option>
                 {companies.map((c: Company) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
@@ -472,7 +610,7 @@ function TimeTab({ timeEntries, setTime, companies }: any) {
             {timeEntries.map((t: TimeEntry) => (
               <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
                 <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{t.entry_date}</td>
-                <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{companies.find((c: Company) => c.id === t.company_id)?.name ?? '—'}</td>
+                <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{companies.find((c: Company) => c.id === t.company_id)?.name ?? 'Braco'}</td>
                 <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>{t.developer}</td>
                 <td className="px-4 py-2.5 text-right" style={{ color: 'var(--text-primary)' }}>{t.hours}</td>
                 <td className="px-4 py-2.5 text-right" style={{ color: 'var(--text-muted)' }}>{GBP(t.rate_gbp)}</td>
