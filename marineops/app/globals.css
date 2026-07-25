@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  --bg-base: #0a0f1e;
+  --bg-surface: #0f1629;
+  --bg-elevated: #162038;
+  --border: #1e3050;
+  --text-primary: #e2e8f0;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --critical: #ef4444;
+  --major: #f97316;
+  --minor: #eab308;
+  --observation: #6b7280;
+  --success: #22c55e;
+
+  --bg-sidebar: #0f172a;
+  --sidebar-border: #1e2d45;
+  --sidebar-text: #cbd5e1;
+  --sidebar-muted: #475569;
+  --sidebar-active-bg: rgba(59, 130, 246, 0.15);
+  --sidebar-active-text: #60a5fa;
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.05);
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.badge-critical { background: #3f1212; color: #f87171; border: 1px solid #7f1d1d; }
+.badge-major    { background: #3f1f0a; color: #fb923c; border: 1px solid #7c2d12; }
+.badge-minor    { background: #3f3000; color: #fbbf24; border: 1px solid #78350f; }
+.badge-info     { background: #1e2d45; color: #60a5fa; border: 1px solid #1d4ed8; }
+.badge-success  { background: #052e16; color: #4ade80; border: 1px solid #14532d; }
+.badge-neutral  { background: #1f2937; color: #9ca3af; border: 1px solid #374151; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
