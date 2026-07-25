@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import {
   DollarSign, Clock, Cpu, Package, FileText, Plus, Trash2, Edit2, Check, X,
-  ChevronDown, TrendingUp, Building2,
+  ChevronDown, TrendingUp, Building2, Download,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -13,7 +13,7 @@ interface Alloc    { id: string; subscription_id: string; company_id: string; al
 interface Hardware { id: string; company_id: string | null; name: string; description: string | null; amount_gbp: number; purchase_date: string | null; amortise_months: number | null; notes: string | null }
 interface TimeEntry{ id: string; company_id: string | null; developer: string; hours: number; rate_gbp: number; entry_date: string; description: string | null }
 interface Invoice  { id: string; company_id: string; invoice_number: string; period_start: string; period_end: string; status: string; notes: string | null; invoice_line_items: LineItem[] }
-interface LineItem { id: string; invoice_id: string; description: string; quantity: number; unit_price_gbp: number; total_gbp: number; sort_order: number }
+interface LineItem { id: string; invoice_id: string; description: string; quantity: number; unit_price_gbp: number; total_gbp: number; sort_order: number; markup_pct: number }
 interface UsageLog { company_id: string | null; model: string; input_tokens: number; output_tokens: number; cost_usd: number; created_at: string }
 
 interface Props {
@@ -718,15 +718,46 @@ function InvoicesTab({ invoices, setInvoices, companies, subs, allocs, hardware,
 }
 
 function InvoiceCard({ invoice, companies, setInvoices }: any) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen]           = useState(false)
+  const [markups, setMarkups]     = useState<Record<string, string>>({})
+  const [savingMkp, setSavingMkp] = useState(false)
   const company = companies.find((c: Company) => c.id === invoice.company_id)
-  const total = (invoice.invoice_line_items ?? []).reduce((a: number, l: LineItem) => a + l.total_gbp, 0)
   const STATUS_COLORS: Record<string, string> = { draft: '#94a3b8', sent: '#f59e0b', paid: '#10b981' }
+
+  const items: LineItem[] = (invoice.invoice_line_items ?? []).sort((a: LineItem, b: LineItem) => a.sort_order - b.sort_order)
+
+  function getMarkup(l: LineItem): number {
+    const s = markups[l.id]
+    return s !== undefined ? (parseFloat(s) || 0) : (l.markup_pct ?? 15)
+  }
+
+  const subtotal   = items.reduce((sum, l) => sum + l.total_gbp * (1 + getMarkup(l) / 100), 0)
+  const vat        = subtotal * 0.20
+  const grandTotal = subtotal + vat
 
   async function updateStatus(status: string) {
     await fetch(`/api/admin/costs/invoices/${invoice.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
     setInvoices((inv: any) => inv.map((i: any) => i.id === invoice.id ? { ...i, status } : i))
   }
+
+  async function saveMarkups() {
+    setSavingMkp(true)
+    const payload = items.map(l => ({ id: l.id, markup_pct: getMarkup(l) }))
+    const res = await fetch(`/api/admin/costs/invoices/${invoice.id}/line-items`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: payload }),
+    })
+    if (res.ok) {
+      const { data } = await res.json()
+      setInvoices((inv: any) => inv.map((i: any) => i.id === invoice.id
+        ? { ...i, invoice_line_items: data }
+        : i
+      ))
+      setMarkups({})
+    }
+    setSavingMkp(false)
+  }
+
+  const hasUnsaved = Object.keys(markups).length > 0
 
   return (
     <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
@@ -738,34 +769,59 @@ function InvoiceCard({ invoice, companies, setInvoices }: any) {
           </div>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{company?.name} · {invoice.period_start} → {invoice.period_end}</p>
         </div>
-        <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{GBP(total)}</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{GBP(grandTotal)}</span>
         <ChevronDown size={14} style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .2s' }} />
       </button>
 
       {open && (
         <div className="border-t px-4 pb-4" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full text-sm mt-3">
+          {/* Internal markup note */}
+          <p className="text-xs mt-3 mb-2 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
+            Markup % is internal only — not shown on client invoice or download.
+          </p>
+          <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Description', 'Qty', 'Unit price', 'Total'].map(h => (
-                  <th key={h} className="pb-2 text-left text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                {['Description', 'Base cost', 'Markup %', 'Client total'].map(h => (
+                  <th key={h} className={`pb-2 text-xs font-medium ${h === 'Description' ? 'text-left' : 'text-right'}`} style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {(invoice.invoice_line_items ?? []).sort((a: LineItem, b: LineItem) => a.sort_order - b.sort_order).map((l: LineItem) => (
-                <tr key={l.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td className="py-2" style={{ color: 'var(--text-primary)' }}>{l.description}</td>
-                  <td className="py-2 text-right" style={{ color: 'var(--text-muted)' }}>{l.quantity}</td>
-                  <td className="py-2 text-right" style={{ color: 'var(--text-muted)' }}>{GBP(l.unit_price_gbp)}</td>
-                  <td className="py-2 text-right font-medium" style={{ color: 'var(--text-primary)' }}>{GBP(l.total_gbp)}</td>
-                </tr>
-              ))}
+              {items.map((l: LineItem) => {
+                const mkpPct    = getMarkup(l)
+                const clientTot = l.total_gbp * (1 + mkpPct / 100)
+                return (
+                  <tr key={l.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td className="py-2 pr-4" style={{ color: 'var(--text-primary)' }}>{l.description}</td>
+                    <td className="py-2 text-right" style={{ color: 'var(--text-muted)' }}>{GBP(l.total_gbp)}</td>
+                    <td className="py-2 text-right">
+                      <input
+                        type="text" inputMode="decimal"
+                        value={markups[l.id] !== undefined ? markups[l.id] : String(l.markup_pct ?? 15)}
+                        onChange={e => { if (/^[\d.]*$/.test(e.target.value)) setMarkups(m => ({ ...m, [l.id]: e.target.value })) }}
+                        className="w-16 text-right px-2 py-0.5 rounded border text-xs"
+                        style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      />
+                      <span className="ml-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>%</span>
+                    </td>
+                    <td className="py-2 text-right font-medium" style={{ color: 'var(--text-primary)' }}>{GBP(clientTot)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
             <tfoot>
+              <tr style={{ borderTop: '1px solid var(--border)' }}>
+                <td colSpan={3} className="pt-2.5 pb-1 text-right text-xs" style={{ color: 'var(--text-muted)' }}>Subtotal</td>
+                <td className="pt-2.5 pb-1 text-right text-xs" style={{ color: 'var(--text-primary)' }}>{GBP(subtotal)}</td>
+              </tr>
               <tr>
-                <td colSpan={3} className="pt-3 text-right font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Total</td>
-                <td className="pt-3 text-right font-bold" style={{ color: 'var(--text-primary)' }}>{GBP(total)}</td>
+                <td colSpan={3} className="py-1 text-right text-xs" style={{ color: 'var(--text-muted)' }}>VAT (20%)</td>
+                <td className="py-1 text-right text-xs" style={{ color: 'var(--text-primary)' }}>{GBP(vat)}</td>
+              </tr>
+              <tr style={{ borderTop: '1px solid var(--border)' }}>
+                <td colSpan={3} className="pt-2.5 text-right font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Total due</td>
+                <td className="pt-2.5 text-right font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{GBP(grandTotal)}</td>
               </tr>
             </tfoot>
           </table>
@@ -773,6 +829,19 @@ function InvoiceCard({ invoice, companies, setInvoices }: any) {
             {invoice.status === 'draft' && <button onClick={() => updateStatus('sent')} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#f59e0b' }}>Mark sent</button>}
             {invoice.status === 'sent'  && <button onClick={() => updateStatus('paid')} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#10b981' }}>Mark paid</button>}
             {invoice.status !== 'draft' && <button onClick={() => updateStatus('draft')} className="px-3 py-1.5 rounded-lg text-xs" style={{ color: 'var(--text-muted)' }}>Revert to draft</button>}
+            {hasUnsaved && (
+              <button onClick={saveMarkups} disabled={savingMkp} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: 'var(--accent)' }}>
+                {savingMkp ? 'Saving…' : 'Save markups'}
+              </button>
+            )}
+            <a
+              href={`/api/admin/costs/invoices/${invoice.id}/download`}
+              target="_blank" rel="noreferrer"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+            >
+              <Download size={12} /> Download
+            </a>
           </div>
         </div>
       )}

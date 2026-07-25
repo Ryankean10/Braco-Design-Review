@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
       description: `AI API usage (${(totalTokens / 1000).toFixed(0)}k tokens, ${usage.length} calls)`,
       quantity: 1,
       unit_price_gbp: Math.round(totalCostGbp * 100) / 100,
+      markup_pct: 15,
       sort_order: order++,
     })
   }
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
         description: `Developer time — ${dev} (${hours}hrs @ £${rate}/hr)`,
         quantity: hours,
         unit_price_gbp: rate,
+        markup_pct: 15,
         sort_order: order++,
       })
     }
@@ -97,6 +99,7 @@ export async function POST(req: NextRequest) {
         description: `Hardware — ${h.name} (amortised 1/${h.amortise_months} months)`,
         quantity: 1,
         unit_price_gbp: Math.round((h.amount_gbp / h.amortise_months) * 100) / 100,
+        markup_pct: 15,
         sort_order: order++,
       })
     } else if (h.purchase_date >= period_start && h.purchase_date <= period_end) {
@@ -105,6 +108,7 @@ export async function POST(req: NextRequest) {
         description: `Hardware — ${h.name}`,
         quantity: 1,
         unit_price_gbp: h.amount_gbp,
+        markup_pct: 15,
         sort_order: order++,
       })
     }
@@ -126,6 +130,7 @@ export async function POST(req: NextRequest) {
       description: `${sub.name} (${a.allocation_pct}% allocation)`,
       quantity: 1,
       unit_price_gbp: Math.round(allocated * 100) / 100,
+      markup_pct: 15,
       sort_order: order++,
     })
   }
