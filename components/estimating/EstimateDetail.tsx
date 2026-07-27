@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { Plus, Trash2, Download, Send, AlertTriangle, BookOpen, Sparkles, Loader2, Check, FileText, X, CheckCircle2, XCircle } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Plus, Trash2, Download, Send, AlertTriangle, BookOpen, Sparkles, Loader2, Check, FileText, X, CheckCircle2, XCircle, GitBranch, RotateCcw, Clock } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface EstimateItem {
@@ -29,7 +30,12 @@ interface Estimate {
   id: string; title: string; description: string | null; client_name: string | null; client_email: string | null
   reference: string; status: string; start_date: string | null; end_date: string | null
   notes: string | null; default_markup_pct: number; estimate_items: EstimateItem[]
-  project_id: string | null
+  project_id: string | null; revision: number; root_estimate_id: string | null
+}
+interface ClashData {
+  people: Record<string, { reference: string; title: string }[]>
+  plant:  Record<string, { reference: string; title: string }[]>
+  noDateRange?: boolean
 }
 
 const GBP = (n: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n)
@@ -55,14 +61,17 @@ export default function EstimateDetail({
 }) {
   const [estimate, setEstimate]         = useState(init)
   const [items, setItems]               = useState<EstimateItem[]>(init.estimate_items ?? [])
-  const [tab, setTab]                   = useState<'materials' | 'manpower' | 'plant' | 'other' | 'documents' | 'preview'>('materials')
+  const [tab, setTab]                   = useState<'materials' | 'manpower' | 'plant' | 'other' | 'documents' | 'preview' | 'revisions'>('materials')
   const [saving, setSaving]             = useState(false)
   const [sendEmail, setSendEmail]       = useState(init.client_email ?? '')
   const [sending, setSending]           = useState(false)
   const [sentOk, setSentOk]             = useState(false)
   const [sendError, setSendError]       = useState('')
   const [changingStatus, setChangingStatus] = useState(false)
+  const [revisioning, setRevisioning]   = useState(false)
+  const [clashes, setClashes]           = useState<ClashData>({ people: {}, plant: {} })
   const [headerOpen, setHeaderOpen]     = useState(false)
+  const router = useRouter()
   const [bulkMarkup, setBulkMarkup]     = useState('')
   const [applyingMarkup, setApplyingMarkup] = useState(false)
   const [header, setHeader]             = useState({
@@ -73,18 +82,6 @@ export default function EstimateDetail({
   })
 
   const defaultMarkup = estimate.default_markup_pct ?? 15
-
-  async function saveHeader() {
-    setSaving(true)
-    const patch = { ...header, project_id: header.project_id || null }
-    const res = await fetch(`/api/estimating/${estimate.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    })
-    const { data } = await res.json()
-    if (data) { setEstimate(e => ({ ...e, ...data })); setHeaderOpen(false) }
-    setSaving(false)
-  }
 
   async function addItem(section: EstimateItem['section'], partial: Partial<EstimateItem>) {
     const body = { section, description: '', quantity: 1, unit: 'item', unit_cost: 0, markup_pct: defaultMarkup, ...partial }
@@ -155,6 +152,35 @@ export default function EstimateDetail({
     setChangingStatus(false)
   }
 
+  async function createRevision() {
+    setRevisioning(true)
+    const res = await fetch(`/api/estimating/${estimate.id}/revise`, { method: 'POST' })
+    const { id, error } = await res.json()
+    if (id) router.push(`/estimating/${id}`)
+    else { alert(error ?? 'Failed to create revision'); setRevisioning(false) }
+  }
+
+  const loadClashes = useCallback(async () => {
+    const res = await fetch(`/api/estimating/${estimate.id}/clashes`)
+    const data = await res.json()
+    setClashes(data)
+  }, [estimate.id])
+
+  useEffect(() => { loadClashes() }, [loadClashes])
+
+  // Reload clashes when dates change after a save
+  async function saveHeader() {
+    setSaving(true)
+    const patch = { ...header, project_id: header.project_id || null }
+    const res = await fetch(`/api/estimating/${estimate.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    const { data } = await res.json()
+    if (data) { setEstimate(e => ({ ...e, ...data })); setHeaderOpen(false); loadClashes() }
+    setSaving(false)
+  }
+
   async function applyBulkMarkup() {
     const pct = parseFloat(bulkMarkup)
     if (isNaN(pct)) return
@@ -198,6 +224,7 @@ export default function EstimateDetail({
     { key: 'other',     label: 'Other' },
     { key: 'documents', label: 'Documents' },
     { key: 'preview',   label: 'Preview & Send' },
+    { key: 'revisions', label: `Revisions${estimate.revision > 1 ? ` (Rev.${estimate.revision})` : ''}` },
   ]
 
   return (
@@ -245,6 +272,23 @@ export default function EstimateDetail({
                     className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg text-white"
                     style={{ background: '#ef4444' }}>
                     <XCircle size={10} /> Reject
+                  </button>
+                </>
+              )}
+              {estimate.status !== 'draft' && (
+                <>
+                  <button
+                    onClick={() => changeStatus('draft')} disabled={changingStatus}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                    <RotateCcw size={10} /> Revert to draft
+                  </button>
+                  <button
+                    onClick={createRevision} disabled={revisioning}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg text-white"
+                    style={{ background: 'var(--accent)' }}>
+                    {revisioning ? <Loader2 size={10} className="animate-spin" /> : <GitBranch size={10} />}
+                    New revision
                   </button>
                 </>
               )}
@@ -332,9 +376,11 @@ export default function EstimateDetail({
           items={sectionItems('labour')}
           people={people}
           getClashes={getClashes}
-          onAdd={(personId, name, rate) => addItem('labour', { person_id: personId, description: name, unit: 'day', unit_cost: rate })}
+          estimateClashes={clashes.people}
+          onAdd={(personId, name, rate) => addItem('labour', { person_id: personId, description: name, unit: 'hr', unit_cost: rate })}
           onUpdate={updateItem} onRemove={removeItem}
           estimateId={estimate.id} defaultMarkup={defaultMarkup}
+          noDateRange={clashes.noDateRange}
         />
       )}
       {tab === 'plant' && (
@@ -345,10 +391,13 @@ export default function EstimateDetail({
           estimateId={estimate.id} defaultMarkup={defaultMarkup}
           jobLibrary={[]} onImport={importFromLibrary}
           showHire plantAssets={plantAssets}
+          plantClashes={clashes.plant}
+          noDateRange={clashes.noDateRange}
           onAddPlant={(asset, days) => addItem('plant', {
             description: asset.name, quantity: days, unit: 'day',
-            unit_cost: asset.hire_rate_daily ?? 0, is_hire: true,
-          })}
+            unit_cost: asset.hire_rate_daily ?? (asset.hire_rate_weekly ? asset.hire_rate_weekly / 7 : 0),
+            is_hire: true, plant_item_id: asset.id,
+          } as any)}
         />
       )}
       {tab === 'other' && (
@@ -362,6 +411,9 @@ export default function EstimateDetail({
       )}
       {tab === 'documents' && (
         <DocumentsSection estimateId={estimate.id} defaultMarkup={defaultMarkup} onItemsAdded={newItems => setItems(prev => [...prev, ...newItems])} />
+      )}
+      {tab === 'revisions' && (
+        <RevisionsSection estimateId={estimate.id} currentRevision={estimate.revision} />
       )}
       {tab === 'preview' && (
         <PreviewSection
@@ -377,12 +429,14 @@ export default function EstimateDetail({
 }
 
 // ── Items section (Materials / Plant / Other) ──────────────────────────────────
-function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estimateId, defaultMarkup, jobLibrary, onImport, showExtract, showHire, plantAssets, onAddPlant }: {
+function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estimateId, defaultMarkup, jobLibrary, onImport, showExtract, showHire, plantAssets, onAddPlant, plantClashes, noDateRange }: {
   section: EstimateItem['section']; label: string; items: EstimateItem[]
   onAdd: () => void; onUpdate: (id: string, p: Partial<EstimateItem>) => void; onRemove: (id: string) => void
   estimateId: string; defaultMarkup: number; jobLibrary: JobLibraryJob[]; onImport: (j: JobLibraryJob) => void
   showExtract?: boolean; showHire?: boolean
   plantAssets?: PlantAsset[]; onAddPlant?: (asset: PlantAsset, days: number) => void
+  plantClashes?: Record<string, { reference: string; title: string }[]>
+  noDateRange?: boolean
 }) {
   const [libOpen, setLibOpen]         = useState(false)
   const [fleetOpen, setFleetOpen]     = useState(false)
@@ -462,16 +516,21 @@ function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estima
       {fleetOpen && plantAssets && (
         <div className="rounded-xl border p-3 space-y-2" style={{ background: 'var(--bg-surface)', borderColor: 'var(--accent)' }}>
           <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Select plant from fleet:</p>
+          {noDateRange && <p className="text-xs" style={{ color: '#f59e0b' }}>⚠ Add dates to see availability clashes.</p>}
           <div className="flex gap-2 items-center flex-wrap">
             <select
               value={selectedPlant} onChange={e => setSelectedPlant(e.target.value)}
               style={{ flex: 1, minWidth: 200, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 13, colorScheme: 'dark' }}>
               <option value="">Select asset…</option>
-              {plantAssets.map(a => (
-                <option key={a.id} value={a.id}>
-                  {a.name} {a.hire_rate_daily ? `— £${a.hire_rate_daily}/day` : ''}
-                </option>
-              ))}
+              {plantAssets.map(a => {
+                const clash = plantClashes?.[a.id]
+                const rate = a.hire_rate_daily ? `£${a.hire_rate_daily}/day` : a.hire_rate_weekly ? `£${a.hire_rate_weekly}/wk` : 'no rate'
+                return (
+                  <option key={a.id} value={a.id}>
+                    {a.name} — {rate}{clash ? ` ⚠ CLASH (${clash.map(c => c.reference).join(', ')})` : ''}
+                  </option>
+                )
+              })}
             </select>
             <div className="flex items-center gap-1">
               <input
@@ -525,7 +584,8 @@ function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estima
           </thead>
           <tbody>
             {items.map(item => (
-              <ItemRow key={item.id} item={item} onUpdate={onUpdate} onRemove={onRemove} showHire={showHire} />
+              <ItemRow key={item.id} item={item} onUpdate={onUpdate} onRemove={onRemove} showHire={showHire}
+                clashRefs={(item as any).plant_item_id ? (plantClashes?.[(item as any).plant_item_id] ?? []).map((c: any) => c.reference) : []} />
             ))}
             {items.length === 0 && (
               <tr><td colSpan={showHire ? 8 : 7} className="px-3 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No items yet. Add one or use AI extract.</td></tr>
@@ -547,8 +607,8 @@ function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estima
 }
 
 // ── Inline editable row ────────────────────────────────────────────────────────
-function ItemRow({ item, onUpdate, onRemove, showHire }: {
-  item: EstimateItem; onUpdate: (id: string, p: Partial<EstimateItem>) => void; onRemove: (id: string) => void; showHire?: boolean
+function ItemRow({ item, onUpdate, onRemove, showHire, clashRefs = [] }: {
+  item: EstimateItem; onUpdate: (id: string, p: Partial<EstimateItem>) => void; onRemove: (id: string) => void; showHire?: boolean; clashRefs?: string[]
 }) {
   const [qty, setQty]   = useState(String(item.quantity))
   const [cost, setCost] = useState(String(item.unit_cost))
@@ -571,6 +631,9 @@ function ItemRow({ item, onUpdate, onRemove, showHire }: {
           onChange={e => onUpdate(item.id, { description: e.target.value })}
           placeholder="Description…"
         />
+        {clashRefs.length > 0 && (
+          <p className="text-[10px] mt-0.5" style={{ color: '#ef4444' }}>⚠ Also on: {clashRefs.join(', ')}</p>
+        )}
       </td>
       {showHire && (
         <td className="px-3 py-1.5 text-center">
@@ -611,11 +674,12 @@ function ItemRow({ item, onUpdate, onRemove, showHire }: {
 }
 
 // ── Manpower section ───────────────────────────────────────────────────────────
-function ManpowerSection({ items, people, getClashes, onAdd, onUpdate, onRemove, estimateId, defaultMarkup }: {
+function ManpowerSection({ items, people, getClashes, estimateClashes, onAdd, onUpdate, onRemove, estimateId, defaultMarkup, noDateRange }: {
   items: EstimateItem[]; people: Person[]; getClashes: (id: string) => Holiday[]
+  estimateClashes: Record<string, { reference: string; title: string }[]>
   onAdd: (personId: string, name: string, rate: number) => void
   onUpdate: (id: string, p: Partial<EstimateItem>) => void; onRemove: (id: string) => void
-  estimateId: string; defaultMarkup: number
+  estimateId: string; defaultMarkup: number; noDateRange?: boolean
 }) {
   const [selectedPerson, setSelectedPerson] = useState('')
   const sectionTotal = items.reduce((s, i) => s + clientTotal(i), 0)
@@ -629,6 +693,11 @@ function ManpowerSection({ items, people, getClashes, onAdd, onUpdate, onRemove,
 
   return (
     <div className="space-y-3">
+      {noDateRange && (
+        <p className="text-xs px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
+          ⚠ Add start &amp; end dates in Edit details to enable clash detection.
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
           Manpower — {items.length} people · {GBP(sectionTotal)} (client total)
@@ -639,7 +708,10 @@ function ManpowerSection({ items, people, getClashes, onAdd, onUpdate, onRemove,
             onChange={e => setSelectedPerson(e.target.value)}
             style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 13, colorScheme: 'dark' }}>
             <option value="">Select person…</option>
-            {people.map(p => <option key={p.id} value={p.id}>{p.name} — {p.role} {p.standard_rate ? `(£${p.standard_rate}/day)` : ''}</option>)}
+            {people.map(p => {
+              const clash = estimateClashes[p.id]
+              return <option key={p.id} value={p.id}>{p.name} — {p.role}{p.standard_rate ? ` (£${p.standard_rate}/hr)` : ''}{clash ? ' ⚠ CLASH' : ''}</option>
+            })}
           </select>
           <button onClick={addPerson} disabled={!selectedPerson} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: 'var(--accent)', opacity: selectedPerson ? 1 : 0.5 }}>
             <Plus size={11} /> Add
@@ -651,16 +723,17 @@ function ManpowerSection({ items, people, getClashes, onAdd, onUpdate, onRemove,
         <table className="w-full text-sm">
           <thead>
             <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-              {['Name / Role', 'Days', 'Day rate', 'Markup %', 'Client total', ''].map(h => (
+              {['Name / Role', 'Hours', 'Hourly rate', 'Markup %', 'Client total', ''].map(h => (
                 <th key={h} className={`px-3 py-2.5 text-xs font-medium ${h ? 'text-right' : 'text-left'} first:text-left`} style={{ color: 'var(--text-muted)' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {items.map(item => {
-              const clashes = item.person_id ? getClashes(item.person_id) : []
+              const holidayClashes = item.person_id ? getClashes(item.person_id) : []
+              const estClashes = item.person_id ? (estimateClashes[item.person_id] ?? []) : []
               return (
-                <ManpowerRow key={item.id} item={item} clashes={clashes} onUpdate={onUpdate} onRemove={onRemove} />
+                <ManpowerRow key={item.id} item={item} clashes={holidayClashes} estimateClashes={estClashes} onUpdate={onUpdate} onRemove={onRemove} />
               )
             })}
             {items.length === 0 && (
@@ -682,8 +755,10 @@ function ManpowerSection({ items, people, getClashes, onAdd, onUpdate, onRemove,
   )
 }
 
-function ManpowerRow({ item, clashes, onUpdate, onRemove }: {
-  item: EstimateItem; clashes: Holiday[]; onUpdate: (id: string, p: Partial<EstimateItem>) => void; onRemove: (id: string) => void
+function ManpowerRow({ item, clashes, estimateClashes, onUpdate, onRemove }: {
+  item: EstimateItem; clashes: Holiday[]
+  estimateClashes: { reference: string; title: string }[]
+  onUpdate: (id: string, p: Partial<EstimateItem>) => void; onRemove: (id: string) => void
 }) {
   const [days, setDays]   = useState(String(item.quantity))
   const [rate, setRate]   = useState(String(item.unit_cost))
@@ -710,7 +785,12 @@ function ManpowerRow({ item, clashes, onUpdate, onRemove }: {
         </div>
         {showClash && clashes.length > 0 && (
           <div className="mt-1 text-xs px-2 py-1 rounded" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
-            ⚠ Holiday clash: {clashes.map(c => `${c.start_date} → ${c.end_date}`).join(', ')}
+            ⚠ Holiday: {clashes.map(c => `${c.start_date} → ${c.end_date}`).join(', ')}
+          </div>
+        )}
+        {estimateClashes.length > 0 && (
+          <div className="mt-1 text-xs px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+            ⚠ Also on: {estimateClashes.map(e => e.reference).join(', ')}
           </div>
         )}
       </td>
@@ -962,6 +1042,65 @@ function DocumentsSection({ estimateId, defaultMarkup, onItemsAdded }: {
       <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
         "Extract items" runs AI extraction and adds line items to the Materials tab.
       </p>
+    </div>
+  )
+}
+
+// ── Revisions section ─────────────────────────────────────────────────────────
+function RevisionsSection({ estimateId, currentRevision }: { estimateId: string; currentRevision: number }) {
+  const [revisions, setRevisions] = useState<any[]>([])
+  const [loading, setLoading]     = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/estimating/${estimateId}/revisions`)
+      .then(r => r.json())
+      .then(data => { setRevisions(Array.isArray(data) ? data : []); setLoading(false) })
+  }, [estimateId])
+
+  const STATUS_COLORS: Record<string, string> = { draft: '#94a3b8', sent: '#f59e0b', accepted: '#10b981', rejected: '#ef4444', void: '#6b7280' }
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin" style={{ color: 'var(--text-muted)' }} /></div>
+
+  if (revisions.length <= 1) {
+    return (
+      <div className="rounded-xl border border-dashed py-12 text-center" style={{ borderColor: 'var(--border)' }}>
+        <GitBranch size={28} className="mx-auto mb-3 opacity-30" style={{ color: 'var(--text-muted)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No revisions yet.</p>
+        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Use "New revision" to create a new version of this estimate.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>{revisions.length} revision{revisions.length !== 1 ? 's' : ''} in this estimate family — all versions remain accessible.</p>
+      {revisions.map((rev: any) => {
+        const subtotal = (rev.estimate_items ?? []).reduce((s: number, i: any) => s + i.total_cost * (1 + (i.markup_pct ?? 15) / 100), 0)
+        const grandTotal = subtotal * 1.20
+        const isCurrent = rev.revision === currentRevision && rev.id === estimateId
+        return (
+          <a key={rev.id} href={`/estimating/${rev.id}`}
+            className="flex items-center justify-between px-4 py-3 rounded-xl border hover:opacity-80"
+            style={{ background: isCurrent ? 'rgba(91,76,245,0.08)' : 'var(--bg-surface)', borderColor: isCurrent ? 'var(--accent)' : 'var(--border)' }}>
+            <div className="flex items-center gap-3">
+              <GitBranch size={14} style={{ color: isCurrent ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }} />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{rev.reference}</span>
+                  {isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>Current</span>}
+                </div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <Clock size={9} className="inline mr-1" />{new Date(rev.created_at).toLocaleDateString('en-GB')}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium text-white" style={{ background: STATUS_COLORS[rev.status] ?? '#94a3b8' }}>{rev.status}</span>
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{GBP(grandTotal)}</span>
+            </div>
+          </a>
+        )
+      })}
     </div>
   )
 }
