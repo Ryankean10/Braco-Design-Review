@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Plus, Trash2, Download, Send, AlertTriangle, ChevronDown, ChevronUp, BookOpen, Sparkles, Loader2, Check, FileText, X } from 'lucide-react'
+import { Plus, Trash2, Download, Send, AlertTriangle, BookOpen, Sparkles, Loader2, Check, FileText, X, CheckCircle2, XCircle } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface EstimateItem {
@@ -21,13 +21,15 @@ interface EstimateItem {
 }
 interface Person { id: string; name: string; role: string; standard_rate: number | null }
 interface Holiday { id: string; person_id: string; start_date: string; end_date: string; status: string }
-interface PlantAsset { id: string; name: string; category: string; hire_rate_daily: number | null }
+interface PlantAsset { id: string; name: string; category: string; hire_rate_daily: number | null; hire_rate_weekly: number | null }
 interface JobLibraryJob { id: string; name: string; category: string | null; job_library_items: JobLibraryItem[] }
 interface JobLibraryItem { id: string; section: string; description: string; quantity: number; unit: string; unit_cost: number; notes: string | null }
+interface Project { id: string; name: string; client: string | null }
 interface Estimate {
   id: string; title: string; description: string | null; client_name: string | null; client_email: string | null
   reference: string; status: string; start_date: string | null; end_date: string | null
   notes: string | null; default_markup_pct: number; estimate_items: EstimateItem[]
+  project_id: string | null
 }
 
 const GBP = (n: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n)
@@ -41,33 +43,43 @@ export default function EstimateDetail({
   people,
   holidays,
   jobLibrary,
+  projects,
+  plantAssets,
 }: {
   estimate: Estimate
   people: Person[]
   holidays: Holiday[]
   jobLibrary: JobLibraryJob[]
+  projects: Project[]
+  plantAssets: PlantAsset[]
 }) {
-  const [estimate, setEstimate]       = useState(init)
-  const [items, setItems]             = useState<EstimateItem[]>(init.estimate_items ?? [])
-  const [tab, setTab]                 = useState<'materials' | 'manpower' | 'plant' | 'other' | 'documents' | 'preview'>('materials')
-  const [saving, setSaving]           = useState(false)
-  const [sendEmail, setSendEmail]     = useState('')
-  const [sending, setSending]         = useState(false)
-  const [sentOk, setSentOk]           = useState(false)
-  const [headerOpen, setHeaderOpen]   = useState(false)
-  const [header, setHeader]           = useState({
+  const [estimate, setEstimate]         = useState(init)
+  const [items, setItems]               = useState<EstimateItem[]>(init.estimate_items ?? [])
+  const [tab, setTab]                   = useState<'materials' | 'manpower' | 'plant' | 'other' | 'documents' | 'preview'>('materials')
+  const [saving, setSaving]             = useState(false)
+  const [sendEmail, setSendEmail]       = useState(init.client_email ?? '')
+  const [sending, setSending]           = useState(false)
+  const [sentOk, setSentOk]             = useState(false)
+  const [sendError, setSendError]       = useState('')
+  const [changingStatus, setChangingStatus] = useState(false)
+  const [headerOpen, setHeaderOpen]     = useState(false)
+  const [bulkMarkup, setBulkMarkup]     = useState('')
+  const [applyingMarkup, setApplyingMarkup] = useState(false)
+  const [header, setHeader]             = useState({
     title: init.title, description: init.description ?? '', client_name: init.client_name ?? '',
     client_email: init.client_email ?? '', start_date: init.start_date ?? '', end_date: init.end_date ?? '',
     notes: init.notes ?? '', default_markup_pct: init.default_markup_pct,
+    project_id: init.project_id ?? '',
   })
 
   const defaultMarkup = estimate.default_markup_pct ?? 15
 
   async function saveHeader() {
     setSaving(true)
+    const patch = { ...header, project_id: header.project_id || null }
     const res = await fetch(`/api/estimating/${estimate.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(header),
+      body: JSON.stringify(patch),
     })
     const { data } = await res.json()
     if (data) { setEstimate(e => ({ ...e, ...data })); setHeaderOpen(false) }
@@ -114,13 +126,48 @@ export default function EstimateDetail({
   }
 
   async function sendEstimate() {
-    if (!sendEmail) return
+    const to = sendEmail || estimate.client_email
+    if (!to) return
     setSending(true)
+    setSendError('')
     const res = await fetch(`/api/estimating/${estimate.id}/send`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: sendEmail }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to }),
     })
-    if (res.ok) { setSentOk(true); setEstimate(e => ({ ...e, status: 'sent' })); setTimeout(() => setSentOk(false), 4000) }
+    const body = await res.json()
+    if (res.ok) {
+      setSentOk(true)
+      setEstimate(e => ({ ...e, status: 'sent' }))
+      setTimeout(() => setSentOk(false), 4000)
+    } else {
+      setSendError(body?.error ?? 'Failed to send — check Resend API key and from address.')
+    }
     setSending(false)
+  }
+
+  async function changeStatus(status: string) {
+    setChangingStatus(true)
+    const res = await fetch(`/api/estimating/${estimate.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+    })
+    const { data } = await res.json()
+    if (data) setEstimate(e => ({ ...e, status }))
+    setChangingStatus(false)
+  }
+
+  async function applyBulkMarkup() {
+    const pct = parseFloat(bulkMarkup)
+    if (isNaN(pct)) return
+    setApplyingMarkup(true)
+    const updated = items.map(i => ({ ...i, markup_pct: pct, total_cost: i.quantity * i.unit_cost }))
+    setItems(updated)
+    // Persist all in parallel
+    await Promise.all(updated.map(i =>
+      fetch(`/api/estimating/${estimate.id}/items/${i.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ markup_pct: pct }),
+      })
+    ))
+    setBulkMarkup('')
+    setApplyingMarkup(false)
   }
 
   // Holiday clash check
@@ -175,9 +222,35 @@ export default function EstimateDetail({
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total (inc. VAT)</p>
               <p className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{GBP(grandTotal)}</p>
             </div>
-            <button onClick={() => setHeaderOpen(o => !o)} className="text-xs px-2.5 py-1 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-              {headerOpen ? 'Close' : 'Edit details'}
-            </button>
+            <div className="flex gap-2 flex-wrap justify-end">
+              {estimate.status === 'draft' && (
+                <button
+                  onClick={() => setTab('preview')}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg text-white"
+                  style={{ background: '#f59e0b' }}>
+                  <Send size={10} /> Send to client
+                </button>
+              )}
+              {estimate.status === 'sent' && (
+                <>
+                  <button
+                    onClick={() => changeStatus('accepted')} disabled={changingStatus}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg text-white"
+                    style={{ background: '#10b981' }}>
+                    <CheckCircle2 size={10} /> Accept
+                  </button>
+                  <button
+                    onClick={() => changeStatus('rejected')} disabled={changingStatus}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg text-white"
+                    style={{ background: '#ef4444' }}>
+                    <XCircle size={10} /> Reject
+                  </button>
+                </>
+              )}
+              <button onClick={() => setHeaderOpen(o => !o)} className="text-xs px-2.5 py-1 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                {headerOpen ? 'Close' : 'Edit details'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -185,17 +258,47 @@ export default function EstimateDetail({
           <div className="mt-4 pt-4 border-t space-y-3" style={{ borderColor: 'var(--border)' }}>
             <div className="grid grid-cols-2 gap-3">
               <EField label="Title"><input value={header.title} onChange={e => setHeader(h => ({ ...h, title: e.target.value }))} /></EField>
-              <EField label="Default markup %"><input type="text" inputMode="decimal" value={header.default_markup_pct} onChange={e => setHeader(h => ({ ...h, default_markup_pct: parseFloat(e.target.value) || 15 }))} /></EField>
+              <EField label="Default markup % (new items)">
+                <input type="text" inputMode="decimal" value={header.default_markup_pct} onChange={e => setHeader(h => ({ ...h, default_markup_pct: parseFloat(e.target.value) || 15 }))} />
+              </EField>
               <EField label="Client name"><input value={header.client_name} onChange={e => setHeader(h => ({ ...h, client_name: e.target.value }))} /></EField>
               <EField label="Client email"><input type="email" value={header.client_email} onChange={e => setHeader(h => ({ ...h, client_email: e.target.value }))} /></EField>
               <EField label="Start date"><input type="date" value={header.start_date} onChange={e => setHeader(h => ({ ...h, start_date: e.target.value }))} /></EField>
               <EField label="End date"><input type="date" value={header.end_date} onChange={e => setHeader(h => ({ ...h, end_date: e.target.value }))} /></EField>
+              {projects.length > 0 && (
+                <EField label="Linked project" className="col-span-2">
+                  <select
+                    value={header.project_id}
+                    onChange={e => setHeader(h => ({ ...h, project_id: e.target.value }))}
+                    style={{ width: '100%', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 13, colorScheme: 'dark' }}>
+                    <option value="">— no project —</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.client ? ` (${p.client})` : ''}</option>)}
+                  </select>
+                </EField>
+              )}
               <EField label="Description" className="col-span-2"><textarea rows={2} value={header.description} onChange={e => setHeader(h => ({ ...h, description: e.target.value }))} /></EField>
               <EField label="Notes" className="col-span-2"><textarea rows={2} value={header.notes} onChange={e => setHeader(h => ({ ...h, notes: e.target.value }))} /></EField>
             </div>
-            <button onClick={saveHeader} disabled={saving} className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: 'var(--accent)' }}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={saveHeader} disabled={saving} className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: 'var(--accent)' }}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <div className="flex items-center gap-2 border-l pl-3 ml-1" style={{ borderColor: 'var(--border)' }}>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Apply markup to all items:</span>
+                <input
+                  type="text" inputMode="decimal" value={bulkMarkup}
+                  onChange={e => { if (/^[\d.]*$/.test(e.target.value)) setBulkMarkup(e.target.value) }}
+                  placeholder="e.g. 20" className="w-16 px-2 py-1 rounded-lg border text-sm text-center"
+                  style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>%</span>
+                <button
+                  onClick={applyBulkMarkup} disabled={!bulkMarkup || applyingMarkup}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium text-white"
+                  style={{ background: 'var(--accent)', opacity: !bulkMarkup || applyingMarkup ? 0.5 : 1 }}>
+                  {applyingMarkup ? 'Applying…' : 'Apply'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -240,7 +343,11 @@ export default function EstimateDetail({
           onUpdate={updateItem} onRemove={removeItem}
           estimateId={estimate.id} defaultMarkup={defaultMarkup}
           jobLibrary={[]} onImport={importFromLibrary}
-          showHire
+          showHire plantAssets={plantAssets}
+          onAddPlant={(asset, days) => addItem('plant', {
+            description: asset.name, quantity: days, unit: 'day',
+            unit_cost: asset.hire_rate_daily ?? 0, is_hire: true,
+          })}
         />
       )}
       {tab === 'other' && (
@@ -260,8 +367,8 @@ export default function EstimateDetail({
           items={items}
           estimateId={estimate.id}
           clientEmail={estimate.client_email ?? ''}
-          sendEmail={sendEmail} setSendEmail={setSendEmail}
-          onSend={sendEstimate} sending={sending} sentOk={sentOk}
+          sendEmail={sendEmail} setSendEmail={e => { setSendEmail(e); setSendError('') }}
+          onSend={sendEstimate} sending={sending} sentOk={sentOk} sendError={sendError}
         />
       )}
     </div>
@@ -269,16 +376,20 @@ export default function EstimateDetail({
 }
 
 // ── Items section (Materials / Plant / Other) ──────────────────────────────────
-function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estimateId, defaultMarkup, jobLibrary, onImport, showExtract, showHire }: {
+function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estimateId, defaultMarkup, jobLibrary, onImport, showExtract, showHire, plantAssets, onAddPlant }: {
   section: EstimateItem['section']; label: string; items: EstimateItem[]
   onAdd: () => void; onUpdate: (id: string, p: Partial<EstimateItem>) => void; onRemove: (id: string) => void
   estimateId: string; defaultMarkup: number; jobLibrary: JobLibraryJob[]; onImport: (j: JobLibraryJob) => void
   showExtract?: boolean; showHire?: boolean
+  plantAssets?: PlantAsset[]; onAddPlant?: (asset: PlantAsset, days: number) => void
 }) {
-  const [libOpen, setLibOpen]       = useState(false)
-  const [extracting, setExtracting] = useState(false)
-  const [extractMsg, setExtractMsg] = useState('')
-  const fileRef                     = useRef<HTMLInputElement>(null)
+  const [libOpen, setLibOpen]         = useState(false)
+  const [fleetOpen, setFleetOpen]     = useState(false)
+  const [selectedPlant, setSelectedPlant] = useState('')
+  const [plantDays, setPlantDays]     = useState('1')
+  const [extracting, setExtracting]   = useState(false)
+  const [extractMsg, setExtractMsg]   = useState('')
+  const fileRef                       = useRef<HTMLInputElement>(null)
 
   const sectionTotal = items.reduce((s, i) => s + clientTotal(i), 0)
 
@@ -327,6 +438,11 @@ function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estima
               </button>
             </>
           )}
+          {plantAssets && plantAssets.length > 0 && (
+            <button onClick={() => setFleetOpen(o => !o)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+              <Plus size={11} /> From fleet
+            </button>
+          )}
           {jobLibrary.length > 0 && (
             <button onClick={() => setLibOpen(o => !o)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
               <BookOpen size={11} /> Import from library
@@ -340,6 +456,41 @@ function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estima
 
       {extractMsg && (
         <p className="text-xs px-3 py-2 rounded-lg" style={{ background: 'rgba(91,76,245,0.1)', color: 'var(--accent)' }}>{extractMsg}</p>
+      )}
+
+      {fleetOpen && plantAssets && (
+        <div className="rounded-xl border p-3 space-y-2" style={{ background: 'var(--bg-surface)', borderColor: 'var(--accent)' }}>
+          <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Select plant from fleet:</p>
+          <div className="flex gap-2 items-center flex-wrap">
+            <select
+              value={selectedPlant} onChange={e => setSelectedPlant(e.target.value)}
+              style={{ flex: 1, minWidth: 200, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 13, colorScheme: 'dark' }}>
+              <option value="">Select asset…</option>
+              {plantAssets.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.name} {a.hire_rate_daily ? `— £${a.hire_rate_daily}/day` : ''}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center gap-1">
+              <input
+                type="number" min="1" value={plantDays} onChange={e => setPlantDays(e.target.value)}
+                className="w-16 px-2 py-1.5 rounded-lg border text-xs text-center"
+                style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>days</span>
+            </div>
+            <button
+              disabled={!selectedPlant}
+              onClick={() => {
+                const asset = plantAssets.find(a => a.id === selectedPlant)
+                if (asset && onAddPlant) { onAddPlant(asset, parseFloat(plantDays) || 1); setSelectedPlant(''); setFleetOpen(false) }
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+              style={{ background: 'var(--accent)', opacity: selectedPlant ? 1 : 0.5 }}>
+              Add
+            </button>
+          </div>
+        </div>
       )}
 
       {libOpen && (
@@ -586,10 +737,10 @@ function ManpowerRow({ item, clashes, onUpdate, onRemove }: {
 }
 
 // ── Preview & Send ─────────────────────────────────────────────────────────────
-function PreviewSection({ items, estimateId, clientEmail, sendEmail, setSendEmail, onSend, sending, sentOk }: {
+function PreviewSection({ items, estimateId, clientEmail, sendEmail, setSendEmail, onSend, sending, sentOk, sendError }: {
   items: EstimateItem[]; estimateId: string; clientEmail: string
   sendEmail: string; setSendEmail: (v: string) => void
-  onSend: () => void; sending: boolean; sentOk: boolean
+  onSend: () => void; sending: boolean; sentOk: boolean; sendError: string
 }) {
   const sections = [
     { key: 'material' as const, label: 'Materials' },
@@ -647,6 +798,9 @@ function PreviewSection({ items, estimateId, clientEmail, sendEmail, setSendEmai
       <p className="text-xs px-2 py-1.5 rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
         Markup % is internal only — the download and email show client totals only.
       </p>
+      {sendError && (
+        <p className="text-xs px-3 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>⚠ {sendError}</p>
+      )}
 
       <div className="flex gap-3 flex-wrap">
         <a
@@ -664,9 +818,9 @@ function PreviewSection({ items, estimateId, clientEmail, sendEmail, setSendEmai
             style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           />
           <button
-            onClick={onSend} disabled={sending || !sendEmail}
+            onClick={onSend} disabled={sending || !(sendEmail || clientEmail)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
-            style={{ background: sentOk ? '#10b981' : 'var(--accent)', opacity: (!sendEmail || sending) ? 0.6 : 1 }}>
+            style={{ background: sentOk ? '#10b981' : 'var(--accent)', opacity: (!(sendEmail || clientEmail) || sending) ? 0.6 : 1 }}>
             {sentOk ? <><Check size={14} /> Sent!</> : sending ? <><Loader2 size={14} className="animate-spin" /> Sending…</> : <><Send size={14} /> Send to client</>}
           </button>
         </div>

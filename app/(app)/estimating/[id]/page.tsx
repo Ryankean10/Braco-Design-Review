@@ -42,12 +42,12 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
     .eq('company_id', companyId)
     .eq('status', 'Approved')
 
-  // Fetch job library
-  const { data: jobLibrary } = await admin
-    .from('job_library')
-    .select('*, job_library_items(*)')
-    .eq('company_id', companyId)
-    .order('name')
+  // Fetch job library, projects, and plant fleet
+  const [{ data: jobLibrary }, { data: projects }, { data: plantAssets }] = await Promise.all([
+    admin.from('job_library').select('*, job_library_items(*)').eq('company_id', companyId).order('name'),
+    admin.from('projects').select('id, name, client').eq('company_id', companyId).order('name'),
+    admin.from('plant_items').select('id, name, category, hire_rate_daily, hire_rate_weekly').eq('company_id', companyId).order('name'),
+  ])
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-4">
@@ -59,6 +59,8 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
         people={people ?? []}
         holidays={holidays ?? []}
         jobLibrary={jobLibrary ?? []}
+        projects={projects ?? []}
+        plantAssets={plantAssets ?? []}
       />
     </div>
   )

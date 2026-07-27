@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
@@ -45,7 +47,7 @@ export default async function TeamPage() {
         projects={projects ?? []}
         sites={sites ?? []}
         currentUserId={user.id}
-        canEdit={['admin', 'engineer', 'project_manager'].includes(role)}
+        canEdit={['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)}
         userRole={role}
       />
     </Suspense>

@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen, TrendingUp, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen, TrendingUp, ShieldCheck, Calculator } from 'lucide-react'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -206,6 +207,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   const canEdit = ['admin', 'engineer'].includes(role)
 
+  // Fetch linked estimates
+  const adminSvc = createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
+  const { data: linkedEstimates } = await adminSvc
+    .from('estimates')
+    .select('id, reference, title, status, estimate_items(total_cost, markup_pct)')
+    .eq('project_id', id)
+    .order('created_at', { ascending: false })
+
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -255,6 +264,44 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         />
       </div>
 
+
+      {/* Estimates panel — only show if estimating module is on OR there are linked estimates */}
+      {(companyModules.includes('estimating') || (linkedEstimates ?? []).length > 0) && role !== 'client' && (
+        <div className="mb-6 rounded-xl border p-4" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Calculator size={16} style={{ color: 'var(--accent)' }} />
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Estimates</p>
+            </div>
+            <Link href={`/estimating`} className="text-xs" style={{ color: 'var(--accent)' }}>View all →</Link>
+          </div>
+          {(linkedEstimates ?? []).length === 0 ? (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No estimates linked to this project yet. Open an estimate and link it via Edit details.</p>
+          ) : (
+            <div className="space-y-2">
+              {(linkedEstimates ?? []).map((est: any) => {
+                const STATUS_COLORS: Record<string, string> = { draft: '#94a3b8', sent: '#f59e0b', accepted: '#10b981', rejected: '#ef4444', void: '#6b7280' }
+                const clientTotal = (est.estimate_items ?? []).reduce((s: number, i: any) => s + i.total_cost * (1 + (i.markup_pct ?? 15) / 100), 0)
+                const grandTotal = clientTotal * 1.20
+                return (
+                  <Link key={est.id} href={`/estimating/${est.id}`}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg hover:opacity-80"
+                    style={{ background: 'var(--bg-base)' }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium text-white shrink-0" style={{ background: STATUS_COLORS[est.status] ?? '#94a3b8' }}>{est.status}</span>
+                      <span className="text-xs font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>{est.reference}</span>
+                      <span className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>{est.title}</span>
+                    </div>
+                    <span className="text-sm font-semibold shrink-0 ml-4" style={{ color: 'var(--text-primary)' }}>
+                      {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(grandTotal)}
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Feature panels */}
       <div className="grid grid-cols-2 gap-4 mb-6">
