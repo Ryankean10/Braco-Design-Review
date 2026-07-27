@@ -30,13 +30,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const buf = Buffer.from(await file.arrayBuffer())
   let docText = ''
 
+  const name = file.name.toLowerCase()
   try {
-    if (file.name.toLowerCase().endsWith('.pdf')) {
+    if (name.endsWith('.pdf')) {
       const { createRequire } = await import('module')
       const require = createRequire(import.meta.url)
       const pdfParse = require('pdf-parse/lib/pdf-parse.js')
       const parsed = await pdfParse(buf)
       docText = parsed.text.slice(0, 30000)
+    } else if (name.endsWith('.docx') || name.endsWith('.doc')) {
+      const mammoth = (await import('mammoth')).default
+      const result = await mammoth.extractRawText({ buffer: buf })
+      docText = result.value.slice(0, 30000)
     } else {
       docText = buf.toString('utf-8').slice(0, 30000)
     }

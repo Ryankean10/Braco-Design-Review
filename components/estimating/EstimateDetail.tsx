@@ -312,7 +312,7 @@ function ItemsSection({ section, label, items, onAdd, onUpdate, onRemove, estima
         <div className="flex gap-2">
           {showExtract && (
             <>
-              <input ref={fileRef} type="file" accept=".pdf,.txt,.csv" className="hidden"
+              <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt,.csv" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleExtract(f); e.target.value = '' }} />
               <button
                 onClick={() => fileRef.current?.click()} disabled={extracting}
