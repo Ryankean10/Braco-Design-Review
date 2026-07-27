@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
     system: buildSystemPrompt(industry),
     messages,
   })
-  logApiUsage({ companyId: null, endpoint: 'help-chat', model: response.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => {})
+  logApiUsage({ companyId, endpoint: 'help-chat', model: response.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => {})
 
   const rawText = response.content[0].type === 'text' ? response.content[0].text : ''
 
