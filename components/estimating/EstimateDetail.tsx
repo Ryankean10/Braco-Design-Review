@@ -139,7 +139,8 @@ export default function EstimateDetail({
       setEstimate(e => ({ ...e, status: 'sent' }))
       setTimeout(() => setSentOk(false), 4000)
     } else {
-      setSendError(body?.error ?? 'Failed to send — check Resend API key and from address.')
+      const errMsg = typeof body?.error === 'string' ? body.error : JSON.stringify(body?.error ?? body)
+      setSendError(errMsg || 'Failed to send — check Resend API key and from address.')
     }
     setSending(false)
   }

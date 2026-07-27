@@ -98,7 +98,7 @@ ${estimate.notes ? `<p style="margin-top:20px;font-size:12px;color:#555"><strong
     subject: `Estimate ${estimate.reference} — ${estimate.title}`,
     html,
   })
-  if (emailErr) return NextResponse.json({ error: String(emailErr) }, { status: 500 })
+  if (emailErr) return NextResponse.json({ error: (emailErr as any).message ?? String(emailErr) }, { status: 500 })
 
   // Mark as sent
   await admin.from('estimates').update({ status: 'sent', updated_at: new Date().toISOString() }).eq('id', id)
