@@ -707,9 +707,15 @@ function DocumentsSection({ estimateId, defaultMarkup, onItemsAdded }: {
     setExtractingId(doc.id)
     setMsgs(m => ({ ...m, [doc.id]: 'Extracting…' }))
     const res = await fetch(`/api/estimating/${estimateId}/documents/${doc.id}/extract`, { method: 'POST' })
-    const { items, error } = await res.json()
+    const json = await res.json()
+    const { items, error, _debug_docText } = json
     if (error) { setMsgs(m => ({ ...m, [doc.id]: `Error: ${error}` })); setExtractingId(null); return }
-    if (!items?.length) { setMsgs(m => ({ ...m, [doc.id]: 'No items found.' })); setExtractingId(null); return }
+    if (!items?.length) {
+      const preview = _debug_docText ? ` | Text extracted: "${_debug_docText.slice(0, 120)}"` : ' | No text extracted from file'
+      setMsgs(m => ({ ...m, [doc.id]: `No items found.${preview}` }))
+      setExtractingId(null)
+      return
+    }
     // Add extracted items via API
     const body = items.map((e: any, idx: number) => ({
       section: 'material', description: e.description ?? '', quantity: e.quantity ?? 1,
