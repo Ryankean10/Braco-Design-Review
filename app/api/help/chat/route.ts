@@ -82,7 +82,7 @@ Respond in plain conversational English, 2-4 sentences. At the END output a raw 
 }
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'MRRK <onboarding@resend.dev>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'MRRK <scotplantai@yacht-gitana.com>'
 
 async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug') {
   const apiKey = process.env.RESEND_API_KEY
@@ -168,13 +168,22 @@ export async function POST(req: NextRequest) {
   const { messages } = await req.json()
   if (!messages?.length) return NextResponse.json({ error: 'No messages' }, { status: 400 })
 
-  const companySlug = req.headers.get('x-company-slug') ?? 'braco'
-  const { data: company } = await supabase.from('companies').select('industry').eq('slug', companySlug).single()
-  const industry = (company as any)?.industry ?? 'bess'
+  // Use service-role client to bypass RLS when reading profile + company
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
 
-  const { data: profile } = await supabase.from('profiles').select('full_name, company_id').eq('id', user.id).maybeSingle()
+  const { data: profile } = await admin.from('profiles').select('full_name, company_id').eq('id', user.id).maybeSingle()
   const userName = (profile as any)?.full_name ?? user.email ?? 'Unknown user'
   const companyId: string | null = (profile as any)?.company_id ?? null
+
+  // Derive industry from the user's actual company, not the subdomain header
+  const { data: company } = companyId
+    ? await admin.from('companies').select('industry').eq('id', companyId).single()
+    : await admin.from('companies').select('industry').eq('slug', req.headers.get('x-company-slug') ?? 'braco').single()
+  const industry = (company as any)?.industry ?? 'bess'
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
