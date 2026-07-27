@@ -39,8 +39,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const parsed = await pdfParse(buf)
       docText = parsed.text.slice(0, 30000)
     } else if (name.endsWith('.docx') || name.endsWith('.doc')) {
-      const mammoth = (await import('mammoth')).default
+      const { createRequire } = await import('module')
+      const req2 = createRequire(import.meta.url)
+      const mammoth = req2('mammoth')
       const result = await mammoth.convertToHtml({ buffer: buf })
+      console.log('[extract-materials] mammoth html length:', result.value?.length)
       // Convert HTML to structured text preserving table columns
       docText = result.value
         .replace(/<\/td>/gi, '\t')

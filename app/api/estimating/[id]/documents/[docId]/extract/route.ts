@@ -30,7 +30,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .from('estimate-documents')
     .download(doc.storage_path)
 
-  if (dlErr || !fileData) return NextResponse.json({ error: 'Could not download file' }, { status: 500 })
+  if (dlErr || !fileData) return NextResponse.json({ error: `Could not download file: ${dlErr?.message}` }, { status: 500 })
 
   const buf = Buffer.from(await fileData.arrayBuffer())
   const name = doc.name.toLowerCase()
@@ -44,8 +44,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       const parsed = await pdfParse(buf)
       docText = parsed.text.slice(0, 30000)
     } else if (name.endsWith('.docx') || name.endsWith('.doc')) {
-      const mammoth = (await import('mammoth')).default
+      const { createRequire } = await import('module')
+      const req2 = createRequire(import.meta.url)
+      const mammoth = req2('mammoth')
       const result = await mammoth.convertToHtml({ buffer: buf })
+      console.log('[extract-doc] mammoth html length:', result.value?.length, 'messages:', result.messages)
       docText = result.value
         .replace(/<\/td>/gi, '\t')
         .replace(/<\/th>/gi, '\t')
@@ -57,6 +60,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         .replace(/\n{3,}/g, '\n\n')
         .trim()
         .slice(0, 30000)
+      console.log('[extract-doc] docText:', JSON.stringify(docText.slice(0, 500)))
     } else {
       docText = buf.toString('utf-8').slice(0, 30000)
     }
@@ -86,6 +90,7 @@ ${docText}`,
   logApiUsage({ companyId: ctx.profile.company_id, endpoint: 'extract-materials-doc', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const text = message.content[0].type === 'text' ? message.content[0].text : '[]'
+  console.log('[extract-doc] claude raw response:', text.slice(0, 500))
   let items: any[]
   try {
     items = extractAndParse(text)
@@ -93,6 +98,8 @@ ${docText}`,
   } catch {
     items = []
   }
+  console.log('[extract-doc] parsed items count:', items.length)
 
-  return NextResponse.json({ items })
+  // Return docText in dev so we can see what was extracted
+  return NextResponse.json({ items, _debug_docText: docText.slice(0, 1000) })
 }
