@@ -90,7 +90,7 @@ function getFromEmail(companySlug?: string | null): string {
 
 async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', fromEmail?: string) {
   const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) return
+  if (!apiKey) throw new Error('RESEND_API_KEY not configured')
   const resend = new Resend(apiKey)
   const actionsHtml = suggestedActions.length
     ? `<ul style="margin:8px 0 0;padding-left:16px;">${suggestedActions.map(a => `<li style="color:#94a3b8;font-size:13px;margin-bottom:4px">${a}</li>`).join('')}</ul>`
