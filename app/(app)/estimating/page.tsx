@@ -18,6 +18,12 @@ export default async function EstimatingPage() {
   const { data: profile } = await admin.from('profiles').select('role, company_id').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
+  // Module gate
+  if (profile.role !== 'superadmin') {
+    const { data: company } = await admin.from('companies').select('modules').eq('id', profile.company_id).single()
+    if (!((company?.modules as string[] ?? []).includes('estimating'))) redirect('/dashboard')
+  }
+
   const query = admin.from('estimates').select('*, estimate_items(total_cost, markup_pct)').order('created_at', { ascending: false })
   if (profile.role !== 'superadmin') query.eq('company_id', profile.company_id)
   const { data: estimates } = await query

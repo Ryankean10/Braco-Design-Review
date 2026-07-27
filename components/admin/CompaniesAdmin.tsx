@@ -47,8 +47,9 @@ const MODULE_GROUPS: {
   {
     label: 'Resources',
     modules: [
-      { key: 'team',  label: 'Team' },
-      { key: 'plant', label: 'Plant' },
+      { key: 'team',       label: 'Team' },
+      { key: 'plant',      label: 'Plant' },
+      { key: 'estimating', label: 'Estimating' },
     ],
   },
 ]

@@ -17,6 +17,12 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
   const { data: profile } = await admin.from('profiles').select('role, company_id').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
+  // Module gate
+  if (profile.role !== 'superadmin') {
+    const { data: company } = await admin.from('companies').select('modules').eq('id', profile.company_id).single()
+    if (!((company?.modules as string[] ?? []).includes('estimating'))) redirect('/dashboard')
+  }
+
   const companyId = profile.company_id
 
   // Fetch estimate with items
