@@ -96,7 +96,7 @@ async function sendBugEmail(summary: string, userMessage: string, userName: stri
     ? `<ul style="margin:8px 0 0;padding-left:16px;">${suggestedActions.map(a => `<li style="color:#94a3b8;font-size:13px;margin-bottom:4px">${a}</li>`).join('')}</ul>`
     : ''
   const isSuggestion = reportType === 'suggestion'
-  await resend.emails.send({
+  const { error: sendErr } = await resend.emails.send({
     from: fromEmail ?? 'MRRK <admin@safetconsultancy.co.uk>',
     to: BUG_EMAIL,
     subject: isSuggestion
@@ -136,6 +136,7 @@ async function sendBugEmail(summary: string, userMessage: string, userName: stri
   </div>
 </div></body></html>`
   })
+  if (sendErr) throw new Error((sendErr as any).message ?? JSON.stringify(sendErr))
 }
 
 async function logBugToDb(summary: string, userMessage: string, userName: string, userEmail: string, userId: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', companyId?: string | null) {
