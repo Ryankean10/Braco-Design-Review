@@ -134,7 +134,7 @@ async function sendBugEmail(summary: string, userMessage: string, userName: stri
   })
 }
 
-async function logBugToDb(summary: string, userMessage: string, userName: string, userEmail: string, userId: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug') {
+async function logBugToDb(summary: string, userMessage: string, userName: string, userEmail: string, userId: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', companyId?: string | null) {
   const sb = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -150,6 +150,7 @@ async function logBugToDb(summary: string, userMessage: string, userName: string
     status: 'open',
     report_type: reportType,
     priority: reportType === 'suggestion' ? 'low' : 'medium',
+    ...(companyId ? { company_id: companyId } : {}),
   })
   if (error) throw new Error(`DB insert failed: ${error.message}`)
 }
@@ -171,8 +172,9 @@ export async function POST(req: NextRequest) {
   const { data: company } = await supabase.from('companies').select('industry').eq('slug', companySlug).single()
   const industry = (company as any)?.industry ?? 'bess'
 
-  const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+  const { data: profile } = await supabase.from('profiles').select('full_name, company_id').eq('id', user.id).maybeSingle()
   const userName = (profile as any)?.full_name ?? user.email ?? 'Unknown user'
+  const companyId: string | null = (profile as any)?.company_id ?? null
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -226,7 +228,7 @@ export async function POST(req: NextRequest) {
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content ?? ''
     try {
       await Promise.all([
-        logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType),
+        logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType, companyId),
         sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
       ])
     } catch (e: any) {

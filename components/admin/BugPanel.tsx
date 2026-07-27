@@ -17,6 +17,7 @@ interface BugReport {
   resolved_at: string | null
   resolved_by_name: string | null
   notes: string | null
+  companies: { name: string } | null
 }
 
 interface Props {
@@ -122,8 +123,12 @@ export default function BugPanel({ onClose }: Props) {
                     )}
                   </div>
                   <p style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600, margin: 0, lineHeight: 1.3 }}>{bug.summary}</p>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span style={{ color: isSuggestion ? '#38bdf8' : '#8b5cf6', fontSize: 11 }}>{bug.reporter_name ?? bug.reporter_email ?? 'Unknown'}</span>
+                    {bug.companies?.name && <>
+                      <span style={{ color: '#475569', fontSize: 11 }}>·</span>
+                      <span style={{ color: '#f59e0b', fontSize: 11, fontWeight: 600 }}>{bug.companies.name}</span>
+                    </>}
                     <span style={{ color: '#475569', fontSize: 11 }}>·</span>
                     <Clock size={10} color="#475569" />
                     <span style={{ color: '#475569', fontSize: 11 }}>{fmt(bug.reported_at)}</span>
@@ -141,6 +146,7 @@ export default function BugPanel({ onClose }: Props) {
                       <p style={{ color: '#64748b', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>Reporter</p>
                       <p style={{ color: '#e2e8f0', fontSize: 12, margin: 0 }}>{bug.reporter_name ?? '—'}</p>
                       {bug.reporter_email && <p style={{ color: '#64748b', fontSize: 11, margin: '2px 0 0' }}>{bug.reporter_email}</p>}
+                      {bug.companies?.name && <p style={{ color: '#f59e0b', fontSize: 11, margin: '2px 0 0', fontWeight: 600 }}>{bug.companies.name}</p>}
                     </div>
 
                     <div className="rounded-lg p-3" style={{ background: '#0f172a' }}>

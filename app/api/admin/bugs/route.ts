@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error: dbError } = await admin!
     .from('bug_reports')
-    .select('*')
+    .select('*, companies(name)')
     .eq('status', status)
     .order('reported_at', { ascending: false })
 
