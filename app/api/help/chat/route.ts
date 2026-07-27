@@ -82,9 +82,13 @@ Respond in plain conversational English, 2-4 sentences. At the END output a raw 
 }
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'MRRK <scotplantai@yacht-gitana.com>'
 
-async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug') {
+function getFromEmail(companySlug?: string | null): string {
+  if (companySlug === 'scotplant') return 'MRRK <scotplantai@yacht-gitana.com>'
+  return process.env.RESEND_FROM_EMAIL ?? 'MRRK <admin@safetconsultancy.co.uk>'
+}
+
+async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', fromEmail?: string) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return
   const resend = new Resend(apiKey)
@@ -93,7 +97,7 @@ async function sendBugEmail(summary: string, userMessage: string, userName: stri
     : ''
   const isSuggestion = reportType === 'suggestion'
   await resend.emails.send({
-    from: FROM_EMAIL,
+    from: fromEmail ?? 'MRRK <admin@safetconsultancy.co.uk>',
     to: BUG_EMAIL,
     subject: isSuggestion
       ? `💡 MRRK Suggestion — ${new Date().toLocaleDateString('en-GB')}`
@@ -181,9 +185,10 @@ export async function POST(req: NextRequest) {
 
   // Derive industry from the user's actual company, not the subdomain header
   const { data: company } = companyId
-    ? await admin.from('companies').select('industry').eq('id', companyId).single()
-    : await admin.from('companies').select('industry').eq('slug', req.headers.get('x-company-slug') ?? 'braco').single()
+    ? await admin.from('companies').select('industry, slug').eq('id', companyId).single()
+    : await admin.from('companies').select('industry, slug').eq('slug', req.headers.get('x-company-slug') ?? 'braco').single()
   const industry = (company as any)?.industry ?? 'bess'
+  const companySlug: string | null = (company as any)?.slug ?? null
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -238,7 +243,7 @@ export async function POST(req: NextRequest) {
     try {
       await Promise.all([
         logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType, companyId),
-        sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
+        sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType, getFromEmail(companySlug)),
       ])
     } catch (e: any) {
       logError = e?.message ?? 'Unknown error'
