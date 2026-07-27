@@ -93,13 +93,14 @@ ${docText}`,
   console.log('[extract-doc] claude raw response:', text.slice(0, 500))
   let items: any[]
   try {
-    items = extractAndParse(text)
+    const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    const match = cleaned.match(/\[[\s\S]*\]/)
+    items = match ? JSON.parse(match[0]) : []
     if (!Array.isArray(items)) items = []
   } catch {
     items = []
   }
   console.log('[extract-doc] parsed items count:', items.length)
 
-  // Return docText in dev so we can see what was extracted
   return NextResponse.json({ items, _debug_docText: docText.slice(0, 1000) })
 }

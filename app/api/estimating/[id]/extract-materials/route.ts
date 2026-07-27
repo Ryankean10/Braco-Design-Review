@@ -87,7 +87,9 @@ ${docText}`,
   const text = message.content[0].type === 'text' ? message.content[0].text : '[]'
   let items: any[]
   try {
-    items = extractAndParse(text)
+    const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    const match = cleaned.match(/\[[\s\S]*\]/)
+    items = match ? JSON.parse(match[0]) : []
     if (!Array.isArray(items)) items = []
   } catch {
     items = []
