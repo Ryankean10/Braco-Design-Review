@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
+import { getResendClient } from '@/lib/resend'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
@@ -83,21 +84,14 @@ Respond in plain conversational English, 2-4 sentences. At the END output a raw 
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 
-function getFromEmail(companySlug?: string | null): string {
-  if (companySlug === 'scotplant') return 'Scotplant MRRK <scotplantai@yacht-gitana.com>'
-  return 'MRRK <admin@safetconsultancy.co.uk>'
-}
-
-async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', fromEmail?: string) {
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) throw new Error('RESEND_API_KEY not configured')
-  const resend = new Resend(apiKey)
+async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', companySlug?: string | null) {
+  const { resend, fromEmail } = getResendClient(companySlug ?? null)
   const actionsHtml = suggestedActions.length
     ? `<ul style="margin:8px 0 0;padding-left:16px;">${suggestedActions.map(a => `<li style="color:#94a3b8;font-size:13px;margin-bottom:4px">${a}</li>`).join('')}</ul>`
     : ''
   const isSuggestion = reportType === 'suggestion'
   const { error: sendErr } = await resend.emails.send({
-    from: fromEmail ?? 'MRRK <admin@safetconsultancy.co.uk>',
+    from: fromEmail,
     to: BUG_EMAIL,
     subject: isSuggestion
       ? `💡 MRRK Suggestion — ${new Date().toLocaleDateString('en-GB')}`
@@ -244,7 +238,7 @@ export async function POST(req: NextRequest) {
     // Run independently — a DB failure must not prevent the email from sending
     const [dbResult, emailResult] = await Promise.allSettled([
       logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType, companyId),
-      sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType, getFromEmail(companySlug)),
+      sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType, companySlug),
     ])
     const errors = [dbResult, emailResult]
       .filter((r): r is PromiseRejectedResult => r.status === 'rejected')

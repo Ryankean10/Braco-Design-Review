@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import { Resend } from 'resend'
+import { getResendClient } from '@/lib/resend'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const admin = createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
   const { data: estimate } = await admin
     .from('estimates')
-    .select('*, estimate_items(*), companies(name)')
+    .select('*, estimate_items(*), companies(name, slug)')
     .eq('id', id)
     .single()
   if (!estimate) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -91,9 +91,9 @@ ${estimate.notes ? `<p style="margin-top:20px;font-size:12px;color:#555"><strong
 <p style="margin-top:40px;font-size:11px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:14px">This estimate is valid for 30 days. Please reply to this email to accept or discuss.</p>
 </body></html>`
 
-  const resend = new Resend(process.env.RESEND_API_KEY)
+  const { resend, fromEmail } = getResendClient((estimate.companies as any)?.slug ?? null)
   const { error: emailErr } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? 'Scotplant Contractors <scotplantai@yacht-gitana.com>',
+    from: fromEmail,
     to,
     subject: `Estimate ${estimate.reference} — ${estimate.title}`,
     html,

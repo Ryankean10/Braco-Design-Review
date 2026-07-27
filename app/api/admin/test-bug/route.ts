@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { Resend } from 'resend'
+import { getResendClient } from '@/lib/resend'
 
 export async function GET() {
   const results: Record<string, any> = {}
@@ -10,8 +10,8 @@ export async function GET() {
     supabase_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
     service_role_key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     resend_api_key: !!process.env.RESEND_API_KEY,
+    resend_api_key_braco: !!process.env.RESEND_API_KEY_BRACO,
     alert_email: process.env.ALERT_EMAIL ?? '(not set, using default)',
-    resend_from: process.env.RESEND_FROM_EMAIL ?? '(not set, using default)',
   }
 
   // 2. Test DB insert
@@ -44,12 +44,12 @@ export async function GET() {
     results.db = { ok: false, threw: e?.message }
   }
 
-  // 3. Test Resend
-  if (process.env.RESEND_API_KEY) {
+  // 3. Test Resend (braco key)
+  if (process.env.RESEND_API_KEY_BRACO) {
     try {
-      const resend = new Resend(process.env.RESEND_API_KEY)
+      const { resend, fromEmail } = getResendClient(null) // null = braco
       const { data, error } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL ?? 'MRRK <onboarding@resend.dev>',
+        from: fromEmail,
         to: process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk',
         subject: '🔧 MRRK Email Diagnostic Test',
         html: '<p>This is a diagnostic test email from MRRK. If you received this, email sending is working.</p>',
@@ -63,7 +63,7 @@ export async function GET() {
       results.email = { ok: false, threw: e?.message }
     }
   } else {
-    results.email = { ok: false, error: 'RESEND_API_KEY not set' }
+    results.email = { ok: false, error: 'RESEND_API_KEY_BRACO not set' }
   }
 
   return NextResponse.json(results)
