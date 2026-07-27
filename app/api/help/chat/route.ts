@@ -84,8 +84,9 @@ Respond in plain conversational English, 2-4 sentences. At the END output a raw 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 
 function getFromEmail(companySlug?: string | null): string {
-  if (companySlug === 'scotplant') return 'MRRK <scotplantai@yacht-gitana.com>'
-  return process.env.RESEND_FROM_EMAIL ?? 'MRRK <admin@safetconsultancy.co.uk>'
+  // yacht-gitana.com is the only verified Resend domain — all outbound mail uses it
+  const label = companySlug === 'scotplant' ? 'Scotplant MRRK' : 'MRRK'
+  return `${label} <scotplantai@yacht-gitana.com>`
 }
 
 async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', fromEmail?: string) {
