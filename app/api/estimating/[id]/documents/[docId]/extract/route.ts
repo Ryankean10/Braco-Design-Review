@@ -18,19 +18,24 @@ async function auth() {
   return { admin, profile, supabase, userId: user.id }
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id: estimateId } = await params
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string; docId: string }> }) {
+  const { docId } = await params
   const ctx = await auth()
   if (!ctx) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const formData = await req.formData()
-  const file = formData.get('file') as File | null
-  if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+  const { data: doc } = await ctx.admin.from('estimate_documents').select('*').eq('id', docId).single()
+  if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
 
-  const buf = Buffer.from(await file.arrayBuffer())
+  const { data: fileData, error: dlErr } = await ctx.admin.storage
+    .from('estimate-documents')
+    .download(doc.storage_path)
+
+  if (dlErr || !fileData) return NextResponse.json({ error: 'Could not download file' }, { status: 500 })
+
+  const buf = Buffer.from(await fileData.arrayBuffer())
+  const name = doc.name.toLowerCase()
   let docText = ''
 
-  const name = file.name.toLowerCase()
   try {
     if (name.endsWith('.pdf')) {
       const { createRequire } = await import('module')
@@ -41,7 +46,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } else if (name.endsWith('.docx') || name.endsWith('.doc')) {
       const mammoth = (await import('mammoth')).default
       const result = await mammoth.convertToHtml({ buffer: buf })
-      // Convert HTML to structured text preserving table columns
       docText = result.value
         .replace(/<\/td>/gi, '\t')
         .replace(/<\/th>/gi, '\t')
@@ -79,7 +83,7 @@ DOCUMENT:
 ${docText}`,
     }],
   })
-  logApiUsage({ companyId: ctx.profile.company_id, endpoint: 'extract-materials', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
+  logApiUsage({ companyId: ctx.profile.company_id, endpoint: 'extract-materials-doc', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const text = message.content[0].type === 'text' ? message.content[0].text : '[]'
   let items: any[]

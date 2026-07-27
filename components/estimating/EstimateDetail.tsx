@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Plus, Trash2, Download, Send, AlertTriangle, ChevronDown, ChevronUp, BookOpen, Sparkles, Loader2, Check } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Plus, Trash2, Download, Send, AlertTriangle, ChevronDown, ChevronUp, BookOpen, Sparkles, Loader2, Check, FileText, X } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface EstimateItem {
@@ -49,7 +49,7 @@ export default function EstimateDetail({
 }) {
   const [estimate, setEstimate]       = useState(init)
   const [items, setItems]             = useState<EstimateItem[]>(init.estimate_items ?? [])
-  const [tab, setTab]                 = useState<'materials' | 'manpower' | 'plant' | 'other' | 'preview'>('materials')
+  const [tab, setTab]                 = useState<'materials' | 'manpower' | 'plant' | 'other' | 'documents' | 'preview'>('materials')
   const [saving, setSaving]           = useState(false)
   const [sendEmail, setSendEmail]     = useState('')
   const [sending, setSending]         = useState(false)
@@ -148,6 +148,7 @@ export default function EstimateDetail({
     { key: 'manpower',  label: 'Manpower' },
     { key: 'plant',     label: 'Plant' },
     { key: 'other',     label: 'Other' },
+    { key: 'documents', label: 'Documents' },
     { key: 'preview',   label: 'Preview & Send' },
   ]
 
@@ -250,6 +251,9 @@ export default function EstimateDetail({
           estimateId={estimate.id} defaultMarkup={defaultMarkup}
           jobLibrary={[]} onImport={importFromLibrary}
         />
+      )}
+      {tab === 'documents' && (
+        <DocumentsSection estimateId={estimate.id} defaultMarkup={defaultMarkup} onItemsAdded={newItems => setItems(prev => [...prev, ...newItems])} />
       )}
       {tab === 'preview' && (
         <PreviewSection
@@ -667,6 +671,136 @@ function PreviewSection({ items, estimateId, clientEmail, sendEmail, setSendEmai
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Documents section ──────────────────────────────────────────────────────────
+interface EstimateDoc { id: string; name: string; file_size: number | null; file_type: string | null; created_at: string }
+
+function DocumentsSection({ estimateId, defaultMarkup, onItemsAdded }: {
+  estimateId: string; defaultMarkup: number; onItemsAdded: (items: EstimateItem[]) => void
+}) {
+  const [docs, setDocs]           = useState<EstimateDoc[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [extractingId, setExtractingId] = useState<string | null>(null)
+  const [msgs, setMsgs]           = useState<Record<string, string>>({})
+  const fileRef                   = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    fetch(`/api/estimating/${estimateId}/documents`)
+      .then(r => r.json())
+      .then(data => { setDocs(Array.isArray(data) ? data : []); setLoading(false) })
+  }, [estimateId])
+
+  async function upload(file: File) {
+    setUploading(true)
+    const fd = new FormData(); fd.append('file', file)
+    const res = await fetch(`/api/estimating/${estimateId}/documents`, { method: 'POST', body: fd })
+    const data = await res.json()
+    if (data.id) setDocs(prev => [data, ...prev])
+    setUploading(false)
+  }
+
+  async function extract(doc: EstimateDoc) {
+    setExtractingId(doc.id)
+    setMsgs(m => ({ ...m, [doc.id]: 'Extracting…' }))
+    const res = await fetch(`/api/estimating/${estimateId}/documents/${doc.id}/extract`, { method: 'POST' })
+    const { items, error } = await res.json()
+    if (error) { setMsgs(m => ({ ...m, [doc.id]: `Error: ${error}` })); setExtractingId(null); return }
+    if (!items?.length) { setMsgs(m => ({ ...m, [doc.id]: 'No items found.' })); setExtractingId(null); return }
+    // Add extracted items via API
+    const body = items.map((e: any, idx: number) => ({
+      section: 'material', description: e.description ?? '', quantity: e.quantity ?? 1,
+      unit: e.unit ?? 'item', unit_cost: e.unit_cost ?? 0, markup_pct: defaultMarkup, notes: e.notes ?? null, sort_order: idx,
+    }))
+    const r2 = await fetch(`/api/estimating/${estimateId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const { data } = await r2.json()
+    if (data) {
+      onItemsAdded(Array.isArray(data) ? data : [data])
+      setMsgs(m => ({ ...m, [doc.id]: `✓ Added ${items.length} items to Materials` }))
+    }
+    setExtractingId(null)
+  }
+
+  async function remove(doc: EstimateDoc) {
+    await fetch(`/api/estimating/${estimateId}/documents/${doc.id}`, { method: 'DELETE' })
+    setDocs(prev => prev.filter(d => d.id !== doc.id))
+  }
+
+  function fmtSize(bytes: number | null) {
+    if (!bytes) return ''
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+          Quotes & order confirmations — {docs.length} file{docs.length !== 1 ? 's' : ''}
+        </p>
+        <div>
+          <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt,.csv,.xlsx" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = '' }} />
+          <button
+            onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+            style={{ background: 'var(--accent)' }}>
+            {uploading ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+            Upload document
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin" style={{ color: 'var(--text-muted)' }} /></div>
+      ) : docs.length === 0 ? (
+        <div className="rounded-xl border border-dashed py-12 text-center" style={{ borderColor: 'var(--border)' }}>
+          <FileText size={32} className="mx-auto mb-3 opacity-30" style={{ color: 'var(--text-muted)' }} />
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No documents uploaded yet.</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Upload quotes or order confirmations to keep them with this estimate.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {docs.map(doc => (
+            <div key={doc.id} className="rounded-xl border p-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-3">
+                <FileText size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{doc.name}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {doc.file_type?.toUpperCase()} · {fmtSize(doc.file_size)} · {new Date(doc.created_at).toLocaleDateString('en-GB')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => extract(doc)} disabled={extractingId === doc.id}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                    {extractingId === doc.id ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                    Extract items
+                  </button>
+                  <button onClick={() => remove(doc)} className="p-1 rounded opacity-40 hover:opacity-100">
+                    <X size={13} style={{ color: 'var(--text-muted)' }} />
+                  </button>
+                </div>
+              </div>
+              {msgs[doc.id] && (
+                <p className="mt-2 text-xs px-3 py-1.5 rounded-lg" style={{ background: 'rgba(91,76,245,0.1)', color: 'var(--accent)' }}>
+                  {msgs[doc.id]}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+        "Extract items" runs AI extraction and adds line items to the Materials tab.
+      </p>
     </div>
   )
 }
