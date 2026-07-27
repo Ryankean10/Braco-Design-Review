@@ -84,9 +84,8 @@ Respond in plain conversational English, 2-4 sentences. At the END output a raw 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 
 function getFromEmail(companySlug?: string | null): string {
-  // yacht-gitana.com is the only verified Resend domain — all outbound mail uses it
-  const label = companySlug === 'scotplant' ? 'Scotplant MRRK' : 'MRRK'
-  return `${label} <scotplantai@yacht-gitana.com>`
+  if (companySlug === 'scotplant') return 'Scotplant MRRK <scotplantai@yacht-gitana.com>'
+  return 'MRRK <admin@safetconsultancy.co.uk>'
 }
 
 async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', fromEmail?: string) {
@@ -241,13 +240,16 @@ export async function POST(req: NextRequest) {
   if (shouldLog) {
     const reportType = isSuggestion ? 'suggestion' : 'bug'
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content ?? ''
-    try {
-      await Promise.all([
-        logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType, companyId),
-        sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType, getFromEmail(companySlug)),
-      ])
-    } catch (e: any) {
-      logError = e?.message ?? 'Unknown error'
+    // Run independently — a DB failure must not prevent the email from sending
+    const [dbResult, emailResult] = await Promise.allSettled([
+      logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType, companyId),
+      sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType, getFromEmail(companySlug)),
+    ])
+    const errors = [dbResult, emailResult]
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map(r => r.reason?.message ?? String(r.reason))
+    if (errors.length) {
+      logError = errors.join(' | ')
       console.error('Report logging error:', logError)
     }
   }
