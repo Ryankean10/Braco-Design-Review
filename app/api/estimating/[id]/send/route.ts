@@ -93,7 +93,7 @@ ${estimate.notes ? `<p style="margin-top:20px;font-size:12px;color:#555"><strong
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   const { error: emailErr } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? 'Braco <onboarding@resend.dev>',
+    from: process.env.RESEND_FROM_EMAIL ?? 'Scotplant Contractors <scotplantai@yacht-gitana.com>',
     to,
     subject: `Estimate ${estimate.reference} — ${estimate.title}`,
     html,
