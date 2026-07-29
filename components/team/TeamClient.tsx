@@ -59,7 +59,7 @@ const DISC_COLOR: Record<string, { bg: string; text: string }> = {
 }
 
 function DisciplineBadge({ d }: { d: string | null }) {
-  const s = DISC_COLOR[d ?? ''] ?? DISC_COLOR.Other
+  const s = DISC_COLOR[d ?? ''] ?? { bg: 'rgba(148,163,184,0.12)', text: '#94a3b8' }
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
       style={{ background: s.bg, color: s.text }}>{d ?? 'Other'}</span>
