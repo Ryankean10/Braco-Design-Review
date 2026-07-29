@@ -205,7 +205,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     projectStages.find((s: any) => s.stage === name)
   ).filter(Boolean) as any[]
 
-  const canEdit = ['admin', 'engineer'].includes(role)
+  const canEdit = ['superadmin', 'admin', 'engineer'].includes(role)
 
   // Fetch linked estimates
   const adminSvc = createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })

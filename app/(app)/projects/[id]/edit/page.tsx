@@ -7,7 +7,7 @@ import ProjectForm from '@/components/ProjectForm'
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { supabase, role, company } = await getCompanyContext()
-  if (!['admin', 'engineer', 'project_manager'].includes(role)) redirect(`/projects/${id}`)
+  if (!['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)) redirect(`/projects/${id}`)
 
   const { data: project } = await supabase.from('projects').select('*').eq('id', id).single()
   if (!project) notFound()

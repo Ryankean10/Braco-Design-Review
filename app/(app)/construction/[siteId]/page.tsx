@@ -184,7 +184,7 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
     if (m.person_id) nameToPersonId[m.raw_name] = m.person_id
   }
 
-  const canEdit = ['admin', 'engineer'].includes(role)
+  const canEdit = ['superadmin', 'admin', 'engineer'].includes(role)
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">

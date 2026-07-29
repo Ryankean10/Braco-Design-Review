@@ -13,7 +13,7 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ site
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = profile?.role ?? ''
-  if (!['admin', 'engineer', 'project_manager', 'operative'].includes(role)) notFound()
+  if (!['superadmin', 'admin', 'engineer', 'project_manager', 'operative'].includes(role)) notFound()
 
   const [{ data: site }, { data: logs }, { data: cables }] = await Promise.all([
     supabase.from('construction_sites').select('id, name, client, project_id').eq('id', siteId).single(),

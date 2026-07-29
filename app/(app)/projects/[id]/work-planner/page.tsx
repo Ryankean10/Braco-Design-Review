@@ -34,7 +34,7 @@ export default async function WorkPlannerPage({ params }: { params: Promise<{ id
       project={project as { id: string; name: string; capacity_mw: number | null; location: string | null; stage: string | null; client: string | null }}
       documents={docs ?? []}
       initialForecast={existingForecast}
-      canEdit={['admin', 'engineer', 'project_manager'].includes(role)}
+      canEdit={['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)}
     />
   )
 }

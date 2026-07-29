@@ -25,7 +25,7 @@ export default async function AssurancePage({ params }: { params: Promise<{ id: 
   const role = profile?.role ?? 'engineer'
   if (role === 'client') redirect(`/projects/${id}`)
 
-  const canEdit = ['admin', 'engineer'].includes(role)
+  const canEdit = ['superadmin', 'admin', 'engineer'].includes(role)
 
   const [{ data: projectItps }, { data: constructionSite }, { data: qcsDocs }] = await Promise.all([
     supabase.from('project_itps').select('*').eq('project_id', id).order('uploaded_at', { ascending: false }),

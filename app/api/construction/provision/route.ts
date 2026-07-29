@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
-  if (!['admin', 'engineer', 'project_manager'].includes(role)) {
+  if (!['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
