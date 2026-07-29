@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen, TrendingUp, ShieldCheck, Calculator } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen, TrendingUp, ShieldCheck, Calculator, FileQuestion } from 'lucide-react'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
@@ -416,6 +416,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>AI forecast — manpower, cost & long lead procurement</p>
           </Link>
         )}
+        <Link href={`/projects/${id}/rfi-tq`}
+          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+          style={{ background: 'var(--bg-surface)', borderColor: 'rgba(99,102,241,0.3)', minHeight: 100 }}>
+          <FileQuestion size={20} style={{ color: '#818cf8' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>RFI / TQ Register</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Technical queries & requests for information — workflow & response tracking</p>
+        </Link>
       </div>
 
       {/* Client comments — visible to admin/PM/engineer, hidden from operative */}
