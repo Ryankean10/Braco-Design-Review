@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export type Role = 'admin' | 'engineer' | 'project_manager' | 'operative' | 'client'
+export type Role = 'superadmin' | 'admin' | 'engineer' | 'project_manager' | 'operative' | 'client'
 
 const INTERNAL_ROLES: Role[] = ['admin', 'engineer', 'project_manager', 'operative']
 const MANAGER_ROLES: Role[] = ['admin', 'engineer', 'project_manager']
