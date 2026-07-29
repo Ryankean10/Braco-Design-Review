@@ -82,7 +82,7 @@ Respond in plain conversational English, 2-4 sentences. At the END output a raw 
 {"isBugReport": true/false, "isSuggestion": true/false, "bugSummary": "one sentence summary — ALWAYS provide this, never null", "suggestedActions": ["action 1", "action 2"] or []}`
 }
 
-const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
+const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'rkean1995@gmail.com'
 
 async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', companySlug?: string | null) {
   const { resend, fromEmail } = getResendClient(companySlug ?? null)
