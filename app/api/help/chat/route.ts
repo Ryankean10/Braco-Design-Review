@@ -84,8 +84,8 @@ Respond in plain conversational English, 2-4 sentences. At the END output a raw 
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'rkean1995@gmail.com'
 
-async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', companySlug?: string | null) {
-  const { resend, fromEmail } = getResendClient(companySlug ?? null)
+async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug') {
+  const { resend, fromEmail } = getResendClient(null) // always braco key for bug reports
   const actionsHtml = suggestedActions.length
     ? `<ul style="margin:8px 0 0;padding-left:16px;">${suggestedActions.map(a => `<li style="color:#94a3b8;font-size:13px;margin-bottom:4px">${a}</li>`).join('')}</ul>`
     : ''
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
     // Run independently — a DB failure must not prevent the email from sending
     const [dbResult, emailResult] = await Promise.allSettled([
       logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType, companyId),
-      sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType, companySlug),
+      sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
     ])
     const errors = [dbResult, emailResult]
       .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
