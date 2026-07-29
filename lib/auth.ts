@@ -18,7 +18,7 @@ export async function requireRole(allowed: Role[]) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = (profile?.role ?? 'client') as Role
 
-  if (!allowed.includes(role)) return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  if (role !== 'superadmin' && !allowed.includes(role)) return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
 
   return { user, profile, role }
 }
