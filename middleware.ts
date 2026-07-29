@@ -72,9 +72,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Company access enforcement: verify the logged-in user belongs to this subdomain's company
+  // Company access enforcement: verify the logged-in user belongs to this subdomain's company.
+  // Use service-role client to bypass RLS — anon key cannot reliably read profiles/companies in middleware.
   if (user && pathname !== '/login') {
-    const { data: profile } = await supabase
+    const admin = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { cookies: { getAll: () => [], setAll: () => {} } }
+    )
+
+    const { data: profile } = await admin
       .from('profiles')
       .select('role, company_id')
       .eq('id', user.id)
@@ -85,13 +92,13 @@ export async function middleware(request: NextRequest) {
 
     // Superadmins can access any subdomain
     if (role !== 'superadmin') {
-      const { data: subdomainCompany } = await supabase
+      const { data: subdomainCompany } = await admin
         .from('companies')
         .select('id')
         .eq('slug', companySlug)
         .single()
 
-      if (subdomainCompany && userCompanyId !== subdomainCompany.id) {
+      if (!subdomainCompany || userCompanyId !== subdomainCompany.id) {
         // User does not belong to this company — redirect to login with error
         const url = request.nextUrl.clone()
         url.pathname = '/login'
