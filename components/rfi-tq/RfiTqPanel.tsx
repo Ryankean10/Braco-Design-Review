@@ -131,8 +131,8 @@ function fmtVal(v: unknown): string {
   return String(v)
 }
 
-export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
-  projectId: string
+export default function RfiTqPanel({ baseUrl, initialItems, canEdit }: {
+  baseUrl: string   // e.g. /api/projects/[id]/rfi-tq  or  /api/construction/[siteId]/rfi-tq
   initialItems: RfiTq[]
   canEdit: boolean
 }) {
@@ -163,12 +163,12 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
   const openCount = items.filter(i => i.status !== 'closed').length
 
   async function reload() {
-    const r = await fetch(`/api/projects/${projectId}/rfi-tq`)
+    const r = await fetch(`${baseUrl}`)
     if (r.ok) setItems(await r.json())
   }
 
   async function loadAudit(item: RfiTq) {
-    const r = await fetch(`/api/projects/${projectId}/rfi-tq/${item.id}`)
+    const r = await fetch(`${baseUrl}/${item.id}`)
     if (r.ok) {
       const d = await r.json()
       setAuditItem(d)
@@ -213,7 +213,7 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await fetch(`/api/projects/${projectId}/rfi-tq/extract`, { method: 'POST', body: fd })
+      const r = await fetch(`${baseUrl}/extract`, { method: 'POST', body: fd })
       const d = await r.json()
       if (!r.ok) { setExtractError(d.error ?? 'Extraction failed'); return }
       const e = d.extracted
@@ -260,8 +260,8 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
         response_required_by: form.response_required_by || null,
       }
       const url = editingItem
-        ? `/api/projects/${projectId}/rfi-tq/${editingItem.id}`
-        : `/api/projects/${projectId}/rfi-tq`
+        ? `${baseUrl}/${editingItem.id}`
+        : `${baseUrl}`
       const r = await fetch(url, {
         method: editingItem ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -276,7 +276,7 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
   }
 
   async function advanceStatus(item: RfiTq, nextStatus: RfiTqStatus, extra?: Record<string, unknown>) {
-    const r = await fetch(`/api/projects/${projectId}/rfi-tq/${item.id}`, {
+    const r = await fetch(`${baseUrl}/${item.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: nextStatus, ...extra }),
@@ -309,7 +309,7 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
     setAiLoading(item.id)
     setAiError(e => ({ ...e, [item.id]: '' }))
     try {
-      const r = await fetch(`/api/projects/${projectId}/rfi-tq/${item.id}/analyse`, { method: 'POST' })
+      const r = await fetch(`${baseUrl}/${item.id}/analyse`, { method: 'POST' })
       const d = await r.json()
       if (!r.ok) { setAiError(e => ({ ...e, [item.id]: d.error ?? 'Analysis failed' })); return }
       setAiResults(prev => ({ ...prev, [item.id]: d }))
@@ -321,7 +321,7 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
   }
 
   async function loadAttachments(rfiId: string) {
-    const r = await fetch(`/api/projects/${projectId}/rfi-tq/${rfiId}/attachments`)
+    const r = await fetch(`${baseUrl}/${rfiId}/attachments`)
     if (r.ok) { const d = await r.json(); setAttachments(prev => ({ ...prev, [rfiId]: d })) }
   }
 
@@ -330,7 +330,7 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await fetch(`/api/projects/${projectId}/rfi-tq/${rfiId}/attachments`, { method: 'POST', body: fd })
+      const r = await fetch(`${baseUrl}/${rfiId}/attachments`, { method: 'POST', body: fd })
       if (r.ok) await loadAttachments(rfiId)
     } finally {
       setAttachUploading(prev => ({ ...prev, [rfiId]: false }))
@@ -338,12 +338,12 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
   }
 
   async function deleteAttachment(rfiId: string, attId: string) {
-    await fetch(`/api/projects/${projectId}/rfi-tq/${rfiId}/attachments/${attId}`, { method: 'DELETE' })
+    await fetch(`${baseUrl}/${rfiId}/attachments/${attId}`, { method: 'DELETE' })
     await loadAttachments(rfiId)
   }
 
   async function downloadAttachment(rfiId: string, attId: string, fileName: string) {
-    const r = await fetch(`/api/projects/${projectId}/rfi-tq/${rfiId}/attachments/${attId}`)
+    const r = await fetch(`${baseUrl}/${rfiId}/attachments/${attId}`)
     if (!r.ok) return
     const { url } = await r.json()
     const a = document.createElement('a')

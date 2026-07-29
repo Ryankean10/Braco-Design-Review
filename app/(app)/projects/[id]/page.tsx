@@ -416,13 +416,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>AI forecast — manpower, cost & long lead procurement</p>
           </Link>
         )}
-        <Link href={`/projects/${id}/rfi-tq`}
-          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
-          style={{ background: 'var(--bg-surface)', borderColor: 'rgba(99,102,241,0.3)', minHeight: 100 }}>
-          <FileQuestion size={20} style={{ color: '#818cf8' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>RFI / TQ Register</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Technical queries & requests for information — workflow & response tracking</p>
-        </Link>
+        {pfeat('projects.rfi_tq') && (
+          <Link href={`/projects/${id}/rfi-tq`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'rgba(99,102,241,0.3)', minHeight: 100 }}>
+            <FileQuestion size={20} style={{ color: '#818cf8' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>RFI / TQ Register</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Technical queries & requests for information — workflow & response tracking</p>
+          </Link>
+        )}
       </div>
 
       {/* Client comments — visible to admin/PM/engineer, hidden from operative */}

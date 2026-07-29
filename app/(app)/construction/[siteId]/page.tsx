@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, HardHat, BookOpen, FileBarChart2 } from 'lucide-react'
+import { ArrowLeft, HardHat, BookOpen, FileBarChart2, FileQuestion } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import CableRegister from '@/components/construction/CableRegister'
@@ -322,6 +322,16 @@ export default async function ConstructionSitePage({ params, searchParams }: { p
       })()}
 
       {/* Unified cable register */}
+      {feat('construction.rfi_tq') && <CollapsibleSection
+        title="RFI / TQ Register"
+        summary="View and manage RFIs and Technical Queries for this site"
+      >
+        <div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>
+          <a href={`/construction/${siteId}/rfi-tq`} className="underline" style={{ color: 'var(--accent)' }}>
+            Open RFI / TQ Register →
+          </a>
+        </div>
+      </CollapsibleSection>}
       {feat('construction.cable') && <CollapsibleSection
         title="Cable Schedule"
         badge={(cables ?? []).length}
