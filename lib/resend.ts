@@ -7,13 +7,17 @@ import { Resend } from 'resend'
  */
 export function getResendClient(companySlug: string | null): { resend: Resend; fromEmail: string } {
   if (companySlug === 'scotplant') {
+    const key = process.env.RESEND_API_KEY
+    if (!key) throw new Error('RESEND_API_KEY not configured')
     return {
-      resend: new Resend(process.env.RESEND_API_KEY!),
+      resend: new Resend(key),
       fromEmail: 'Scotplant MRRK <scotplantai@yacht-gitana.com>',
     }
   }
+  const key = process.env.RESEND_API_KEY_BRACO
+  if (!key) throw new Error('RESEND_API_KEY_BRACO not configured')
   return {
-    resend: new Resend(process.env.RESEND_API_KEY_BRACO!),
+    resend: new Resend(key),
     fromEmail: 'MRRK <admin@safetconsultancy.co.uk>',
   }
 }
