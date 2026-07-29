@@ -66,15 +66,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && pathname === '/login') {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
-
-  // Company access enforcement: verify the logged-in user belongs to this subdomain's company.
-  // Use service-role client to bypass RLS — anon key cannot reliably read profiles/companies in middleware.
-  if (user && pathname !== '/login') {
+  // Company access enforcement — runs before the login→dashboard redirect to avoid loops.
+  // Use service-role client to bypass RLS.
+  if (user) {
     const admin = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -89,8 +83,8 @@ export async function middleware(request: NextRequest) {
 
     const role = profile?.role
     const userCompanyId = profile?.company_id
+    const isAuthorized = role === 'superadmin' || (() => false)()
 
-    // Superadmins can access any subdomain
     if (role !== 'superadmin') {
       const { data: subdomainCompany } = await admin
         .from('companies')
@@ -98,13 +92,27 @@ export async function middleware(request: NextRequest) {
         .eq('slug', companySlug)
         .single()
 
-      if (!subdomainCompany || userCompanyId !== subdomainCompany.id) {
-        // User does not belong to this company — redirect to login with error
-        const url = request.nextUrl.clone()
-        url.pathname = '/login'
-        url.searchParams.set('error', 'unauthorized')
-        return NextResponse.redirect(url)
+      const authorised = subdomainCompany && userCompanyId === subdomainCompany.id
+
+      if (!authorised) {
+        // Not allowed on this subdomain — send to login with error and stop
+        if (pathname !== '/login') {
+          const url = request.nextUrl.clone()
+          url.pathname = '/login'
+          url.searchParams.set('error', 'unauthorized')
+          return NextResponse.redirect(url)
+        }
+        // Already on login — serve it (show the error banner), don't redirect to dashboard
+        return supabaseResponse
       }
+    }
+
+    // User is authorised — redirect away from login to dashboard
+    if (pathname === '/login') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      url.searchParams.delete('error')
+      return NextResponse.redirect(url)
     }
   }
 
