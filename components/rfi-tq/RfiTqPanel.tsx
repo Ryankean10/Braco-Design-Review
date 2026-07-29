@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, ChevronDown, ChevronRight, Clock, CheckCircle2, AlertCircle, X, History, Pencil, RotateCcw } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, Clock, CheckCircle2, AlertCircle, X, History, Pencil, RotateCcw, Sparkles, Paperclip, Upload, Trash2, Download, FileText, Loader2 } from 'lucide-react'
 
 type RfiTqStatus = 'received' | 'submitted' | 'response_received' | 'sent_to_team' | 'closed'
 
@@ -11,6 +11,25 @@ interface AuditEntry {
   action: string
   changes: { field: string; old_value: unknown; new_value: unknown }[]
   created_at: string
+}
+
+interface Attachment {
+  id: string
+  file_name: string
+  mime_type: string | null
+  size_bytes: number | null
+  uploaded_at: string
+}
+
+interface AiAnalysis {
+  found_in_documents: boolean
+  confidence: 'high' | 'medium' | 'low' | 'none'
+  summary: string
+  sources: { document: string; clause_ref: string | null; verbatim_text: string; relevance: string }[]
+  technical_analysis: string
+  suggested_response: string
+  docs_searched?: number
+  doc_labels?: string[]
 }
 
 interface RfiTq {
@@ -41,6 +60,8 @@ interface RfiTq {
   sent_to_team_at: string | null
   closed_at: string | null
   created_at: string
+  ai_analysis?: AiAnalysis | null
+  ai_analysed_at?: string | null
   audit_log?: AuditEntry[]
 }
 
@@ -129,6 +150,12 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
   const [, startTransition] = useTransition()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState<string | null>(null)   // rfiId being analysed
+  const [aiResults, setAiResults] = useState<Record<string, AiAnalysis>>({})
+  const [aiError, setAiError] = useState<Record<string, string>>({})
+  const [attachments, setAttachments] = useState<Record<string, Attachment[]>>({})
+  const [attachUploading, setAttachUploading] = useState<Record<string, boolean>>({})
+  const [showAttachPanel, setShowAttachPanel] = useState<string | null>(null)
 
   const visible = items.filter(i => showClosed || i.status !== 'closed')
   const openCount = items.filter(i => i.status !== 'closed').length
@@ -237,6 +264,55 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
 
   function removeSolution(i: number) {
     setForm(f => ({ ...f, possible_solutions: f.possible_solutions.filter((_, j) => j !== i) }))
+  }
+
+  async function runAiAnalysis(item: RfiTq) {
+    setAiLoading(item.id)
+    setAiError(e => ({ ...e, [item.id]: '' }))
+    try {
+      const r = await fetch(`/api/projects/${projectId}/rfi-tq/${item.id}/analyse`, { method: 'POST' })
+      const d = await r.json()
+      if (!r.ok) { setAiError(e => ({ ...e, [item.id]: d.error ?? 'Analysis failed' })); return }
+      setAiResults(prev => ({ ...prev, [item.id]: d }))
+      // Also update the item in list with saved analysis
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, ai_analysis: d, ai_analysed_at: new Date().toISOString() } : i))
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
+  async function loadAttachments(rfiId: string) {
+    const r = await fetch(`/api/projects/${projectId}/rfi-tq/${rfiId}/attachments`)
+    if (r.ok) { const d = await r.json(); setAttachments(prev => ({ ...prev, [rfiId]: d })) }
+  }
+
+  async function uploadAttachment(rfiId: string, file: File) {
+    setAttachUploading(prev => ({ ...prev, [rfiId]: true }))
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await fetch(`/api/projects/${projectId}/rfi-tq/${rfiId}/attachments`, { method: 'POST', body: fd })
+      if (r.ok) await loadAttachments(rfiId)
+    } finally {
+      setAttachUploading(prev => ({ ...prev, [rfiId]: false }))
+    }
+  }
+
+  async function deleteAttachment(rfiId: string, attId: string) {
+    await fetch(`/api/projects/${projectId}/rfi-tq/${rfiId}/attachments/${attId}`, { method: 'DELETE' })
+    await loadAttachments(rfiId)
+  }
+
+  async function downloadAttachment(rfiId: string, attId: string, fileName: string) {
+    const r = await fetch(`/api/projects/${projectId}/rfi-tq/${rfiId}/attachments/${attId}`)
+    if (!r.ok) return
+    const { url } = await r.json()
+    const a = document.createElement('a')
+    a.href = url; a.download = fileName; a.click()
+  }
+
+  function getAiResult(item: RfiTq): AiAnalysis | null {
+    return aiResults[item.id] ?? item.ai_analysis ?? null
   }
 
   const inputCls = `w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-1`
@@ -432,6 +508,203 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
                         <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{item.client_response}</p>
                       </div>
                     )}
+
+                    {/* ── Attachments panel ── */}
+                    <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                      <button
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:opacity-80"
+                        style={{ background: 'var(--bg-base)', color: 'var(--text-muted)' }}
+                        onClick={() => {
+                          if (showAttachPanel !== item.id) {
+                            setShowAttachPanel(item.id)
+                            if (!attachments[item.id]) loadAttachments(item.id)
+                          } else {
+                            setShowAttachPanel(null)
+                          }
+                        }}>
+                        <span className="flex items-center gap-1.5">
+                          <Paperclip size={12} /> Documents
+                          {(attachments[item.id] ?? []).length > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px]"
+                              style={{ background: 'var(--accent)', color: '#fff' }}>
+                              {attachments[item.id].length}
+                            </span>
+                          )}
+                        </span>
+                        <span>{showAttachPanel === item.id ? '▲' : '▼'}</span>
+                      </button>
+
+                      {showAttachPanel === item.id && (
+                        <div className="p-3 space-y-2" style={{ borderTop: '1px solid var(--border)' }}>
+                          {/* Upload area */}
+                          {canEdit && (
+                            <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed py-4 cursor-pointer hover:opacity-80"
+                              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                              {attachUploading[item.id]
+                                ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+                                : <><Upload size={14} /> <span className="text-xs">Upload PDF, DOCX, drawing…</span></>
+                              }
+                              <input type="file" className="hidden"
+                                accept=".pdf,.docx,.doc,.xls,.xlsx,.dwg,.png,.jpg"
+                                onChange={e => { const f = e.target.files?.[0]; if (f) uploadAttachment(item.id, f) }}
+                              />
+                            </label>
+                          )}
+
+                          {/* File list */}
+                          {(attachments[item.id] ?? []).length === 0 && !attachUploading[item.id] && (
+                            <p className="text-xs text-center py-2" style={{ color: 'var(--text-muted)' }}>
+                              No documents attached yet
+                            </p>
+                          )}
+                          {(attachments[item.id] ?? []).map(att => (
+                            <div key={att.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                              style={{ background: 'var(--bg-base)' }}>
+                              <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                              <span className="text-xs flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{att.file_name}</span>
+                              {att.size_bytes && (
+                                <span className="text-[10px] shrink-0" style={{ color: 'var(--text-muted)' }}>
+                                  {(att.size_bytes / 1024).toFixed(0)}KB
+                                </span>
+                              )}
+                              <button onClick={() => downloadAttachment(item.id, att.id, att.file_name)}
+                                className="hover:opacity-70 shrink-0" title="Download">
+                                <Download size={12} style={{ color: 'var(--text-muted)' }} />
+                              </button>
+                              {canEdit && (
+                                <button onClick={() => deleteAttachment(item.id, att.id)}
+                                  className="hover:opacity-70 shrink-0" title="Delete">
+                                  <Trash2 size={12} style={{ color: '#ef4444' }} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── AI Analysis panel ── */}
+                    {(() => {
+                      const result = getAiResult(item)
+                      const isLoading = aiLoading === item.id
+                      const err = aiError[item.id]
+
+                      const CONF_COLOR = { high: '#22c55e', medium: '#f59e0b', low: '#fb923c', none: '#94a3b8' }
+                      const FOUND_COLOR = result?.found_in_documents ? '#22c55e' : '#94a3b8'
+
+                      return (
+                        <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'rgba(139,92,246,0.3)' }}>
+                          <div className="flex items-center justify-between px-3 py-2"
+                            style={{ background: 'rgba(139,92,246,0.08)' }}>
+                            <div className="flex items-center gap-2">
+                              <Sparkles size={13} style={{ color: '#a78bfa' }} />
+                              <span className="text-xs font-medium" style={{ color: '#a78bfa' }}>AI Analysis</span>
+                              {item.ai_analysed_at && !aiResults[item.id] && (
+                                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                  {fmt(item.ai_analysed_at)}
+                                </span>
+                              )}
+                              {result && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full border"
+                                  style={{ color: FOUND_COLOR, borderColor: FOUND_COLOR + '44', background: FOUND_COLOR + '15' }}>
+                                  {result.found_in_documents ? 'Answer found in docs' : 'No direct match — AI analysis'}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              disabled={isLoading}
+                              onClick={() => runAiAnalysis(item)}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium hover:opacity-80 disabled:opacity-50"
+                              style={{ background: '#7c3aed', color: '#fff' }}>
+                              {isLoading
+                                ? <><Loader2 size={11} className="animate-spin" /> Analysing…</>
+                                : <><Sparkles size={11} /> {result ? 'Re-run' : 'Run AI Check'}</>
+                              }
+                            </button>
+                          </div>
+
+                          {err && (
+                            <p className="px-3 py-2 text-xs" style={{ color: '#ef4444' }}>{err}</p>
+                          )}
+
+                          {isLoading && (
+                            <div className="px-4 py-6 flex flex-col items-center gap-3">
+                              <Loader2 size={20} className="animate-spin" style={{ color: '#a78bfa' }} />
+                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                Reading ER, project documents and attachments…
+                              </p>
+                            </div>
+                          )}
+
+                          {result && !isLoading && (
+                            <div className="p-4 space-y-4">
+                              {/* Summary + confidence */}
+                              <div className="flex items-start gap-3">
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{result.summary}</p>
+                                  {result.docs_searched !== undefined && (
+                                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                                      Searched {result.docs_searched} document{result.docs_searched !== 1 ? 's' : ''}
+                                      {result.doc_labels && result.doc_labels.length > 0 ? `: ${result.doc_labels.join(', ')}` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className="text-xs px-2 py-0.5 rounded-full border shrink-0"
+                                  style={{ color: CONF_COLOR[result.confidence] ?? '#94a3b8', borderColor: (CONF_COLOR[result.confidence] ?? '#94a3b8') + '44', background: (CONF_COLOR[result.confidence] ?? '#94a3b8') + '15' }}>
+                                  {result.confidence} confidence
+                                </span>
+                              </div>
+
+                              {/* Verbatim quotes from docs */}
+                              {result.sources && result.sources.length > 0 && (
+                                <div className="space-y-2">
+                                  <p className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: 'var(--text-muted)' }}>Found in documents</p>
+                                  {result.sources.map((src, i) => (
+                                    <div key={i} className="rounded-lg border-l-2 pl-3 py-2" style={{ borderColor: '#22c55e' }}>
+                                      <p className="text-[10px] font-medium mb-1" style={{ color: '#22c55e' }}>
+                                        {src.document}{src.clause_ref ? ` · ${src.clause_ref}` : ''}
+                                      </p>
+                                      <blockquote className="text-xs italic mb-1" style={{ color: 'var(--text-primary)' }}>
+                                        "{src.verbatim_text}"
+                                      </blockquote>
+                                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{src.relevance}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Technical analysis */}
+                              {result.technical_analysis && (
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Technical Analysis</p>
+                                  <p className="text-xs whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--text-primary)' }}>{result.technical_analysis}</p>
+                                </div>
+                              )}
+
+                              {/* Suggested response */}
+                              {result.suggested_response && (
+                                <div className="rounded-lg border p-3" style={{ borderColor: 'rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.06)' }}>
+                                  <p className="text-[10px] uppercase tracking-wide font-semibold mb-2" style={{ color: '#a78bfa' }}>Suggested Response</p>
+                                  <p className="text-xs whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--text-primary)' }}>{result.suggested_response}</p>
+                                  <button
+                                    className="mt-2 text-[10px] hover:opacity-70"
+                                    style={{ color: '#a78bfa' }}
+                                    onClick={() => navigator.clipboard.writeText(result.suggested_response)}>
+                                    Copy to clipboard
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {!result && !isLoading && !err && (
+                            <p className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                              Run the AI check to search the ER and project documents for a suggested response.
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     {/* Action buttons */}
                     {canEdit && item.status !== 'closed' && (
