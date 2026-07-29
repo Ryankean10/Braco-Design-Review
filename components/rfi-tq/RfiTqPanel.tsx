@@ -150,6 +150,8 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
   const [, startTransition] = useTransition()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [extracting, setExtracting] = useState(false)
+  const [extractError, setExtractError] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState<string | null>(null)   // rfiId being analysed
   const [aiResults, setAiResults] = useState<Record<string, AiAnalysis>>({})
   const [aiError, setAiError] = useState<Record<string, string>>({})
@@ -203,6 +205,43 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
     })
     setShowForm(true)
     setError(null)
+  }
+
+  async function extractFromFile(file: File) {
+    setExtracting(true)
+    setExtractError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await fetch(`/api/projects/${projectId}/rfi-tq/extract`, { method: 'POST', body: fd })
+      const d = await r.json()
+      if (!r.ok) { setExtractError(d.error ?? 'Extraction failed'); return }
+      const e = d.extracted
+      setEditingItem(null)
+      setForm({
+        type: e.type === 'RFI' ? 'RFI' : 'TQ',
+        number: e.number ?? '',
+        title: e.title ?? '',
+        to_contact: e.to_contact ?? '',
+        from_contact: e.from_contact ?? '',
+        contractor_name: e.contractor_name ?? '',
+        date_sent: e.date_sent ?? '',
+        date_received: e.date_received ?? '',
+        document_reference: e.document_reference ?? '',
+        document_title: e.document_title ?? '',
+        description: e.description ?? '',
+        proposed_solution: e.proposed_solution ?? '',
+        cost_impact: e.cost_impact ?? '',
+        programme_impact: e.programme_impact ?? '',
+        is_scope_change: !!e.is_scope_change,
+        response_required_by: e.response_required_by ?? '',
+        possible_solutions: Array.isArray(e.possible_solutions) ? e.possible_solutions : [],
+      })
+      setShowForm(true)
+      setError(null)
+    } finally {
+      setExtracting(false)
+    }
   }
 
   async function saveForm() {
@@ -337,13 +376,25 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
           )}
         </div>
         {canEdit && (
-          <button
-            onClick={openNewForm}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80"
-            style={{ background: 'var(--accent)', color: '#fff' }}
-          >
-            <Plus size={13} /> New RFI / TQ
-          </button>
+          <div className="flex items-center gap-2">
+            {extractError && (
+              <span className="text-xs" style={{ color: '#ef4444' }}>{extractError}</span>
+            )}
+            <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 cursor-pointer border"
+              style={{ color: 'var(--accent)', borderColor: 'var(--accent)', opacity: extracting ? 0.6 : 1 }}>
+              {extracting ? <><Loader2 size={13} className="animate-spin" /> Extracting…</> : <><Upload size={13} /> Upload RFI/TQ doc</>}
+              <input type="file" className="hidden" accept=".pdf,.docx,.doc"
+                disabled={extracting}
+                onChange={e => { const f = e.target.files?.[0]; if (f) extractFromFile(f); e.target.value = '' }} />
+            </label>
+            <button
+              onClick={openNewForm}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              <Plus size={13} /> New RFI / TQ
+            </button>
+          </div>
         )}
       </div>
 
@@ -931,6 +982,15 @@ export default function RfiTqPanel({ projectId, initialItems, canEdit }: {
             </div>
 
             <div className="overflow-y-auto flex-1 p-6 space-y-4">
+
+              {/* Extracted-from-doc banner */}
+              {!editingItem && form.number && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+                  style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.25)' }}>
+                  <Sparkles size={12} />
+                  Fields extracted from document — review and save when ready.
+                </div>
+              )}
 
               {/* Type + Number */}
               <div className="grid grid-cols-3 gap-3">
