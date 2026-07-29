@@ -11,9 +11,10 @@ interface Props {
   logoUrl: string | null
   accentColor: string
   loginBg?: string
+  unauthorizedError?: boolean
 }
 
-export default function LoginForm({ companyName, companySlug, logoUrl, accentColor, loginBg = 'dark' }: Props) {
+export default function LoginForm({ companyName, companySlug, logoUrl, accentColor, loginBg = 'dark', unauthorizedError = false }: Props) {
   const isLight = loginBg === 'light'
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -49,6 +50,11 @@ export default function LoginForm({ companyName, companySlug, logoUrl, accentCol
   return (
     <div className="min-h-screen flex items-center justify-center px-4" style={{ background: pageBg }}>
       <div className="w-full max-w-sm">
+        {unauthorizedError && (
+          <div className="mb-5 rounded-lg px-4 py-3 text-sm text-center" style={{ background: '#450a0a', color: '#fca5a5', border: '1px solid #7f1d1d' }}>
+            You don't have permission to access this site. Please log in with an authorised account.
+          </div>
+        )}
         {/* Company branding */}
         <div className="mb-8 text-center">
           <div className="flex justify-center mb-3">

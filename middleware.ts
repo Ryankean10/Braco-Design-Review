@@ -72,6 +72,35 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Company access enforcement: verify the logged-in user belongs to this subdomain's company
+  if (user && pathname !== '/login') {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, company_id')
+      .eq('id', user.id)
+      .single()
+
+    const role = profile?.role
+    const userCompanyId = profile?.company_id
+
+    // Superadmins can access any subdomain
+    if (role !== 'superadmin') {
+      const { data: subdomainCompany } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('slug', companySlug)
+        .single()
+
+      if (subdomainCompany && userCompanyId !== subdomainCompany.id) {
+        // User does not belong to this company — redirect to login with error
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        url.searchParams.set('error', 'unauthorized')
+        return NextResponse.redirect(url)
+      }
+    }
+  }
+
   return supabaseResponse
 }
 

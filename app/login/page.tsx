@@ -4,7 +4,8 @@ import { headers } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 import LoginForm from '@/components/LoginForm'
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams
   const headersList = await headers()
   const slug = headersList.get('x-company-slug') ?? 'braco'
 
@@ -27,6 +28,7 @@ export default async function LoginPage() {
       logoUrl={company?.logo_url ?? null}
       accentColor={company?.accent_color ?? '#2563eb'}
       loginBg={(company as any)?.login_bg ?? 'dark'}
+      unauthorizedError={error === 'unauthorized'}
     />
   )
 }
