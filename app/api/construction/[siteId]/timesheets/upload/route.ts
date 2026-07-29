@@ -97,7 +97,7 @@ function parseBlock(rows: unknown[][], startRow: number, weekEndISO: string) {
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
-  const auth = await requireRole(MANAGER_ROLES)
+  const auth = await requireRole([...MANAGER_ROLES, 'operative'])
   if ('error' in auth) return auth.error
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

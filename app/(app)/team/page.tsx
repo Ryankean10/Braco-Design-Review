@@ -15,28 +15,27 @@ export default async function TeamPage() {
   const companyId: string = (profile as any)?.company_id ?? ''
   if (!['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)) redirect('/dashboard')
 
-  const { data: people } = await supabase
-    .from('people')
-    .select('*')
+  // Fetch projects first so we can scope sites by project IDs
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('id, name, client')
     .eq('company_id', companyId)
     .order('name')
 
-  // Appointments scoped to this company's people
-  const { data: appointments } = await supabase
-    .from('job_appointments')
-    .select(`
+  const projectIds = (projects ?? []).map(p => p.id)
+
+  const [{ data: people }, { data: appointments }, { data: sites }] = await Promise.all([
+    supabase.from('people').select('*').eq('company_id', companyId).order('name'),
+    supabase.from('job_appointments').select(`
       *,
       person:people(id, name, role, discipline, company),
       project:projects(id, name, client),
       site:construction_sites(id, name, client)
-    `)
-    .eq('appointed_by', user.id)
-    .order('created_at', { ascending: false })
-
-  // Fetch projects + sites scoped to this company
-  const [{ data: projects }, { data: sites }] = await Promise.all([
-    supabase.from('projects').select('id, name, client').eq('company_id', companyId).order('name'),
-    supabase.from('construction_sites').select('id, name, client, project_id, projects!inner(company_id)').eq('projects.company_id', companyId).order('name'),
+    `).eq('appointed_by', user.id).order('created_at', { ascending: false }),
+    supabase.from('construction_sites')
+      .select('id, name, client, project_id')
+      .in('project_id', projectIds.length > 0 ? projectIds : ['00000000-0000-0000-0000-000000000000'])
+      .order('name'),
   ])
 
   return (
