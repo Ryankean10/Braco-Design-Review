@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
   // Get all active sites with company from_email
   const { data: sites } = await admin
     .from('construction_sites')
-    .select('id, name, location, project_id, projects(company_id, companies(from_email, name))')
+    .select('id, name, location, project_id, projects(company_id, companies(from_email, name, slug))')
     .eq('status', 'active')
 
   if (!sites?.length) return NextResponse.json({ ok: true, results: ['No active sites'] })
@@ -168,7 +168,12 @@ export async function GET(req: NextRequest) {
           briefUrl,
         })
 
-        const { error: sendError } = await resend.emails.send({
+        const companySlug = (site as any).projects?.companies?.slug ?? ''
+        const resendClient = companySlug === 'braco' && process.env.RESEND_API_KEY_BRACO
+          ? new Resend(process.env.RESEND_API_KEY_BRACO)
+          : resend
+
+        const { error: sendError } = await resendClient.emails.send({
           from: `${fromName} <${fromEmail}>`,
           to: managerEmails,
           subject,
