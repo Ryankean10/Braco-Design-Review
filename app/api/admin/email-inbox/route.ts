@@ -17,12 +17,17 @@ export async function GET(req: NextRequest) {
 
   const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '50')
 
-  const { data, error } = await admin
+  let query = admin
     .from('email_inbox')
     .select('*, people(name)')
-    .eq('company_id', profile?.company_id)
     .order('received_at', { ascending: false })
     .limit(limit)
+
+  if (profile?.role !== 'superadmin') {
+    query = query.eq('company_id', profile?.company_id)
+  }
+
+  const { data, error } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data ?? [])
