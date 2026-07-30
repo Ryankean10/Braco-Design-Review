@@ -164,10 +164,22 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // ── STAFF ENQUIRY ────────────────────────────────────────────
+      if (parsed.type === 'staff_enquiry') {
+        await admin.from('email_inbox').update({
+          status: 'needs_attention',
+          email_type: 'staff_enquiry',
+          parsed_data: parsed,
+          processed_at: new Date().toISOString(),
+        }).eq('id', inboxRow.id)
+        results.push(`Staff enquiry from ${person?.name ?? msg.from}: ${parsed.summary}`)
+      }
+
       // File into the appropriate Gmail label
       const gmailLabel =
         parsed.type === 'timesheet' ? 'Timesheets'
         : parsed.type === 'holiday' ? 'Holidays'
+        : parsed.type === 'staff_enquiry' ? 'Staff Enquiries'
         : null
       if (gmailLabel) await applyLabel(msgId, gmailLabel).catch(() => {})
 

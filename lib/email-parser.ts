@@ -23,12 +23,17 @@ export interface ParsedHoliday {
   description: string
 }
 
+export interface ParsedStaffEnquiry {
+  type: 'staff_enquiry'
+  summary: string // one-line summary of what they're asking
+}
+
 export interface ParsedUnknown {
   type: 'unknown'
   reason: string
 }
 
-export type ParseResult = ParsedTimesheet | ParsedHoliday | ParsedUnknown
+export type ParseResult = ParsedTimesheet | ParsedHoliday | ParsedStaffEnquiry | ParsedUnknown
 
 export async function parseEmail(
   subject: string,
@@ -48,7 +53,9 @@ ${body}
 Determine if this email is:
 1. A TIMESHEET submission — worker reporting their hours for a week
 2. A HOLIDAY REQUEST — worker requesting time off
-3. UNKNOWN — neither of the above (spam, general query, etc.)
+3. A STAFF ENQUIRY — a question or query from a worker (pay, expenses, schedule, general question, complaint, anything that needs a response)
+4. UNKNOWN — spam or completely unrelated content
+
 
 For TIMESHEET: extract the week starting date (always a Monday, YYYY-MM-DD) and hours for each working day (Mon–Fri). Hours fields: hoursRegular (standard hours), hoursOt1 (overtime rate 1), hoursOt2 (overtime rate 2). If the worker just says "10 hours Monday" with no OT split, put all in hoursRegular. Infer the week from context (e.g. "this week", "week ending Friday 25 Jul" → Monday 21 Jul 2025).
 
@@ -70,6 +77,9 @@ For timesheet:
 
 For holiday:
 {"type":"holiday","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","description":""}
+
+For staff enquiry:
+{"type":"staff_enquiry","summary":"one-line description of what they are asking"}
 
 For unknown:
 {"type":"unknown","reason":"brief reason"}`

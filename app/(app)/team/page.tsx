@@ -24,7 +24,7 @@ export default async function TeamPage() {
 
   const projectIds = (projects ?? []).map(p => p.id)
 
-  const [{ data: people }, { data: appointments }, { data: sites }] = await Promise.all([
+  const [{ data: people }, { data: appointments }, { data: sites }, { data: enquiries }] = await Promise.all([
     supabase.from('people').select('*').eq('company_id', companyId).order('name'),
     supabase.from('job_appointments').select(`
       *,
@@ -36,6 +36,12 @@ export default async function TeamPage() {
       .select('id, name, client, project_id')
       .in('project_id', projectIds.length > 0 ? projectIds : ['00000000-0000-0000-0000-000000000000'])
       .order('name'),
+    supabase.from('email_inbox')
+      .select('*')
+      .eq('email_type', 'staff_enquiry')
+      .in('status', ['needs_attention', 'replied'])
+      .order('received_at', { ascending: false })
+      .limit(50),
   ])
 
   return (
@@ -45,6 +51,7 @@ export default async function TeamPage() {
         appointments={appointments ?? []}
         projects={projects ?? []}
         sites={sites ?? []}
+        enquiries={enquiries ?? []}
         currentUserId={user.id}
         canEdit={['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)}
         userRole={role}

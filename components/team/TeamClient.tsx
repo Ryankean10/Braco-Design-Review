@@ -44,6 +44,7 @@ interface JobRef { id: string; name: string; client: string | null }
 interface Props {
   people: Person[]; appointments: Appointment[]
   projects: JobRef[]; sites: JobRef[]
+  enquiries?: any[]
   currentUserId: string; canEdit: boolean; userRole: string
 }
 
@@ -1420,7 +1421,7 @@ function EditAppointmentModal({ appt, onClose, onSaved }: {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function TeamClient({ people: init, appointments: initAppts, projects, sites, currentUserId, canEdit, userRole }: Props) {
+export default function TeamClient({ people: init, appointments: initAppts, projects, sites, enquiries: _enquiries, currentUserId, canEdit, userRole }: Props) {
   const supabase = createClient()
   const searchParams = useSearchParams()
   const [tab, setTab] = useState<'library' | 'teams' | 'timesheets' | 'holidays' | 'inbox'>('library')
