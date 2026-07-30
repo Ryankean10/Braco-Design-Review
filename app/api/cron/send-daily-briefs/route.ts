@@ -81,10 +81,10 @@ export async function GET(req: NextRequest) {
   const today = new Date().toISOString().slice(0, 10)
   const results: string[] = []
 
-  // Get all active sites
+  // Get all active sites with company from_email
   const { data: sites } = await admin
     .from('construction_sites')
-    .select('id, name, location, project_id, projects(company_id)')
+    .select('id, name, location, project_id, projects(company_id, companies(from_email, name))')
     .eq('status', 'active')
 
   if (!sites?.length) return NextResponse.json({ ok: true, results: ['No active sites'] })
@@ -147,6 +147,11 @@ export async function GET(req: NextRequest) {
 
       // Send email if there are manager recipients
       if (managerEmails.length > 0) {
+        const project = (site as any).projects
+        const company = project?.companies
+        const fromEmail = company?.from_email ?? 'scotplantai@yacht-gitana.com'
+        const fromName = company?.name ?? 'Site Management'
+
         const briefUrl = `https://braco.yacht-gitana.com/construction/${site.id}/daily-brief`
         const { subject, html, text } = formatBriefEmail({
           siteName: site.name,
@@ -164,7 +169,7 @@ export async function GET(req: NextRequest) {
         })
 
         await resend.emails.send({
-          from: 'Scotplant AI <scotplantai@yacht-gitana.com>',
+          from: `${fromName} <${fromEmail}>`,
           to: managerEmails,
           subject,
           html,

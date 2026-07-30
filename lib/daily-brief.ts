@@ -24,11 +24,21 @@ export interface WeatherData {
 
 export async function fetchWeather(locationText: string): Promise<WeatherData | null> {
   try {
-    const geoRes = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationText)}&count=1&language=en&format=json`
-    )
-    const geo = await geoRes.json()
-    const place = geo.results?.[0]
+    // Try progressively simpler versions of the location string until geocoding succeeds
+    const candidates = [
+      locationText,
+      locationText.split(',')[0].trim(),       // "Dyce, Aberdeen" → "Dyce"
+      locationText.split(',').pop()?.trim(),    // "Dyce, Aberdeen" → "Aberdeen"
+    ].filter(Boolean) as string[]
+
+    let place: any = null
+    for (const candidate of candidates) {
+      const geoRes = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(candidate)}&count=1&language=en&format=json`
+      )
+      const geo = await geoRes.json()
+      if (geo.results?.[0]) { place = geo.results[0]; break }
+    }
     if (!place) return null
 
     const wxRes = await fetch(
