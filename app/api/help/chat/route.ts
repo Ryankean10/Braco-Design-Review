@@ -248,7 +248,7 @@ async function executeTool(name: string, input: any, companyId: string | null): 
 
     try {
       const { data: fileData, error } = await admin.storage
-        .from('documents')
+        .from('construction-programmes')
         .download(prog.file_path)
       if (error || !fileData) return `Programme file found (${prog.file_name}, ${prog.revision}) but could not be downloaded: ${error?.message}`
 
