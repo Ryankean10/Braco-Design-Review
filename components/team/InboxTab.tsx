@@ -285,15 +285,34 @@ export default function InboxTab() {
                       </div>
                     )}
 
-                    {/* Reply button for enquiries */}
+                    {/* Actions for enquiries */}
                     {isEnquiry && (
-                      <button
-                        onClick={e => { e.stopPropagation(); setReplyingTo(email) }}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
-                        style={{ background: 'var(--accent)', color: '#fff' }}>
-                        <MessageSquare size={12} />
-                        {email.reply_text ? 'Send another reply' : 'Reply to enquiry'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={e => { e.stopPropagation(); setReplyingTo(email) }}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
+                          style={{ background: 'var(--accent)', color: '#fff' }}>
+                          <MessageSquare size={12} />
+                          {email.reply_text ? 'Send another reply' : 'Reply to enquiry'}
+                        </button>
+                        {email.status === 'needs_attention' && (
+                          <button
+                            onClick={async e => {
+                              e.stopPropagation()
+                              await fetch(`/api/email-inbox/${email.id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: 'processed' }),
+                              })
+                              load(true)
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border"
+                            style={{ borderColor: 'var(--border)', color: 'var(--text-muted)', background: 'var(--bg-surface)' }}>
+                            <CheckCircle2 size={12} />
+                            Mark as processed
+                          </button>
+                        )}
+                      </div>
                     )}
 
                     {email.error_message && (
