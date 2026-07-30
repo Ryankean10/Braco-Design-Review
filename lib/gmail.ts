@@ -1,29 +1,62 @@
-// IMAP inbox client — replaces the previous Gmail API implementation.
-// Uses imapflow to poll Scotplantai@yacht-gitana.com via IMAP over TLS.
+// Gmail API client using OAuth2 refresh token (no googleapis dependency)
 
-import { ImapFlow } from 'imapflow'
+const TOKEN_URL = 'https://oauth2.googleapis.com/token'
+const GMAIL_BASE = 'https://gmail.googleapis.com/gmail/v1'
 
-function makeClient() {
-  return new ImapFlow({
-    host:   process.env.IMAP_HOST!,
-    port:   Number(process.env.IMAP_PORT ?? 993),
-    secure: true,
-    auth: {
-      user: process.env.IMAP_USER!,
-      pass: process.env.IMAP_PASSWORD!,
-    },
-    logger: false,
+let cachedToken: { token: string; expires: number } | null = null
+
+export async function getAccessToken(): Promise<string> {
+  if (cachedToken && Date.now() < cachedToken.expires - 60_000) return cachedToken.token
+
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id:     process.env.GMAIL_CLIENT_ID!,
+      client_secret: process.env.GMAIL_CLIENT_SECRET!,
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN!,
+      grant_type:    'refresh_token',
+    }),
   })
+  const data = await res.json()
+  if (!data.access_token) throw new Error(`Gmail token error: ${JSON.stringify(data)}`)
+  cachedToken = { token: data.access_token, expires: Date.now() + data.expires_in * 1000 }
+  return cachedToken.token
+}
+
+async function gmailFetch(path: string, options: RequestInit = {}) {
+  const token = await getAccessToken()
+  const res = await fetch(`${GMAIL_BASE}${path}`, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers },
+  })
+  if (!res.ok) throw new Error(`Gmail API ${path} → ${res.status} ${await res.text()}`)
+  return res.json()
 }
 
 export interface GmailMessage {
-  id: string       // IMAP UID (as string for backwards compatibility)
-  threadId: string // same as id — IMAP has no thread concept
+  id: string
+  threadId: string
   from: string
   fromName: string
   subject: string
   date: Date
   bodyText: string
+}
+
+function decodeBase64Url(s: string): string {
+  return Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8')
+}
+
+function extractPart(payload: any, mimeType: string): string {
+  if (payload.mimeType === mimeType && payload.body?.data) return decodeBase64Url(payload.body.data)
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const found = extractPart(part, mimeType)
+      if (found) return found
+    }
+  }
+  return ''
 }
 
 function parseFromHeader(from: string): { email: string; name: string } {
@@ -32,89 +65,58 @@ function parseFromHeader(from: string): { email: string; name: string } {
   return { name: '', email: from.trim().toLowerCase() }
 }
 
-// Returns IMAP UIDs (as strings) of unread messages in INBOX
 export async function listUnreadMessages(maxResults = 50): Promise<string[]> {
-  const client = makeClient()
-  await client.connect()
-  try {
-    await client.mailboxOpen('INBOX')
-    const uids: string[] = []
-    for await (const msg of client.fetch({ seen: false }, { uid: true })) {
-      uids.push(String(msg.uid))
-      if (uids.length >= maxResults) break
-    }
-    return uids
-  } finally {
-    await client.logout()
+  const data = await gmailFetch(
+    `/users/me/messages?q=is:unread&maxResults=${maxResults}`
+  )
+  return (data.messages ?? []).map((m: any) => m.id)
+}
+
+export async function getMessage(id: string): Promise<GmailMessage> {
+  const data = await gmailFetch(`/users/me/messages/${id}?format=full`)
+  const headers: Record<string, string> = {}
+  for (const h of data.payload?.headers ?? []) headers[h.name.toLowerCase()] = h.value
+
+  const { name: fromName, email: from } = parseFromHeader(headers['from'] ?? '')
+  const bodyText = extractPart(data.payload, 'text/plain') || extractPart(data.payload, 'text/html')
+
+  return {
+    id: data.id,
+    threadId: data.threadId,
+    from,
+    fromName,
+    subject: headers['subject'] ?? '',
+    date: new Date(parseInt(data.internalDate)),
+    bodyText: bodyText.slice(0, 8000),
   }
 }
 
-export async function getMessage(uid: string): Promise<GmailMessage> {
-  const client = makeClient()
-  await client.connect()
-  try {
-    await client.mailboxOpen('INBOX')
-    let result: GmailMessage | null = null
-    for await (const msg of client.fetch({ uid: Number(uid) }, { uid: true, envelope: true, source: true })) {
-      const source = msg.source?.toString('utf-8') ?? ''
-      // Extract plain text body from raw source (simple heuristic)
-      let bodyText = ''
-      const textMatch = source.match(/Content-Type: text\/plain[^\r\n]*\r?\n(?:[^\r\n]+\r?\n)*\r?\n([\s\S]*?)(?:\r?\n--|\r?\n\r?\n--|\s*$)/)
-      if (textMatch) {
-        bodyText = textMatch[1]
-      } else {
-        // Fallback: strip MIME headers and take the bulk of content
-        bodyText = source.replace(/^[\s\S]*?\r?\n\r?\n/, '').slice(0, 8000)
-      }
-
-      // Decode quoted-printable if needed
-      bodyText = bodyText.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
-
-      const fromRaw = msg.envelope?.from?.[0]
-      const fromEmail = (fromRaw?.address ?? '').toLowerCase()
-      const fromName = fromRaw?.name ?? ''
-
-      result = {
-        id: String(msg.uid),
-        threadId: String(msg.uid),
-        from: fromEmail,
-        fromName,
-        subject: msg.envelope?.subject ?? '',
-        date: msg.envelope?.date ?? new Date(),
-        bodyText: bodyText.slice(0, 8000),
-      }
-    }
-    if (!result) throw new Error(`Message UID ${uid} not found`)
-    return result
-  } finally {
-    await client.logout()
-  }
+export async function markAsRead(id: string): Promise<void> {
+  await gmailFetch(`/users/me/messages/${id}/modify`, {
+    method: 'POST',
+    body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
+  })
 }
 
-export async function markAsRead(uid: string): Promise<void> {
-  const client = makeClient()
-  await client.connect()
-  try {
-    await client.mailboxOpen('INBOX')
-    await client.messageFlagsAdd({ uid: Number(uid) }, ['\\Seen'])
-  } finally {
-    await client.logout()
+const labelIdCache: Record<string, string> = {}
+
+async function getLabelId(name: string): Promise<string | null> {
+  if (labelIdCache[name]) return labelIdCache[name]
+  const data = await gmailFetch('/users/me/labels')
+  for (const label of data.labels ?? []) {
+    labelIdCache[label.name] = label.id
   }
+  return labelIdCache[name] ?? null
 }
 
-// Move message to a named subfolder (equivalent to Gmail's applyLabel)
-export async function applyLabel(uid: string, labelName: string): Promise<void> {
-  const client = makeClient()
-  await client.connect()
-  try {
-    await client.mailboxOpen('INBOX')
-    // Try to copy to the folder; ignore if folder doesn't exist
-    try {
-      await client.messageMove({ uid: Number(uid) }, labelName)
-    } catch {
-      console.warn(`IMAP folder "${labelName}" not found — skipping move`)
-    }
-  } finally {
-    await client.logout()
+export async function applyLabel(messageId: string, labelName: string): Promise<void> {
+  const labelId = await getLabelId(labelName)
+  if (!labelId) {
+    console.warn(`Gmail label "${labelName}" not found — skipping`)
+    return
   }
+  await gmailFetch(`/users/me/messages/${messageId}/modify`, {
+    method: 'POST',
+    body: JSON.stringify({ addLabelIds: [labelId] }),
+  })
 }
