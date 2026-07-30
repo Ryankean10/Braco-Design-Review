@@ -168,7 +168,7 @@ export async function GET(req: NextRequest) {
           briefUrl,
         })
 
-        await resend.emails.send({
+        const { error: sendError } = await resend.emails.send({
           from: `${fromName} <${fromEmail}>`,
           to: managerEmails,
           subject,
@@ -176,11 +176,14 @@ export async function GET(req: NextRequest) {
           text,
         })
 
-        await admin.from('site_daily_briefs')
-          .update({ status: 'sent', email_sent_at: new Date().toISOString() })
-          .eq('id', brief!.id)
-
-        results.push(`${site.name}: brief generated + sent to ${managerEmails.join(', ')}`)
+        if (sendError) {
+          results.push(`${site.name}: brief generated but EMAIL FAILED — ${JSON.stringify(sendError)} (from: ${fromEmail})`)
+        } else {
+          await admin.from('site_daily_briefs')
+            .update({ status: 'sent', email_sent_at: new Date().toISOString() })
+            .eq('id', brief!.id)
+          results.push(`${site.name}: brief generated + sent to ${managerEmails.join(', ')} (from: ${fromEmail})`)
+        }
       } else {
         results.push(`${site.name}: brief generated (no manager emails configured)`)
       }
