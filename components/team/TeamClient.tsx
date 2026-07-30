@@ -1503,22 +1503,36 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
-        {([
+      {(() => {
+        const needsAttention = (_enquiries ?? []).filter((e: any) => e.status === 'needs_attention').length
+        const tabs = [
           { key: 'library'    as const, label: `People Library (${people.length})` },
           { key: 'teams'      as const, label: `My Teams (${Object.keys(byJob).length} jobs)` },
           { key: 'timesheets' as const, label: 'Timesheets' },
           { key: 'holidays'   as const, label: 'Holidays' },
           ...(canEdit ? [{ key: 'inbox' as const, label: '📬 Email Inbox' }] : []),
-        ]).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
-            style={{
-              borderBottomColor: tab === t.key ? 'var(--accent)' : 'transparent',
-              color: tab === t.key ? 'var(--accent)' : 'var(--text-muted)',
-            }}>{t.label}</button>
-        ))}
-      </div>
+        ]
+        return (
+          <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
+            {tabs.map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                className="relative px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+                style={{
+                  borderBottomColor: tab === t.key ? 'var(--accent)' : 'transparent',
+                  color: tab === t.key ? 'var(--accent)' : 'var(--text-muted)',
+                }}>
+                {t.label}
+                {t.key === 'inbox' && needsAttention > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold px-1"
+                    style={{ background: '#ef4444', color: '#fff', lineHeight: 1 }}>
+                    {needsAttention}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* ── Library tab ─────────────────────────────────────────────────────── */}
       {tab === 'library' && (
