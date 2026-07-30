@@ -13,6 +13,7 @@
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
     "adm-zip": "^0.5.18",
+    "imapflow": "^1.6.5",
     "lucide-react": "^1.17.0",
     "next": "16.2.9",
     "pdf-parse": "^1.1.1",
