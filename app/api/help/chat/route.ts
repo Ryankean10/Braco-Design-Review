@@ -118,6 +118,17 @@ const TOOLS: Anthropic.Tool[] = [
       required: ['site_name'],
     },
   },
+  {
+    name: 'read_programme',
+    description: 'Read and extract the text content from the latest uploaded programme PDF for a site. Use this to understand schedule, planned activities, dates, milestones, disciplines, and resource allocations. Essential for programme-related questions.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        site_name: { type: 'string', description: 'Site name or partial name (e.g. "Dyce", "Kilwinning", "Braco")' },
+      },
+      required: ['site_name'],
+    },
+  },
 ]
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -221,6 +232,38 @@ async function executeTool(name: string, input: any, companyId: string | null): 
     return JSON.stringify(rows)
   }
 
+  if (name === 'read_programme') {
+    const site = await findSite(input.site_name)
+    if (!site) return `No site found matching "${input.site_name}"`
+
+    const { data: progs } = await admin
+      .from('construction_programmes')
+      .select('id, revision, programme_date, file_path, file_name, notes')
+      .eq('site_id', site.id)
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+
+    if (!progs?.length) return `No programme uploaded for ${site.name}`
+    const prog = progs[0]
+
+    try {
+      const { data: fileData, error } = await admin.storage
+        .from('documents')
+        .download(prog.file_path)
+      if (error || !fileData) return `Programme file found (${prog.file_name}, ${prog.revision}) but could not be downloaded: ${error?.message}`
+
+      const buffer = Buffer.from(await fileData.arrayBuffer())
+      const pdfParse = (await import('pdf-parse')).default
+      const parsed = await pdfParse(buffer)
+      const text = parsed.text?.trim() ?? ''
+      if (!text) return `Programme file ${prog.file_name} (${prog.revision}) was downloaded but contains no extractable text — it may be a scanned image or Gantt chart image.`
+
+      return `PROGRAMME: ${site.name} — ${prog.file_name} (${prog.revision}, dated ${prog.programme_date})\n\n${text.slice(0, 8000)}`
+    } catch (err: any) {
+      return `Error reading programme for ${site.name}: ${err.message}`
+    }
+  }
+
   if (name === 'get_rfi_tqs') {
     const site = await findSite(input.site_name)
     if (!site) return `No site found matching "${input.site_name}"`
@@ -319,8 +362,8 @@ export async function POST(req: NextRequest) {
 
   for (let i = 0; i < 8; i++) {
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
       system: buildSystemPrompt(industry),
       tools: TOOLS,
       messages: apiMessages,
@@ -352,7 +395,7 @@ export async function POST(req: NextRequest) {
     break
   }
 
-  logApiUsage({ companyId, endpoint: 'help-chat', model: 'claude-haiku-4-5-20251001', inputTokens: totalInput, outputTokens: totalOutput }).catch(() => {})
+  logApiUsage({ companyId, endpoint: 'help-chat', model: 'claude-sonnet-4-6', inputTokens: totalInput, outputTokens: totalOutput }).catch(() => {})
 
   // Parse bug/suggestion metadata from end of response
   const withoutFences = finalText.replace(/```(?:json)?/g, '').replace(/```/g, '')
