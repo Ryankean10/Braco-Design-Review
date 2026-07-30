@@ -94,7 +94,7 @@ export async function getMessage(id: string): Promise<GmailMessage> {
 export async function markAsRead(id: string): Promise<void> {
   await gmailFetch(`/users/me/messages/${id}/modify`, {
     method: 'POST',
-    body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
+    body: JSON.stringify({ removeLabelIds: ['UNREAD', 'INBOX'] }),
   })
 }
 
