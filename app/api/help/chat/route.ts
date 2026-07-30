@@ -1,158 +1,294 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { Resend } from 'resend'
-import { getResendClient } from '@/lib/resend'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { logApiUsage } from '@/lib/logApiUsage'
+import { getResendClient } from '@/lib/resend'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-function buildSystemPrompt(industry: string): string {
-  const isCivils = industry === 'civils'
+const admin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+)
 
-  const intro = isCivils
-    ? `You are MRRK Assistant — a helpful support bot for the MRRK platform, a construction management tool for civil engineering and grounds works projects in the UK.`
-    : `You are MRRK Assistant — a helpful support bot for the MRRK platform, a construction and design review tool for BESS (Battery Energy Storage System) projects in the UK.`
+// ── Tool definitions ──────────────────────────────────────────────────────────
 
-  const whatItDoes = isCivils
-    ? `## What MRRK does
-MRRK manages civil engineering and grounds works projects through their full lifecycle: Feasibility → Design → Procure → Build & Install → Test & Commission → Handover.`
-    : `## What MRRK does
-MRRK manages BESS projects through their full lifecycle: Design → Procure → Build & Install → Test & Commission → Energise & Handover.`
+const TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'list_sites',
+    description: 'List all construction sites with their status, location, and basic info.',
+    input_schema: { type: 'object' as const, properties: {}, required: [] },
+  },
+  {
+    name: 'get_site_personnel',
+    description: 'Get the list of people appointed to a site on a given date, minus anyone on approved holiday. Returns who is expected on site.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        site_name: { type: 'string', description: 'Site name or partial name (e.g. "Dyce")' },
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format. Defaults to today.' },
+      },
+      required: ['site_name'],
+    },
+  },
+  {
+    name: 'get_daily_log',
+    description: 'Get the daily site diary/log for a site on a given date — weather, crew, issues, summary.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        site_name: { type: 'string' },
+        date: { type: 'string', description: 'YYYY-MM-DD. Defaults to today.' },
+      },
+      required: ['site_name'],
+    },
+  },
+  {
+    name: 'get_daily_brief',
+    description: 'Get the AI-generated daily site brief for a site — personnel, planned works, weather, H&S fact, issues carried over.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        site_name: { type: 'string' },
+        date: { type: 'string', description: 'YYYY-MM-DD. Defaults to today.' },
+      },
+      required: ['site_name'],
+    },
+  },
+  {
+    name: 'get_recent_logs',
+    description: 'Get the last N daily logs for a site — useful for spotting trends, recurring issues, or recent activity.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        site_name: { type: 'string' },
+        days: { type: 'number', description: 'Number of recent days to fetch (default 7, max 30)' },
+      },
+      required: ['site_name'],
+    },
+  },
+  {
+    name: 'get_people',
+    description: 'Get the team directory — people, their roles, disciplines, and companies.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name_filter: { type: 'string', description: 'Optional: filter by name' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_timesheets',
+    description: 'Get timesheet submissions — filter by person name or week.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        person_name: { type: 'string', description: 'Optional person name filter' },
+        week_starting: { type: 'string', description: 'Optional YYYY-MM-DD Monday date' },
+        status: { type: 'string', description: 'Optional: Draft, Submitted, Approved, Rejected' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_holidays',
+    description: 'Get holiday bookings — filter by person name or status.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        person_name: { type: 'string' },
+        status: { type: 'string', description: 'Pending, Approved, Rejected' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_rfi_tqs',
+    description: 'Get the RFI/TQ register for a site.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        site_name: { type: 'string' },
+        status: { type: 'string', description: 'Optional status filter: open, submitted_to_client, response_received, closed' },
+      },
+      required: ['site_name'],
+    },
+  },
+]
 
-  const constructionSection = isCivils
-    ? `**Construction page** (/construction)
-- Shows all active construction sites
-- Click a site to open its full dashboard
-- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Civils activities, ITP panel, Programme, timesheets`
-    : `**Construction page** (/construction)
-- Shows all active construction sites (e.g. Dyce BESS, Braco BESS)
-- Click a site to open its full dashboard
-- Inside a site: Site Dashboard (crew, weather, open issues, daily logs), Cable Register, Civils activities, ITP panel, Programme, timesheets`
+// ── Tool execution ────────────────────────────────────────────────────────────
 
-  const planningSection = isCivils
-    ? `**Planning / Work Planner** (/planning)
-- AI-powered programme forecast generator — input site parameters to get a construction programme
-- Free-issue materials can be entered with delivery dates so they are excluded from the critical path`
-    : `**Planning / Work Planner** (/planning)
-- AI-powered forecast generator — input site parameters, get a programme forecast benchmarked against Dyce BESS real data
-- Free-issue materials can be entered with delivery dates so they are excluded from the critical path`
-
-  return `${intro}
-
-${whatItDoes}
-
-## App sections and where to find things
-
-${constructionSection}
-
-**Daily Logs**
-- Found inside each construction site page → "Daily logs" section
-- Shows the last 7 days of site diary entries with weather, crew, issues and summary
-- Civils diaries can be uploaded as PDFs
-
-**Team page** (/team)
-- Full staff library — civils crew, subcontractors, site managers
-- Click a person to see their profile, credentials, site appointments
-- Filter by group
-
-**ITP (Inspection & Test Plan)**
-- Found inside each construction site → "ITP" section
-- Tracks hold points and witness points for each test activity
-- Requires sign-off before moving to next stage
-
-${planningSection}
-
-**Projects** (/projects)
-- Upload drawings/documents for AI-assisted review
-- Findings classified Critical / Major / Minor / Observation — human sign-off required
-
-**Documents** (/documents)
-- Project document library with version control and comment loop
-
-## Bug reporting and suggestions
-If the user describes something that isn't working correctly, is broken, shows an error, or behaves unexpectedly — that is a bug. Set isBugReport: true.
-If the user makes a suggestion, feature request, or improvement idea — set isSuggestion: true (not isBugReport). Tell them the team will review it.
-Both bugs and suggestions are logged and the team is notified.
-
-## Response format
-Respond in plain conversational English, 2-4 sentences. At the END output a raw JSON object on its own line — NO markdown, NO code fences, just the object:
-{"isBugReport": true/false, "isSuggestion": true/false, "bugSummary": "one sentence summary — ALWAYS provide this, never null", "suggestedActions": ["action 1", "action 2"] or []}`
+async function findSite(name: string) {
+  const { data } = await admin
+    .from('construction_sites')
+    .select('id, name, location, status, capacity_mw, start_date, end_date')
+    .ilike('name', `%${name}%`)
+    .limit(1)
+  return data?.[0] ?? null
 }
+
+async function executeTool(name: string, input: any, companyId: string | null): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10)
+
+  if (name === 'list_sites') {
+    const { data } = await admin.from('construction_sites').select('name, location, status, capacity_mw, start_date, end_date')
+    return JSON.stringify(data ?? [])
+  }
+
+  if (name === 'get_site_personnel') {
+    const site = await findSite(input.site_name)
+    if (!site) return `No site found matching "${input.site_name}"`
+    const date = input.date ?? today
+
+    const { data: appointments } = await admin
+      .from('job_appointments')
+      .select('role_on_job, is_manager, people(id, name, role, discipline, company)')
+      .eq('site_id', site.id)
+      .or(`start_date.is.null,start_date.lte.${date}`)
+      .or(`end_date.is.null,end_date.gte.${date}`)
+
+    const personIds = (appointments ?? []).map((a: any) => (a.people as any)?.id).filter(Boolean)
+    const { data: holidays } = personIds.length > 0
+      ? await admin.from('holiday_bookings').select('person_id').in('person_id', personIds).eq('status', 'Approved').lte('start_date', date).gte('end_date', date)
+      : { data: [] }
+
+    const absentIds = new Set((holidays ?? []).map((h: any) => h.person_id))
+    const on: any[] = [], off: any[] = []
+    for (const a of appointments ?? []) {
+      const p = a.people as any
+      if (!p) continue
+      if (absentIds.has(p.id)) off.push(p.name)
+      else on.push({ name: p.name, role: a.role_on_job || p.role, company: p.company, is_manager: a.is_manager })
+    }
+    return JSON.stringify({ site: site.name, date, on_site: on, absent_holiday: off })
+  }
+
+  if (name === 'get_daily_log') {
+    const site = await findSite(input.site_name)
+    if (!site) return `No site found matching "${input.site_name}"`
+    const date = input.date ?? today
+    const { data } = await admin.from('site_daily_logs').select('*').eq('site_id', site.id).eq('log_date', date).maybeSingle()
+    return data ? JSON.stringify(data) : `No daily log found for ${site.name} on ${date}`
+  }
+
+  if (name === 'get_daily_brief') {
+    const site = await findSite(input.site_name)
+    if (!site) return `No site found matching "${input.site_name}"`
+    const date = input.date ?? today
+    const { data } = await admin.from('site_daily_briefs').select('*').eq('site_id', site.id).eq('brief_date', date).maybeSingle()
+    return data ? JSON.stringify(data) : `No daily brief generated for ${site.name} on ${date}`
+  }
+
+  if (name === 'get_recent_logs') {
+    const site = await findSite(input.site_name)
+    if (!site) return `No site found matching "${input.site_name}"`
+    const days = Math.min(input.days ?? 7, 30)
+    const from = new Date(); from.setDate(from.getDate() - days)
+    const { data } = await admin.from('site_daily_logs').select('log_date, weather_description, temp_c, total_manhours, issues, summary').eq('site_id', site.id).gte('log_date', from.toISOString().slice(0, 10)).order('log_date', { ascending: false })
+    return JSON.stringify(data ?? [])
+  }
+
+  if (name === 'get_people') {
+    let q = admin.from('people').select('name, role, discipline, company, email').eq('is_active', true)
+    if (companyId) q = q.eq('company_id', companyId)
+    if (input.name_filter) q = q.ilike('name', `%${input.name_filter}%`)
+    const { data } = await q.order('name').limit(50)
+    return JSON.stringify(data ?? [])
+  }
+
+  if (name === 'get_timesheets') {
+    let q = admin.from('weekly_timesheets').select('week_starting, status, total_hours, people(name)').order('week_starting', { ascending: false }).limit(50)
+    if (companyId) q = q.eq('company_id', companyId)
+    if (input.week_starting) q = q.eq('week_starting', input.week_starting)
+    if (input.status) q = q.eq('status', input.status)
+    const { data } = await q
+    let rows = data ?? []
+    if (input.person_name) rows = rows.filter((r: any) => r.people?.name?.toLowerCase().includes(input.person_name.toLowerCase()))
+    return JSON.stringify(rows)
+  }
+
+  if (name === 'get_holidays') {
+    let q = admin.from('holiday_bookings').select('start_date, end_date, days_taken, status, description, people(name)').order('start_date', { ascending: false }).limit(50)
+    if (companyId) q = q.eq('company_id', companyId)
+    if (input.status) q = q.eq('status', input.status)
+    const { data } = await q
+    let rows = data ?? []
+    if (input.person_name) rows = rows.filter((r: any) => r.people?.name?.toLowerCase().includes(input.person_name.toLowerCase()))
+    return JSON.stringify(rows)
+  }
+
+  if (name === 'get_rfi_tqs') {
+    const site = await findSite(input.site_name)
+    if (!site) return `No site found matching "${input.site_name}"`
+    let q = admin.from('rfi_tqs').select('rfi_number, title, status, discipline, originator, date_raised, date_required, response_summary').eq('site_id', site.id).order('date_raised', { ascending: false })
+    if (input.status) q = q.eq('status', input.status)
+    const { data } = await q
+    return JSON.stringify(data ?? [])
+  }
+
+  return `Unknown tool: ${name}`
+}
+
+// ── System prompt ─────────────────────────────────────────────────────────────
+
+function buildSystemPrompt(industry: string): string {
+  const today = new Date().toISOString().slice(0, 10)
+  return `You are MRRK Assistant — an intelligent site management assistant for a UK construction platform managing BESS (Battery Energy Storage System) projects.
+
+Today's date: ${today}
+
+You have access to live data via tools. When someone asks about personnel, timesheets, holidays, daily logs, briefs, RFIs, or any site data — use the appropriate tool to fetch real information before answering. Never guess or make up data.
+
+Capabilities:
+- Who is on site today / on a given date (checks appointments vs approved holidays)
+- Daily site logs — weather, crew, issues, summary
+- AI daily briefs — planned works, carried-over issues, H&S facts
+- Team directory and roles
+- Timesheet submissions and status
+- Holiday bookings
+- RFI/TQ registers
+
+Programme information: the programme is currently stored as PDF uploads only — no parsed schedule data is available yet. Tell the user this if they ask programme-specific questions.
+
+Tone: professional, concise, direct. You are talking to site managers and engineers.
+
+If the user describes a bug or something broken: set isBugReport: true in the JSON.
+If it's a suggestion: set isSuggestion: true.
+
+At the END of every response, output a raw JSON object on its own line (no markdown, no code fences):
+{"isBugReport": false, "isSuggestion": false, "bugSummary": "n/a", "suggestedActions": []}`
+}
+
+// ── Bug logging ───────────────────────────────────────────────────────────────
 
 const BUG_EMAIL = process.env.ALERT_EMAIL ?? 'rkean1995@gmail.com'
 
 async function sendBugEmail(summary: string, userMessage: string, userName: string, userEmail: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug') {
-  const { resend, fromEmail } = getResendClient(null) // always braco key for bug reports
-  const actionsHtml = suggestedActions.length
-    ? `<ul style="margin:8px 0 0;padding-left:16px;">${suggestedActions.map(a => `<li style="color:#94a3b8;font-size:13px;margin-bottom:4px">${a}</li>`).join('')}</ul>`
-    : ''
+  const { resend, fromEmail } = getResendClient(null)
   const isSuggestion = reportType === 'suggestion'
-  const { error: sendErr } = await resend.emails.send({
+  await resend.emails.send({
     from: fromEmail,
     to: BUG_EMAIL,
-    subject: isSuggestion
-      ? `💡 MRRK Suggestion — ${new Date().toLocaleDateString('en-GB')}`
-      : `🐛 MRRK Bug Report — ${new Date().toLocaleDateString('en-GB')}`,
-    html: `
-<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0f172a;font-family:system-ui,sans-serif">
-<div style="max-width:600px;margin:32px auto;background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155">
-  <div style="background:${isSuggestion ? '#0ea5e9' : '#8b5cf6'};padding:16px 24px">
-    <p style="margin:0;color:#fff;font-weight:700;font-size:15px">${isSuggestion ? '💡 Suggestion' : '🐛 Bug Report'} — MRRK</p>
-    <p style="margin:4px 0 0;color:#ddd6fe;font-size:12px">${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}</p>
-  </div>
-  <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">
-    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid ${isSuggestion ? '#0ea5e9' : '#8b5cf6'}">
-      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Reported by</p>
-      <p style="margin:0;color:#e2e8f0;font-size:13px">${userName}${userEmail ? ` &lt;${userEmail}&gt;` : ''}</p>
-    </div>
-    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #f87171">
-      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Issue</p>
-      <p style="margin:0;color:#e2e8f0;font-size:13px">${summary}</p>
-    </div>
-    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #64748b">
-      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Full message</p>
-      <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.6">${userMessage}</p>
-    </div>
-    ${suggestedActions.length ? `
-    <div style="padding:12px 16px;background:#0f172a;border-radius:8px;border-left:3px solid #10b981">
-      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Suggested actions</p>
-      ${actionsHtml}
-    </div>` : ''}
-    <div style="text-align:center;margin-top:8px">
-      <a href="https://braco-design-review.vercel.app/admin/bugs"
-        style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600">
-        View in Admin Panel →
-      </a>
-    </div>
-  </div>
-</div></body></html>`
+    subject: isSuggestion ? `💡 MRRK Suggestion — ${new Date().toLocaleDateString('en-GB')}` : `🐛 MRRK Bug Report — ${new Date().toLocaleDateString('en-GB')}`,
+    html: `<p><strong>${isSuggestion ? 'Suggestion' : 'Bug'}</strong> from ${userName} (${userEmail})</p><p>${summary}</p><p>Message: ${userMessage}</p>`,
   })
-  if (sendErr) throw new Error((sendErr as any).message ?? JSON.stringify(sendErr))
 }
 
-async function logBugToDb(summary: string, userMessage: string, userName: string, userEmail: string, userId: string, suggestedActions: string[], reportType: 'bug' | 'suggestion' = 'bug', companyId?: string | null) {
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  )
-  const { error } = await sb.from('bug_reports').insert({
-    reporter_id: userId,
-    reporter_name: userName,
-    reporter_email: userEmail,
-    user_message: userMessage,
-    summary,
-    suggested_actions: suggestedActions,
-    status: 'open',
-    report_type: reportType,
+async function logBugToDb(summary: string, userMessage: string, userName: string, userEmail: string, userId: string, suggestedActions: string[], reportType: 'bug' | 'suggestion', companyId?: string | null) {
+  await admin.from('bug_reports').insert({
+    reporter_id: userId, reporter_name: userName, reporter_email: userEmail,
+    user_message: userMessage, summary, suggested_actions: suggestedActions,
+    status: 'open', report_type: reportType,
     priority: reportType === 'suggestion' ? 'low' : 'medium',
     ...(companyId ? { company_id: companyId } : {}),
   })
-  if (error) throw new Error(`DB insert failed: ${error.message}`)
 }
+
+// ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -167,92 +303,86 @@ export async function POST(req: NextRequest) {
   const { messages } = await req.json()
   if (!messages?.length) return NextResponse.json({ error: 'No messages' }, { status: 400 })
 
-  // Use service-role client to bypass RLS when reading profile + company
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  )
-
   const { data: profile } = await admin.from('profiles').select('full_name, company_id').eq('id', user.id).maybeSingle()
-  const userName = (profile as any)?.full_name ?? user.email ?? 'Unknown user'
+  const userName = (profile as any)?.full_name ?? user.email ?? 'Unknown'
   const companyId: string | null = (profile as any)?.company_id ?? null
 
-  // Derive industry from the user's actual company, not the subdomain header
   const { data: company } = companyId
     ? await admin.from('companies').select('industry, slug').eq('id', companyId).single()
     : await admin.from('companies').select('industry, slug').eq('slug', req.headers.get('x-company-slug') ?? 'braco').single()
   const industry = (company as any)?.industry ?? 'bess'
-  const companySlug: string | null = (company as any)?.slug ?? null
 
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 600,
-    system: buildSystemPrompt(industry),
-    messages,
-  })
-  logApiUsage({ companyId, endpoint: 'help-chat', model: response.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => {})
+  // Agentic tool-use loop
+  let apiMessages: Anthropic.MessageParam[] = messages
+  let totalInput = 0, totalOutput = 0
+  let finalText = ''
 
-  const rawText = response.content[0].type === 'text' ? response.content[0].text : ''
+  for (let i = 0; i < 8; i++) {
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: buildSystemPrompt(industry),
+      tools: TOOLS,
+      messages: apiMessages,
+    })
+    totalInput += response.usage.input_tokens
+    totalOutput += response.usage.output_tokens
 
-  // Strip code fences then find the metadata JSON by locating the last { } block
-  const withoutFences = rawText.replace(/```(?:json)?/g, '').replace(/```/g, '')
+    if (response.stop_reason === 'end_turn') {
+      finalText = (response.content.find(b => b.type === 'text') as any)?.text ?? ''
+      break
+    }
+
+    if (response.stop_reason === 'tool_use') {
+      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
+      apiMessages = [...apiMessages, { role: 'assistant', content: response.content }]
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+        toolUseBlocks.map(async (block: any) => ({
+          type: 'tool_result' as const,
+          tool_use_id: block.id,
+          content: await executeTool(block.name, block.input, companyId),
+        }))
+      )
+      apiMessages = [...apiMessages, { role: 'user', content: toolResults }]
+      continue
+    }
+
+    finalText = (response.content.find(b => b.type === 'text') as any)?.text ?? ''
+    break
+  }
+
+  logApiUsage({ companyId, endpoint: 'help-chat', model: 'claude-haiku-4-5-20251001', inputTokens: totalInput, outputTokens: totalOutput }).catch(() => {})
+
+  // Parse bug/suggestion metadata from end of response
+  const withoutFences = finalText.replace(/```(?:json)?/g, '').replace(/```/g, '')
   const lastOpen = withoutFences.lastIndexOf('{')
   const lastClose = withoutFences.lastIndexOf('}')
-
-  let isBugReport = false
-  let isSuggestion = false
-  let bugSummary: string | null = null
-  let suggestedActions: string[] = []
-  let displayText = rawText
-  let jsonStr: string | null = null
-  let parseError: string | null = null
+  let isBugReport = false, isSuggestion = false, bugSummary: string | null = null, suggestedActions: string[] = []
+  let displayText = finalText
 
   if (lastOpen !== -1 && lastClose > lastOpen) {
-    jsonStr = withoutFences.slice(lastOpen, lastClose + 1)
+    const jsonStr = withoutFences.slice(lastOpen, lastClose + 1)
     if (jsonStr.includes('isBugReport')) {
       try {
         const meta = JSON.parse(jsonStr)
         isBugReport = meta.isBugReport === true
         isSuggestion = meta.isSuggestion === true
         suggestedActions = Array.isArray(meta.suggestedActions) ? meta.suggestedActions : []
-        // Fall back to first suggested action or a generic label if model returns null
         bugSummary = meta.bugSummary ?? suggestedActions[0] ?? (isSuggestion ? 'User suggestion' : 'Bug report')
-        // Strip JSON block from display (handle code fence or bare)
-        displayText = rawText
-          .slice(0, rawText.lastIndexOf('{'))
-          .replace(/```(?:json)?/g, '').replace(/```/g, '')
-          .trim()
-      } catch (e: any) {
-        parseError = e?.message
-      }
+        displayText = finalText.slice(0, finalText.lastIndexOf('{')).replace(/```(?:json)?/g, '').replace(/```/g, '').trim()
+      } catch {}
     }
   }
 
-  const shouldLog = (isBugReport || isSuggestion) && bugSummary
-  let logError: string | null = null
-
-  if (shouldLog) {
+  if ((isBugReport || isSuggestion) && bugSummary) {
     const reportType = isSuggestion ? 'suggestion' : 'bug'
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content ?? ''
-    // Run independently — a DB failure must not prevent the email from sending
-    const [dbResult, emailResult] = await Promise.allSettled([
-      logBugToDb(bugSummary!, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType, companyId),
-      sendBugEmail(bugSummary!, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
+    await Promise.allSettled([
+      logBugToDb(bugSummary, lastUserMsg, userName, user.email ?? '', user.id, suggestedActions, reportType, companyId),
+      sendBugEmail(bugSummary, lastUserMsg, userName, user.email ?? '', suggestedActions, reportType),
     ])
-    const errors = [dbResult, emailResult]
-      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-      .map(r => r.reason?.message ?? String(r.reason))
-    if (errors.length) {
-      logError = errors.join(' | ')
-      console.error('Report logging error:', logError)
-    }
   }
 
-  return NextResponse.json({
-    message: displayText,
-    isBugReport: isBugReport || isSuggestion,
-    bugSummary,
-    _debug: { shouldLog, logError, jsonFound: !!jsonStr, parseError, rawText, jsonStr },
-  })
+  return NextResponse.json({ message: displayText, isBugReport: isBugReport || isSuggestion })
 }
