@@ -100,21 +100,24 @@ export async function markAsRead(id: string): Promise<void> {
 
 const labelIdCache: Record<string, string> = {}
 
-async function getLabelId(name: string): Promise<string | null> {
+async function getLabelId(name: string): Promise<string> {
   if (labelIdCache[name]) return labelIdCache[name]
   const data = await gmailFetch('/users/me/labels')
   for (const label of data.labels ?? []) {
     labelIdCache[label.name] = label.id
   }
-  return labelIdCache[name] ?? null
+  if (labelIdCache[name]) return labelIdCache[name]
+  // Label doesn't exist — create it
+  const created = await gmailFetch('/users/me/labels', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+  labelIdCache[name] = created.id
+  return created.id
 }
 
 export async function applyLabel(messageId: string, labelName: string): Promise<void> {
   const labelId = await getLabelId(labelName)
-  if (!labelId) {
-    console.warn(`Gmail label "${labelName}" not found — skipping`)
-    return
-  }
   await gmailFetch(`/users/me/messages/${messageId}/modify`, {
     method: 'POST',
     body: JSON.stringify({ addLabelIds: [labelId] }),
