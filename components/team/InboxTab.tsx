@@ -285,17 +285,19 @@ export default function InboxTab() {
                       </div>
                     )}
 
-                    {/* Actions for enquiries */}
-                    {isEnquiry && (
+                    {/* Actions */}
+                    {(isEnquiry || ['needs_attention', 'failed'].includes(email.status)) && (
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={e => { e.stopPropagation(); setReplyingTo(email) }}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
-                          style={{ background: 'var(--accent)', color: '#fff' }}>
-                          <MessageSquare size={12} />
-                          {email.reply_text ? 'Send another reply' : 'Reply to enquiry'}
-                        </button>
-                        {email.status === 'needs_attention' && (
+                        {isEnquiry && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setReplyingTo(email) }}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
+                            style={{ background: 'var(--accent)', color: '#fff' }}>
+                            <MessageSquare size={12} />
+                            {email.reply_text ? 'Send another reply' : 'Reply to enquiry'}
+                          </button>
+                        )}
+                        {['needs_attention', 'failed'].includes(email.status) && (
                           <button
                             onClick={async e => {
                               e.stopPropagation()
