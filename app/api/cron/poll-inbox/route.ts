@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
       await markAsRead(msgId)
     }
   } catch (err: any) {
-    results.push(`Fatal error: ${err.message}`)
+    results.push(`Fatal error: ${err.message} | stack: ${err.stack ?? ''} | code: ${err.code ?? ''} | responseCode: ${err.responseCode ?? ''}`)
     return NextResponse.json({ ok: false, results }, { status: 500 })
   }
 
