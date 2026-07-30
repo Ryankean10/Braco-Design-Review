@@ -250,7 +250,7 @@ async function executeTool(name: string, input: any, companyId: string | null): 
       const { data: fileData, error } = await admin.storage
         .from('construction-programmes')
         .download(prog.file_path)
-      if (error || !fileData) return `Programme file found (${prog.file_name}, ${prog.revision}) but could not be downloaded: ${error?.message}`
+      if (error || !fileData) return `Programme file found (${prog.file_name}, ${prog.revision}, path: ${prog.file_path}) but could not be downloaded: ${error?.message}`
 
       const buffer = Buffer.from(await fileData.arrayBuffer())
       const pdfParse = (await import('pdf-parse')).default
@@ -294,8 +294,7 @@ Capabilities:
 - Timesheet submissions and status
 - Holiday bookings
 - RFI/TQ registers
-
-Programme information: the programme is currently stored as PDF uploads only — no parsed schedule data is available yet. Tell the user this if they ask programme-specific questions.
+- Construction programmes — use read_programme to read the uploaded PDF for a site and extract schedule, milestones, activities, dates, and resource info. Always use this tool when asked about programme dates, when activities finish, or when resources can move between sites.
 
 Tone: professional, concise, direct. You are talking to site managers and engineers.
 
