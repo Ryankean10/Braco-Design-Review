@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { UserPlus, ChevronDown, ChevronUp, FolderOpen, X, Plus, RefreshCw } from 'lucide-react'
+import { UserPlus, ChevronDown, ChevronUp, FolderOpen, X, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 const ROLES = ['admin', 'project_manager', 'engineer', 'operative', 'client'] as const
 type Role = typeof ROLES[number]
@@ -47,6 +47,8 @@ export default function UsersClient({ users: initial, projects, assignmentMap: i
   const [assignErr, setAssignErr] = useState('')
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [resendMsg, setResendMsg] = useState<Record<string, string>>({})
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   async function invite() {
     if (!form.email.trim()) return
@@ -62,6 +64,16 @@ export default function UsersClient({ users: initial, projects, assignmentMap: i
     setAssignMap(prev => ({ ...prev, [data.userId]: [] }))
     setForm({ email: '', full_name: '', role: 'engineer' })
     setInviting(false)
+  }
+
+  async function removeUser(userId: string) {
+    setRemovingId(userId)
+    const res = await fetch('/api/admin/remove-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }),
+    })
+    setRemovingId(null)
+    setConfirmRemove(null)
+    if (res.ok) setUsers(prev => prev.filter(u => u.id !== userId))
   }
 
   async function resendInvite(userId: string, email: string) {
@@ -208,8 +220,8 @@ export default function UsersClient({ users: initial, projects, assignmentMap: i
                 {/* Expanded project assignments */}
                 {isExpanded && (
                   <div className="px-5 pb-4 pt-1 border-t" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
-                    {/* Resend invite */}
-                    <div className="flex items-center gap-3 mb-3 pt-1">
+                    {/* Actions row */}
+                    <div className="flex items-center gap-3 mb-3 pt-1 flex-wrap">
                       <button
                         onClick={() => resendInvite(u.id, u.email)}
                         disabled={resendingId === u.id}
@@ -218,6 +230,36 @@ export default function UsersClient({ users: initial, projects, assignmentMap: i
                         <RefreshCw size={11} className={resendingId === u.id ? 'animate-spin' : ''} />
                         {resendingId === u.id ? 'Sending…' : 'Resend invite email'}
                       </button>
+
+                      {u.id !== currentUserId && (
+                        confirmRemove === u.id ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Remove this user?</span>
+                            <button
+                              onClick={() => removeUser(u.id)}
+                              disabled={removingId === u.id}
+                              className="text-xs px-2.5 py-1.5 rounded-lg font-medium disabled:opacity-50"
+                              style={{ background: '#dc2626', color: 'white' }}>
+                              {removingId === u.id ? 'Removing…' : 'Yes, remove'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmRemove(null)}
+                              className="text-xs px-2.5 py-1.5 rounded-lg border"
+                              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmRemove(u.id)}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border hover:opacity-80 transition-opacity"
+                            style={{ color: '#dc2626', borderColor: '#dc262640', background: '#dc262610' }}>
+                            <Trash2 size={11} />
+                            Remove user
+                          </button>
+                        )
+                      )}
+
                       {resendMsg[u.id] && (
                         <span className="text-xs" style={{ color: resendMsg[u.id].startsWith('Invite') ? '#4ade80' : 'var(--critical)' }}>
                           {resendMsg[u.id]}
