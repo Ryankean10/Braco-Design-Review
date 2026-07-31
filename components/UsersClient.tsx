@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { UserPlus, ChevronDown, ChevronUp, FolderOpen, X, Plus } from 'lucide-react'
+import { UserPlus, ChevronDown, ChevronUp, FolderOpen, X, Plus, RefreshCw } from 'lucide-react'
 
 const ROLES = ['admin', 'project_manager', 'engineer', 'operative', 'client'] as const
 type Role = typeof ROLES[number]
@@ -45,6 +45,8 @@ export default function UsersClient({ users: initial, projects, assignmentMap: i
   const [selectedProject, setSelectedProject] = useState('')
   const [assignSaving, setAssignSaving] = useState(false)
   const [assignErr, setAssignErr] = useState('')
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [resendMsg, setResendMsg] = useState<Record<string, string>>({})
 
   async function invite() {
     if (!form.email.trim()) return
@@ -60,6 +62,17 @@ export default function UsersClient({ users: initial, projects, assignmentMap: i
     setAssignMap(prev => ({ ...prev, [data.userId]: [] }))
     setForm({ email: '', full_name: '', role: 'engineer' })
     setInviting(false)
+  }
+
+  async function resendInvite(userId: string, email: string) {
+    setResendingId(userId)
+    setResendMsg(prev => ({ ...prev, [userId]: '' }))
+    const res = await fetch('/api/admin/resend-invite', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
+    })
+    const data = await res.json()
+    setResendingId(null)
+    setResendMsg(prev => ({ ...prev, [userId]: res.ok ? `Invite resent to ${email}` : (data.error ?? 'Failed') }))
   }
 
   async function changeRole(userId: string, role: Role) {
@@ -195,6 +208,23 @@ export default function UsersClient({ users: initial, projects, assignmentMap: i
                 {/* Expanded project assignments */}
                 {isExpanded && (
                   <div className="px-5 pb-4 pt-1 border-t" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+                    {/* Resend invite */}
+                    <div className="flex items-center gap-3 mb-3 pt-1">
+                      <button
+                        onClick={() => resendInvite(u.id, u.email)}
+                        disabled={resendingId === u.id}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border hover:opacity-80 disabled:opacity-40 transition-opacity"
+                        style={{ color: 'var(--text-primary)', borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+                        <RefreshCw size={11} className={resendingId === u.id ? 'animate-spin' : ''} />
+                        {resendingId === u.id ? 'Sending…' : 'Resend invite email'}
+                      </button>
+                      {resendMsg[u.id] && (
+                        <span className="text-xs" style={{ color: resendMsg[u.id].startsWith('Invite') ? '#4ade80' : 'var(--critical)' }}>
+                          {resendMsg[u.id]}
+                        </span>
+                      )}
+                    </div>
+
                     <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
                       {isAdmin ? 'Admins have access to all projects' : `Project access (${assignedProjs.length})`}
                     </p>
