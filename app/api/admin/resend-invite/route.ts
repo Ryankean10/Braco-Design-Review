@@ -29,13 +29,16 @@ export async function POST(req: NextRequest) {
   let bodyIntro = "You've been invited to join the platform. Click the link below to set your password and get started."
   let ctaText = 'Accept invitation'
 
-  const { data: inviteData, error: inviteErr } = await admin.auth.admin.generateLink({ type: 'invite', email })
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? `https://${companySlug}.yacht-gitana.com`
+  const redirectTo = `${siteUrl}/update-password`
+
+  const { data: inviteData, error: inviteErr } = await admin.auth.admin.generateLink({ type: 'invite', email, options: { redirectTo } })
 
   if (!inviteErr) {
     inviteUrl = inviteData?.properties?.action_link
   } else {
     // User already confirmed — send a password reset so they can log in
-    const { data: recoveryData, error: recoveryErr } = await admin.auth.admin.generateLink({ type: 'recovery', email })
+    const { data: recoveryData, error: recoveryErr } = await admin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo } })
     if (recoveryErr) return NextResponse.json({ error: recoveryErr.message }, { status: 500 })
     inviteUrl = recoveryData?.properties?.action_link
     subject = 'Your login link'

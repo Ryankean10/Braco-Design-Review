@@ -19,10 +19,14 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? `https://${req.headers.get('host')}`
+  const redirectTo = `${siteUrl}/update-password`
+
   // Try to invite — if the user already exists (pending invite), look them up and resend
   let userId: string
   const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { full_name: full_name ?? null },
+    redirectTo,
   })
 
   if (inviteErr) {
