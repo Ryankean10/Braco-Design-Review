@@ -72,7 +72,7 @@ export default function UpdatePasswordPage() {
                 minLength={8}
                 placeholder="At least 8 characters"
                 className="w-full rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2"
-                style={{ background: '#0f172a', border: '1px solid #334155', focusRingColor: '#3b82f6' }}
+                style={{ background: '#0f172a', border: '1px solid #334155' }}
               />
             </div>
             <div>
