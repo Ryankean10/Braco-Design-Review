@@ -120,6 +120,7 @@ export default function InboxTab() {
   const [refreshing, setRefreshing] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [replyingTo, setReplyingTo] = useState<InboxEmail | null>(null)
+  const [actionMsg, setActionMsg] = useState<Record<string, string>>({})
 
   async function load(quiet = false) {
     if (!quiet) setLoading(true); else setRefreshing(true)
@@ -319,17 +320,24 @@ export default function InboxTab() {
                             {email.reply_text ? 'Send another reply' : 'Reply to enquiry'}
                           </button>
                         )}
-                        {/* Re-process as haulage — for misclassified emails */}
+                        {/* Re-process as haulage — for misclassified or stuck emails */}
                         {!isHaulage && email.body_text && (
                           <button
                             onClick={async e => {
                               e.stopPropagation()
-                              await fetch(`/api/haulage/reprocess-email`, {
+                              setActionMsg(prev => ({ ...prev, [email.id]: 'Processing…' }))
+                              const res = await fetch(`/api/haulage/reprocess-email`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ emailInboxId: email.id }),
                               })
-                              load(true)
+                              const d = await res.json()
+                              if (res.ok) {
+                                setActionMsg(prev => ({ ...prev, [email.id]: '✓ Done' }))
+                                setTimeout(() => load(true), 800)
+                              } else {
+                                setActionMsg(prev => ({ ...prev, [email.id]: `Error: ${d.error ?? 'failed'}` }))
+                              }
                             }}
                             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border"
                             style={{ borderColor: 'rgba(167,139,250,0.4)', color: '#a78bfa', background: 'rgba(167,139,250,0.06)' }}>
@@ -337,7 +345,8 @@ export default function InboxTab() {
                             Re-process as haulage
                           </button>
                         )}
-                        {['needs_attention', 'failed'].includes(email.status) && (
+                        {/* Mark as processed — available for any non-processed status */}
+                        {!['processed', 'replied'].includes(email.status) && (
                           <button
                             onClick={async e => {
                               e.stopPropagation()
@@ -353,6 +362,11 @@ export default function InboxTab() {
                             <CheckCircle2 size={12} />
                             Mark as processed
                           </button>
+                        )}
+                        {actionMsg[email.id] && (
+                          <span className="text-xs" style={{ color: actionMsg[email.id].startsWith('Error') ? '#ef4444' : '#22c55e' }}>
+                            {actionMsg[email.id]}
+                          </span>
                         )}
                       </div>
                     )}
