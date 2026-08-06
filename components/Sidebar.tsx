@@ -23,12 +23,12 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard },
+  { href: '/inbox',             label: 'Email Inbox',       icon: Inbox,                                 roles: ['superadmin', 'admin'] },
   { href: '/projects',          label: 'Projects',          icon: FolderOpen,     module: 'projects' },
   { href: '/construction',      label: 'Construction',      icon: HardHat,        module: 'construction', roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
   { href: '/reference-library', label: 'Reference Library', icon: BookOpen,       module: 'reference_library' },
   { href: '/planning',          label: 'Work Planner',      icon: ClipboardList,  module: 'planning',    roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/team',              label: 'Team',              icon: UsersRound,     module: 'team',        roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
-  { href: '/inbox',             label: 'Email Inbox',       icon: Inbox,                                 roles: ['superadmin', 'admin'] },
   { href: '/plant',             label: 'Plant',             icon: Truck,          module: 'plant',       roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/estimating',        label: 'Estimating',        icon: Calculator,     module: 'estimating',  roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/haulage',           label: 'Haulage',           icon: Truck,          module: 'haulage',     roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
