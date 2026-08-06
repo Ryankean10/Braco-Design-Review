@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import TimesheetTab from '@/components/team/TimesheetTab'
 import HolidayTab from '@/components/team/HolidayTab'
-import InboxTab from '@/components/team/InboxTab'
 import {
   UsersRound, Plus, Search, X, ChevronDown, ChevronRight,
   Briefcase, HardHat, Star, Mail, Phone, Building2,
@@ -1510,7 +1509,6 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
           { key: 'teams'      as const, label: `My Teams (${Object.keys(byJob).length} jobs)` },
           { key: 'timesheets' as const, label: 'Timesheets' },
           { key: 'holidays'   as const, label: 'Holidays' },
-          ...(canEdit ? [{ key: 'inbox' as const, label: '📬 Email Inbox' }] : []),
         ]
         return (
           <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
@@ -1857,10 +1855,6 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
         <HolidayTab people={people} appointments={appointments} canManage={canEdit} userRole={userRole} />
       )}
 
-      {/* ── Email Inbox tab ───────────────────────────────────────────────────── */}
-      {tab === 'inbox' && canEdit && (
-        <InboxTab />
-      )}
 
       {/* Modals */}
       {(addingPerson || editingPerson) && (
