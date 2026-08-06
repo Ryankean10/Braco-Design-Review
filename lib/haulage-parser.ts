@@ -57,7 +57,7 @@ ${replyText}
 
 Extract every time entry from the reply. For each entry return:
 - description: what the driver did
-- task_id: matching planned task id (or null if no match)
+- task_id: matching planned task id — match by DESCRIPTION SIMILARITY, not by "Task 1/2/3" position number. Only match if the work described clearly corresponds to the planned task (same location, same type of work). If the driver says "Task 2" but the description doesn't match planned task 2, do not force-match it.
 - project_id: matching project id (or null if unidentifiable — flag it)
 - start_time: HH:MM (24hr) or null
 - end_time: HH:MM (24hr) or null
@@ -66,7 +66,7 @@ Extract every time entry from the reply. For each entry return:
 - is_flagged: true if project cannot be identified from the reply or system
 - flag_reason: brief explanation if flagged (e.g. "Mentioned 'Inverness job' but no matching project found")
 
-Also check every planned task. If a planned task is not mentioned or accounted for in the reply, add it to "missing_tasks" with its task_id and title.
+Also check every planned task. If a planned task is not mentioned or accounted for in the reply — meaning no time entry clearly corresponds to it by description — add it to "missing_tasks". Do not mark a task as covered just because the driver labelled something "Task 2" if the actual work described is clearly different.
 
 Return ONLY valid JSON, no markdown:
 {

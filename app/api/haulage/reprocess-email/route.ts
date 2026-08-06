@@ -22,8 +22,23 @@ export async function POST(req: NextRequest) {
 
   if (!email) return NextResponse.json({ error: 'Email not found' }, { status: 404 })
 
-  const person = email.people as any
-  if (!person?.company_id) return NextResponse.json({ error: 'No matching person/company for this email' }, { status: 400 })
+  // person_id may be null if the row was inserted before the person's email was corrected
+  // Fall back to looking up by from_email directly
+  let person = email.people as any
+  if (!person?.company_id) {
+    const { data: lookedUp } = await db
+      .from('people')
+      .select('id, company_id')
+      .eq('email', email.from_email)
+      .eq('is_active', true)
+      .maybeSingle()
+    person = lookedUp
+    // Also backfill the inbox row so future lookups work
+    if (lookedUp) {
+      await db.from('email_inbox').update({ person_id: lookedUp.id, company_id: lookedUp.company_id }).eq('id', emailInboxId)
+    }
+  }
+  if (!person?.company_id) return NextResponse.json({ error: `No active person found for ${email.from_email}` }, { status: 400 })
 
   const sheetDate = email.received_at.slice(0, 10)
 
