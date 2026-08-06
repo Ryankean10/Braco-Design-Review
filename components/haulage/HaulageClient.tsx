@@ -39,11 +39,14 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
   const [form, setForm] = useState({ title: '', description: '', location: '', driver_id: '', vehicle_id: '', project_id: '', est_start: '', est_end: '' })
 
   function shiftDate(days: number) {
-    const d = new Date(date); d.setDate(d.getDate() + days)
-    router.push(`/haulage?date=${d.toISOString().slice(0, 10)}`)
+    const d = new Date(date + 'T00:00:00')
+    d.setDate(d.getDate() + days)
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+    router.push(`/haulage?date=${y}-${m}-${day}`)
   }
 
-  const isToday = date === new Date().toISOString().slice(0, 10)
+  const todayLocal = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}` })()
+  const isToday = date === todayLocal
 
   async function addTask() {
     if (!form.title.trim()) return
