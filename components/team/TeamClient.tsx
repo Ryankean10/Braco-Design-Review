@@ -1520,12 +1520,6 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                   color: tab === t.key ? 'var(--accent)' : 'var(--text-muted)',
                 }}>
                 {t.label}
-                {t.key === 'inbox' && needsAttention > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold px-1"
-                    style={{ background: '#ef4444', color: '#fff', lineHeight: 1 }}>
-                    {needsAttention}
-                  </span>
-                )}
               </button>
             ))}
           </div>
