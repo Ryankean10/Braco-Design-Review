@@ -66,7 +66,10 @@ Extract every time entry from the reply. For each entry return:
 - is_flagged: true if project cannot be identified from the reply or system
 - flag_reason: brief explanation if flagged (e.g. "Mentioned 'Inverness job' but no matching project found")
 
-Also check every planned task. If a planned task is not mentioned or accounted for in the reply — meaning no time entry clearly corresponds to it by description — add it to "missing_tasks". Do not mark a task as covered just because the driver labelled something "Task 2" if the actual work described is clearly different.
+CRITICAL — check every planned task against the reply. A planned task is only covered if the driver's description matches the SPECIFIC work, location, and material in the task. Examples of non-matches:
+- Planned: "take spoil from Roth to waste disposal" vs Reply: "waste wood back to yard" — DIFFERENT (different material, different route, different destination)
+- Planned: "delivery to Dyce site" vs Reply: "dropped off materials somewhere" — DIFFERENT (location not confirmed)
+If in doubt, mark as missing. Do not match tasks just because the driver numbered them "Task 1", "Task 2" etc — numbers are unreliable. Add every unmatched planned task to "missing_tasks".
 
 Return ONLY valid JSON, no markdown:
 {
