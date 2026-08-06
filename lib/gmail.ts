@@ -66,10 +66,15 @@ function parseFromHeader(from: string): { email: string; name: string } {
 }
 
 export async function listUnreadMessages(maxResults = 50): Promise<string[]> {
-  const data = await gmailFetch(
-    `/users/me/messages?q=is:unread&maxResults=${maxResults}`
-  )
-  return (data.messages ?? []).map((m: any) => m.id)
+  // Fetch unread messages AND recent inbox messages from the last 24h
+  // so emails marked read by a previous cron run aren't permanently skipped
+  const [unread, recent] = await Promise.all([
+    gmailFetch(`/users/me/messages?q=is:unread&maxResults=${maxResults}`),
+    gmailFetch(`/users/me/messages?q=in:inbox newer_than:1d&maxResults=${maxResults}`),
+  ])
+  const ids = new Set<string>()
+  for (const m of [...(unread.messages ?? []), ...(recent.messages ?? [])]) ids.add(m.id)
+  return [...ids]
 }
 
 export async function getMessage(id: string): Promise<GmailMessage> {

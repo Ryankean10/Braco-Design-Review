@@ -95,16 +95,18 @@ export async function GET(req: NextRequest) {
       }
 
       // ── HAULAGE DRIVER REPLY (check FIRST before general parser) ──
-      // A reply to a task brief, OR any email from a driver who has tasks today
+      // Match on subject OR on any email from a driver who has tasks today
       const looksLikeHaulageReply = /re:.*task brief|re:.*daily.*brief|re:.*your tasks/i.test(msg.subject)
-      if (person?.company_id && looksLikeHaulageReply) {
+      if (person?.company_id) {
         const { data: driverTasks } = await admin
           .from('haulage_tasks')
           .select('id')
           .eq('driver_id', person.id)
           .eq('task_date', today)
           .limit(1)
-        if (driverTasks?.length) {
+        const hasTasksToday = (driverTasks?.length ?? 0) > 0
+        if (hasTasksToday || looksLikeHaulageReply) {
+          results.push(`Haulage check: driver=${person.name}, hasTasksToday=${hasTasksToday}, subjectMatch=${looksLikeHaulageReply}`)
           const result = await parseDriverReply({
             replyText: msg.bodyText,
             driverEmail: msg.from,
@@ -117,10 +119,11 @@ export async function GET(req: NextRequest) {
             email_type: 'haulage_reply',
             parsed_data: result,
             processed_at: new Date().toISOString(),
+            error_message: (result as any).error ?? null,
           }).eq('id', inboxRow.id)
-          await applyLabel(msgId, 'Haulage').catch(() => {})
+          await applyLabel(msgId, 'Haulage').catch((e) => results.push(`Label error: ${e.message}`))
           await markAsRead(msgId)
-          results.push(`Haulage reply from ${person.name}: ${result.lineCount ?? 0} lines, ${result.hasFlagged ? 'FLAGGED' : 'OK'}`)
+          results.push(`Haulage reply from ${person.name}: ${(result as any).lineCount ?? 0} lines, ${ (result as any).hasFlagged ? 'FLAGGED' : (result as any).error ? 'ERROR' : 'OK'}`)
           continue
         }
       }
