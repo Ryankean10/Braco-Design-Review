@@ -319,15 +319,25 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
 
                 {/* Missing tasks — planned tasks not mentioned in the reply */}
                 {missingTasks.length > 0 && (
-                  <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border)', background: 'rgba(239,68,68,0.04)' }}>
-                    <p className="text-xs font-semibold mb-2" style={{ color: '#ef4444' }}>Tasks not reported by driver</p>
-                    <div className="space-y-1">
+                  <div className="border-t" style={{ borderColor: 'var(--border)', background: 'rgba(239,68,68,0.04)' }}>
+                    <p className="px-4 pt-3 pb-2 text-xs font-semibold" style={{ color: '#ef4444' }}>Tasks not reported by driver</p>
+                    <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
                       {missingTasks.map((t, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          <AlertTriangle size={11} style={{ color: '#ef4444', flexShrink: 0 }} />
-                          <span style={{ color: 'var(--text-primary)' }}>{t.title}</span>
-                          <span style={{ color: 'var(--text-muted)' }}>— no times provided</span>
-                        </div>
+                        <MissingTaskRow
+                          key={i}
+                          task={t}
+                          sheetId={sheet.id}
+                          driverId={sheet.driver_id ?? ''}
+                          date={date}
+                          companyId={companyId}
+                          projects={projects}
+                          onResolved={() => {
+                            setSheets(prev => prev.map(s => s.id === sheet.id ? {
+                              ...s,
+                              missing_tasks: (s.missing_tasks ?? []).filter((_, idx) => idx !== i)
+                            } : s))
+                          }}
+                        />
                       ))}
                     </div>
                   </div>
@@ -337,6 +347,76 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function MissingTaskRow({ task, sheetId, driverId, date, companyId, projects, onResolved }: {
+  task: { task_id: string; title: string }
+  sheetId: string; driverId: string; date: string; companyId: string; projects: Project[]
+  onResolved: () => void
+}) {
+  const [startTime, setStartTime] = useState('07:00')
+  const [endTime, setEndTime] = useState('')
+  const [projectId, setProjectId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [nextDayLoading, setNextDayLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  async function saveManualTime() {
+    if (!startTime || !endTime) { setMsg('Enter both start and end time'); return }
+    setSaving(true); setMsg('')
+    const res = await fetch(`/api/haulage/sheets/${sheetId}/lines`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: task.title, start_time: startTime, end_time: endTime, project_id: projectId || null, task_id: task.task_id, is_adhoc: false }),
+    })
+    if (res.ok) {
+      await fetch(`/api/haulage/sheets/${sheetId}/resolve-missing`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: task.task_id }),
+      })
+      onResolved()
+    } else {
+      const d = await res.json()
+      setMsg(d.error ?? 'Failed to save')
+    }
+    setSaving(false)
+  }
+
+  async function addToNextDay() {
+    setNextDayLoading(true); setMsg('')
+    const res = await fetch('/api/haulage/tasks/copy-to-next-day', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: task.task_id, sheet_date: date, sheet_id: sheetId }),
+    })
+    const d = await res.json()
+    setMsg(res.ok ? `Added to ${d.next_date}` : (d.error ?? 'Failed'))
+    setNextDayLoading(false)
+  }
+
+  const inp = { background: 'var(--bg-elevated)', color: 'var(--text-primary)', borderColor: 'var(--border)' }
+
+  return (
+    <div className="px-4 py-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <AlertTriangle size={11} style={{ color: '#ef4444', flexShrink: 0 }} />
+        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{task.title}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 pl-4">
+        <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="rounded-lg border px-2 py-1 text-xs" style={inp} />
+        <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="rounded-lg border px-2 py-1 text-xs" style={inp} />
+        <select value={projectId} onChange={e => setProjectId(e.target.value)} className="rounded-lg border px-2 py-1 text-xs" style={inp}>
+          <option value="">No project</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <button onClick={saveManualTime} disabled={saving} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white disabled:opacity-60" style={{ background: 'var(--accent)' }}>
+          {saving ? 'Saving…' : 'Save times'}
+        </button>
+        <button onClick={addToNextDay} disabled={nextDayLoading} className="px-2.5 py-1 rounded-lg text-xs border disabled:opacity-60" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+          {nextDayLoading ? 'Adding…' : '+ Next day'}
+        </button>
+      </div>
+      {msg && <p className="text-xs pl-4" style={{ color: msg.startsWith('Added') ? '#22c55e' : '#ef4444' }}>{msg}</p>}
     </div>
   )
 }
