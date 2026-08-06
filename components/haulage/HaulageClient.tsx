@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Send, ChevronLeft, ChevronRight, Truck, AlertTriangle, CheckCircle, Clock, Edit2, Trash2, X, Check } from 'lucide-react'
+import { Plus, Send, ChevronLeft, ChevronRight, Truck, AlertTriangle, CheckCircle, Clock, Edit2, Trash2, X, Check, RefreshCw } from 'lucide-react'
 
 interface Task { id: string; title: string; description: string | null; location: string | null; est_start: string | null; est_end: string | null; driver_id: string | null; vehicle_id: string | null; project_id: string | null; sort_order: number; people?: { name: string } | null; haulage_vehicles?: { name: string; reg: string } | null; projects?: { name: string } | null }
 interface SheetLine { id: string; description: string; start_time: string | null; end_time: string | null; hours: number | null; project_id: string | null; task_id: string | null; is_flagged: boolean; flag_reason: string | null; is_adhoc: boolean }
@@ -263,6 +263,14 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
                     </span>
                     {flaggedLines.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>{flaggedLines.length} flagged</span>}
                   {missingTasks.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>{missingTasks.length} task{missingTasks.length > 1 ? 's' : ''} not reported</span>}
+                    {sheet.raw_reply && sheet.status !== 'approved' && (
+                      <button onClick={async () => {
+                        const res = await fetch(`/api/haulage/sheets/${sheet.id}/reparse`, { method: 'POST' })
+                        if (res.ok) router.refresh()
+                      }} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                        <RefreshCw size={10} /> Re-parse
+                      </button>
+                    )}
                     {canApprove && <button onClick={() => approveSheet(sheet.id)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: '#22c55e' }}><Check size={11} /> Approve</button>}
                   </div>
                 </div>
