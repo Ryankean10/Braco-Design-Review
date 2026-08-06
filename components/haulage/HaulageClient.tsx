@@ -6,7 +6,7 @@ import { Plus, Send, ChevronLeft, ChevronRight, Truck, AlertTriangle, CheckCircl
 
 interface Task { id: string; title: string; description: string | null; location: string | null; est_start: string | null; est_end: string | null; driver_id: string | null; vehicle_id: string | null; project_id: string | null; sort_order: number; people?: { name: string } | null; haulage_vehicles?: { name: string; reg: string } | null; projects?: { name: string } | null }
 interface SheetLine { id: string; description: string; start_time: string | null; end_time: string | null; hours: number | null; project_id: string | null; task_id: string | null; is_flagged: boolean; flag_reason: string | null; is_adhoc: boolean }
-interface Sheet { id: string; driver_id: string | null; status: string; brief_sent_at: string | null; reply_received_at: string | null; raw_reply: string | null; total_hours: number | null; notes: string | null; people?: { name: string } | null; haulage_sheet_lines?: SheetLine[] }
+interface Sheet { id: string; driver_id: string | null; status: string; brief_sent_at: string | null; reply_received_at: string | null; raw_reply: string | null; total_hours: number | null; notes: string | null; missing_tasks: { task_id: string; title: string }[] | null; people?: { name: string } | null; haulage_sheet_lines?: SheetLine[] }
 interface Driver { id: string; name: string; email: string | null; phone: string | null }
 interface Vehicle { id: string; name: string; reg: string | null; category: string }
 interface Project { id: string; name: string }
@@ -240,7 +240,8 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
             const Icon = cfg.icon
             const lines = sheet.haulage_sheet_lines ?? []
             const flaggedLines = lines.filter(l => l.is_flagged)
-            const canApprove = sheet.status !== 'approved' && flaggedLines.length === 0
+            const missingTasks = sheet.missing_tasks ?? []
+            const canApprove = sheet.status !== 'approved' && flaggedLines.length === 0 && missingTasks.length === 0
 
             return (
               <div key={sheet.id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
@@ -261,6 +262,7 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
                       <Icon size={11} /> {cfg.label}
                     </span>
                     {flaggedLines.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>{flaggedLines.length} flagged</span>}
+                  {missingTasks.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>{missingTasks.length} task{missingTasks.length > 1 ? 's' : ''} not reported</span>}
                     {canApprove && <button onClick={() => approveSheet(sheet.id)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: '#22c55e' }}><Check size={11} /> Approve</button>}
                   </div>
                 </div>
@@ -290,6 +292,22 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
 
                 {lines.length === 0 && sheet.raw_reply && (
                   <p className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>No lines parsed — raw reply captured above.</p>
+                )}
+
+                {/* Missing tasks — planned tasks not mentioned in the reply */}
+                {missingTasks.length > 0 && (
+                  <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border)', background: 'rgba(239,68,68,0.04)' }}>
+                    <p className="text-xs font-semibold mb-2" style={{ color: '#ef4444' }}>Tasks not reported by driver</p>
+                    <div className="space-y-1">
+                      {missingTasks.map((t, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          <AlertTriangle size={11} style={{ color: '#ef4444', flexShrink: 0 }} />
+                          <span style={{ color: 'var(--text-primary)' }}>{t.title}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>— no times provided</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )

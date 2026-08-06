@@ -66,9 +66,12 @@ Extract every time entry from the reply. For each entry return:
 - is_flagged: true if project cannot be identified from the reply or system
 - flag_reason: brief explanation if flagged (e.g. "Mentioned 'Inverness job' but no matching project found")
 
+Also check every planned task. If a planned task is not mentioned or accounted for in the reply, add it to "missing_tasks" with its task_id and title.
+
 Return ONLY valid JSON, no markdown:
 {
   "lines": [...],
+  "missing_tasks": [{ "task_id": "...", "title": "..." }],
   "total_hours": number,
   "notes": "any general observations or issues"
 }`
@@ -90,7 +93,8 @@ Return ONLY valid JSON, no markdown:
   }
 
   const lines: any[] = parsed.lines ?? []
-  const hasFlagged = lines.some((l: any) => l.is_flagged)
+  const missingTasks: any[] = parsed.missing_tasks ?? []
+  const hasFlagged = lines.some((l: any) => l.is_flagged) || missingTasks.length > 0
 
   // Upsert daily sheet
   const { data: sheet, error: sheetErr } = await admin
@@ -105,6 +109,7 @@ Return ONLY valid JSON, no markdown:
       email_thread_id: emailThreadId ?? null,
       total_hours: parsed.total_hours ?? null,
       notes: parsed.notes ?? null,
+      missing_tasks: missingTasks.length > 0 ? missingTasks : null,
     }, { onConflict: 'driver_id,sheet_date' })
     .select()
     .single()
@@ -132,5 +137,5 @@ Return ONLY valid JSON, no markdown:
     )
   }
 
-  return { ok: true, sheetId: sheet.id, hasFlagged, lineCount: lines.length }
+  return { ok: true, sheetId: sheet.id, hasFlagged, lineCount: lines.length, missingTaskCount: missingTasks.length }
 }
