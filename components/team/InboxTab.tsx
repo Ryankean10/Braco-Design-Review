@@ -308,7 +308,7 @@ export default function InboxTab() {
                     )}
 
                     {/* Actions */}
-                    {(isEnquiry || isHaulage || ['needs_attention', 'failed'].includes(email.status)) && (
+                    {(isEnquiry || isHaulage || ['needs_attention', 'failed', 'processing', 'ignored'].includes(email.status)) && (
                       <div className="flex items-center gap-2 flex-wrap">
                         {isEnquiry && (
                           <button
