@@ -30,6 +30,7 @@ const NAV: NavItem[] = [
   { href: '/team',              label: 'Team',              icon: UsersRound,     module: 'team',        roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/plant',             label: 'Plant',             icon: Truck,          module: 'plant',       roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/estimating',        label: 'Estimating',        icon: Calculator,     module: 'estimating',  roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/haulage',           label: 'Haulage',           icon: Truck,          module: 'haulage',     roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/users',             label: 'Users',             icon: Users,          roles: ['superadmin', 'admin'] },
 ]
 

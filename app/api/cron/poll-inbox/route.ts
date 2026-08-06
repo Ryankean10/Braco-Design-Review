@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { listUnreadMessages, getMessage, markAsRead, applyLabel } from '@/lib/gmail'
 import { parseEmail, countWorkingDays } from '@/lib/email-parser'
+import { parseDriverReply } from '@/lib/haulage-parser'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -173,6 +174,40 @@ export async function GET(req: NextRequest) {
           processed_at: new Date().toISOString(),
         }).eq('id', inboxRow.id)
         results.push(`Staff enquiry from ${person?.name ?? msg.from}: ${parsed.summary}`)
+      }
+
+      // ── HAULAGE DRIVER REPLY ─────────────────────────────────────
+      // Detect if this email is a reply to a daily task brief
+      const isHaulageReply =
+        /re:.*task brief|re:.*daily.*brief|re:.*your tasks/i.test(msg.subject) ||
+        (parsed as any).type === 'unknown'
+      if (isHaulageReply && person?.company_id) {
+        // Check if driver has tasks for today
+        const { data: driverTasks } = await admin
+          .from('haulage_tasks')
+          .select('id')
+          .eq('driver_id', person.id)
+          .eq('task_date', today)
+          .limit(1)
+        if (driverTasks?.length) {
+          const result = await parseDriverReply({
+            replyText: msg.bodyText,
+            driverEmail: msg.from,
+            sheetDate: today,
+            companyId: person.company_id,
+            emailThreadId: msg.threadId,
+          })
+          await admin.from('email_inbox').update({
+            status: result.ok ? 'processed' : 'needs_attention',
+            email_type: 'haulage_reply',
+            parsed_data: result,
+            processed_at: new Date().toISOString(),
+          }).eq('id', inboxRow.id)
+          await applyLabel(msgId, 'Haulage').catch(() => {})
+          await markAsRead(msgId)
+          results.push(`Haulage reply from ${person.name}: ${result.lineCount ?? 0} lines, ${result.hasFlagged ? 'FLAGGED' : 'OK'}`)
+          continue
+        }
       }
 
       // File into the appropriate Gmail label
