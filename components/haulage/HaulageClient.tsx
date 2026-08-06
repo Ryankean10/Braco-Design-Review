@@ -34,6 +34,8 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
   const [sendingBriefs, setSendingBriefs] = useState(false)
   const [msg, setMsg] = useState('')
   const [editingLine, setEditingLine] = useState<string | null>(null)
+  const [reparsingId, setReparsingId] = useState<string | null>(null)
+  const [reparseMsg, setReparseMsg] = useState<Record<string, string>>({})
   const [form, setForm] = useState({ title: '', description: '', location: '', driver_id: '', vehicle_id: '', project_id: '', est_start: '', est_end: '' })
 
   function shiftDate(days: number) {
@@ -265,10 +267,23 @@ export default function HaulageClient({ date, tasks: initialTasks, sheets: initi
                   {missingTasks.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>{missingTasks.length} task{missingTasks.length > 1 ? 's' : ''} not reported</span>}
                     {sheet.raw_reply && sheet.status !== 'approved' && (
                       <button onClick={async () => {
+                        setReparsingId(sheet.id)
+                        setReparseMsg(prev => ({ ...prev, [sheet.id]: '' }))
                         const res = await fetch(`/api/haulage/sheets/${sheet.id}/reparse`, { method: 'POST' })
-                        if (res.ok) router.refresh()
-                      }} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                        <RefreshCw size={10} /> Re-parse
+                        if (res.ok) {
+                          setReparseMsg(prev => ({ ...prev, [sheet.id]: '✓ Done' }))
+                          setTimeout(() => { setReparsingId(null); router.refresh() }, 800)
+                        } else {
+                          const d = await res.json()
+                          setReparseMsg(prev => ({ ...prev, [sheet.id]: `Error: ${d.error ?? 'failed'}` }))
+                          setReparsingId(null)
+                        }
+                      }}
+                      disabled={reparsingId === sheet.id}
+                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border disabled:opacity-60"
+                      style={{ borderColor: 'var(--border)', color: reparseMsg[sheet.id]?.startsWith('Error') ? '#ef4444' : 'var(--text-muted)' }}>
+                        <RefreshCw size={10} className={reparsingId === sheet.id ? 'animate-spin' : ''} />
+                        {reparsingId === sheet.id ? 'Re-parsing…' : reparseMsg[sheet.id] || 'Re-parse'}
                       </button>
                     )}
                     {canApprove && <button onClick={() => approveSheet(sheet.id)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: '#22c55e' }}><Check size={11} /> Approve</button>}
