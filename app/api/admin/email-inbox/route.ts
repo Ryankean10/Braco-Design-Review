@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
     .limit(limit)
 
   if (profile?.role !== 'superadmin') {
-    query = query.eq('company_id', profile?.company_id)
+    // Also show emails with null company_id (unknown senders) so admins can see and re-process them
+    query = query.or(`company_id.eq.${profile?.company_id},company_id.is.null`)
   }
 
   const { data, error } = await query
