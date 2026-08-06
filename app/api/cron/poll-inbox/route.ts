@@ -28,13 +28,20 @@ export async function GET(req: NextRequest) {
     results.push(`Found ${messageIds.length} unread messages`)
 
     for (const msgId of messageIds) {
-      // Skip if already in DB
+      // Skip if already in DB (unless it was misclassified — haulage replies that hit staff_enquiry first)
       const { data: existing } = await admin
         .from('email_inbox')
-        .select('id')
+        .select('id, email_type')
         .eq('gmail_message_id', msgId)
         .maybeSingle()
-      if (existing) { await markAsRead(msgId); continue }
+      if (existing) {
+        // If it was already correctly classified or is a non-haulage type, skip
+        if (existing.email_type !== 'staff_enquiry' && existing.email_type !== 'unknown') {
+          await markAsRead(msgId); continue
+        }
+        // Otherwise fall through: a misclassified email may be a haulage reply
+        // We'll re-evaluate below and update the existing row if needed
+      }
 
       const msg = await getMessage(msgId)
 
@@ -46,25 +53,34 @@ export async function GET(req: NextRequest) {
         .eq('is_active', true)
         .maybeSingle()
 
-      // Insert into email_inbox
-      const { data: inboxRow, error: insertErr } = await admin
-        .from('email_inbox')
-        .insert({
-          gmail_message_id: msg.id,
-          gmail_thread_id: msg.threadId,
-          received_at: msg.date.toISOString(),
-          from_email: msg.from,
-          from_name: msg.fromName,
-          subject: msg.subject,
-          body_text: msg.bodyText,
-          status: 'processing',
-          person_id: person?.id ?? null,
-          company_id: person?.company_id ?? null,
-        })
-        .select()
-        .single()
+      // Insert or reuse existing row
+      let inboxRow: { id: string } | null = null
+      if (existing) {
+        // Re-processing a misclassified email — reuse the existing DB row
+        inboxRow = existing
+        await admin.from('email_inbox').update({ status: 'processing' }).eq('id', existing.id)
+      } else {
+        const { data, error: insertErr } = await admin
+          .from('email_inbox')
+          .insert({
+            gmail_message_id: msg.id,
+            gmail_thread_id: msg.threadId,
+            received_at: msg.date.toISOString(),
+            from_email: msg.from,
+            from_name: msg.fromName,
+            subject: msg.subject,
+            body_text: msg.bodyText,
+            status: 'processing',
+            person_id: person?.id ?? null,
+            company_id: person?.company_id ?? null,
+          })
+          .select()
+          .single()
+        if (insertErr) { results.push(`Insert error for ${msgId}: ${insertErr.message}`); continue }
+        inboxRow = data
+      }
 
-      if (insertErr) { results.push(`Insert error for ${msgId}: ${insertErr.message}`); continue }
+      if (!inboxRow) { results.push(`No inbox row for ${msgId}`); continue }
 
       if (!person) {
         await admin.from('email_inbox').update({
@@ -76,6 +92,37 @@ export async function GET(req: NextRequest) {
         await markAsRead(msgId)
         results.push(`Unknown sender: ${msg.from}`)
         continue
+      }
+
+      // ── HAULAGE DRIVER REPLY (check FIRST before general parser) ──
+      // A reply to a task brief, OR any email from a driver who has tasks today
+      const looksLikeHaulageReply = /re:.*task brief|re:.*daily.*brief|re:.*your tasks/i.test(msg.subject)
+      if (person?.company_id && looksLikeHaulageReply) {
+        const { data: driverTasks } = await admin
+          .from('haulage_tasks')
+          .select('id')
+          .eq('driver_id', person.id)
+          .eq('task_date', today)
+          .limit(1)
+        if (driverTasks?.length) {
+          const result = await parseDriverReply({
+            replyText: msg.bodyText,
+            driverEmail: msg.from,
+            sheetDate: today,
+            companyId: person.company_id,
+            emailThreadId: msg.threadId,
+          })
+          await admin.from('email_inbox').update({
+            status: result.ok ? 'processed' : 'needs_attention',
+            email_type: 'haulage_reply',
+            parsed_data: result,
+            processed_at: new Date().toISOString(),
+          }).eq('id', inboxRow.id)
+          await applyLabel(msgId, 'Haulage').catch(() => {})
+          await markAsRead(msgId)
+          results.push(`Haulage reply from ${person.name}: ${result.lineCount ?? 0} lines, ${result.hasFlagged ? 'FLAGGED' : 'OK'}`)
+          continue
+        }
       }
 
       // Parse with Claude
@@ -174,40 +221,6 @@ export async function GET(req: NextRequest) {
           processed_at: new Date().toISOString(),
         }).eq('id', inboxRow.id)
         results.push(`Staff enquiry from ${person?.name ?? msg.from}: ${parsed.summary}`)
-      }
-
-      // ── HAULAGE DRIVER REPLY ─────────────────────────────────────
-      // Detect if this email is a reply to a daily task brief
-      const isHaulageReply =
-        /re:.*task brief|re:.*daily.*brief|re:.*your tasks/i.test(msg.subject) ||
-        (parsed as any).type === 'unknown'
-      if (isHaulageReply && person?.company_id) {
-        // Check if driver has tasks for today
-        const { data: driverTasks } = await admin
-          .from('haulage_tasks')
-          .select('id')
-          .eq('driver_id', person.id)
-          .eq('task_date', today)
-          .limit(1)
-        if (driverTasks?.length) {
-          const result = await parseDriverReply({
-            replyText: msg.bodyText,
-            driverEmail: msg.from,
-            sheetDate: today,
-            companyId: person.company_id,
-            emailThreadId: msg.threadId,
-          })
-          await admin.from('email_inbox').update({
-            status: result.ok ? 'processed' : 'needs_attention',
-            email_type: 'haulage_reply',
-            parsed_data: result,
-            processed_at: new Date().toISOString(),
-          }).eq('id', inboxRow.id)
-          await applyLabel(msgId, 'Haulage').catch(() => {})
-          await markAsRead(msgId)
-          results.push(`Haulage reply from ${person.name}: ${result.lineCount ?? 0} lines, ${result.hasFlagged ? 'FLAGGED' : 'OK'}`)
-          continue
-        }
       }
 
       // File into the appropriate Gmail label

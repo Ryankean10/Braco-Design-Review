@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, Mail, CheckCircle2, AlertCircle, Clock, HelpCircle, RefreshCw, ChevronDown, ChevronRight, MessageSquare, Send, X } from 'lucide-react'
+import { Loader2, Mail, CheckCircle2, AlertCircle, Clock, HelpCircle, RefreshCw, ChevronDown, ChevronRight, MessageSquare, Send, X, Truck } from 'lucide-react'
 
 interface InboxEmail {
   id: string
@@ -11,7 +11,7 @@ interface InboxEmail {
   subject: string
   body_text: string
   status: 'pending' | 'processing' | 'processed' | 'failed' | 'ignored' | 'needs_attention' | 'replied'
-  email_type: 'timesheet' | 'holiday' | 'unknown' | 'staff_enquiry' | null
+  email_type: 'timesheet' | 'holiday' | 'unknown' | 'staff_enquiry' | 'haulage_reply' | null
   parsed_data: any
   error_message: string | null
   reply_text: string | null
@@ -35,6 +35,7 @@ const TYPE_CFG = {
   timesheet:      { label: 'Timesheet',        color: '#22c55e', bg: 'rgba(34,197,94,0.1)'    },
   holiday:        { label: 'Holiday request',  color: '#60a5fa', bg: 'rgba(96,165,250,0.1)'   },
   staff_enquiry:  { label: 'Staff Enquiry',    color: '#f97316', bg: 'rgba(249,115,22,0.12)'  },
+  haulage_reply:  { label: 'Haulage reply',    color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
   unknown:        { label: 'Unknown',          color: '#64748b', bg: 'rgba(100,116,139,0.1)'  },
 }
 
@@ -210,6 +211,7 @@ export default function InboxTab() {
             const typeCfg = email.email_type ? TYPE_CFG[email.email_type] : null
             const isExpanded = expanded.has(email.id)
             const isEnquiry = email.email_type === 'staff_enquiry'
+            const isHaulage = email.email_type === 'haulage_reply'
             const highlight = email.status === 'needs_attention'
 
             return (
@@ -256,6 +258,7 @@ export default function InboxTab() {
                       <span>Received: {new Date(email.received_at).toLocaleString('en-GB')}</span>
                       {email.linked_timesheet_id && <span className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e' }}>→ Timesheet created</span>}
                       {email.linked_holiday_id && <span className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'rgba(96,165,250,0.1)', color: '#60a5fa' }}>→ Holiday request created</span>}
+                      {isHaulage && email.parsed_data?.sheetId && <span className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'rgba(167,139,250,0.12)', color: '#a78bfa' }}>→ Daily sheet updated</span>}
                     </div>
 
                     {/* Enquiry summary */}
@@ -263,6 +266,25 @@ export default function InboxTab() {
                       <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)' }}>
                         <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#f97316' }}>Enquiry summary</p>
                         <p style={{ color: 'var(--text-primary)' }}>{email.parsed_data.summary}</p>
+                      </div>
+                    )}
+
+                    {/* Haulage reply summary */}
+                    {isHaulage && (
+                      <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)' }}>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Haulage daily sheet</p>
+                        {email.parsed_data?.error ? (
+                          <p style={{ color: '#ef4444' }}>{email.parsed_data.error}</p>
+                        ) : (
+                          <div className="flex items-center gap-4" style={{ color: 'var(--text-primary)' }}>
+                            <span>{email.parsed_data?.lineCount ?? 0} time lines recorded</span>
+                            {email.parsed_data?.hasFlagged && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+                                Lines flagged for review
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -286,8 +308,8 @@ export default function InboxTab() {
                     )}
 
                     {/* Actions */}
-                    {(isEnquiry || ['needs_attention', 'failed'].includes(email.status)) && (
-                      <div className="flex items-center gap-2">
+                    {(isEnquiry || isHaulage || ['needs_attention', 'failed'].includes(email.status)) && (
+                      <div className="flex items-center gap-2 flex-wrap">
                         {isEnquiry && (
                           <button
                             onClick={e => { e.stopPropagation(); setReplyingTo(email) }}
@@ -295,6 +317,24 @@ export default function InboxTab() {
                             style={{ background: 'var(--accent)', color: '#fff' }}>
                             <MessageSquare size={12} />
                             {email.reply_text ? 'Send another reply' : 'Reply to enquiry'}
+                          </button>
+                        )}
+                        {/* Re-process as haulage — for misclassified emails */}
+                        {!isHaulage && email.body_text && (
+                          <button
+                            onClick={async e => {
+                              e.stopPropagation()
+                              await fetch(`/api/haulage/reprocess-email`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ emailInboxId: email.id }),
+                              })
+                              load(true)
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border"
+                            style={{ borderColor: 'rgba(167,139,250,0.4)', color: '#a78bfa', background: 'rgba(167,139,250,0.06)' }}>
+                            <Truck size={12} />
+                            Re-process as haulage
                           </button>
                         )}
                         {['needs_attention', 'failed'].includes(email.status) && (
