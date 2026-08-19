@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { logApiUsage } from '@/lib/logApiUsage'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const getClient = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export interface ParsedTimesheet {
   type: 'timesheet'
@@ -84,7 +84,7 @@ For staff enquiry:
 For unknown:
 {"type":"unknown","reason":"brief reason"}`
 
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
     messages: [{ role: 'user', content: prompt }],
