@@ -7,18 +7,21 @@ import { parseDriverReply } from '@/lib/haulage-parser'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const admin = createAdmin(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-)
-
 export async function GET(req: NextRequest) {
   // Verify this is called by Vercel cron or with the cron secret
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
+
+  // Env var check — surface missing vars clearly
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.json({ error: 'Missing Supabase env vars', supabaseUrl: !!supabaseUrl, supabaseKey: !!supabaseKey }, { status: 500 })
+  }
+
+  const admin = createAdmin(supabaseUrl, supabaseKey, { auth: { persistSession: false } })
 
   const results: string[] = []
   const today = new Date().toISOString().slice(0, 10)
