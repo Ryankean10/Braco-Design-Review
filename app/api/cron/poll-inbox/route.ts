@@ -8,16 +8,22 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
+  console.log('[poll-inbox] Handler invoked')
+
   // Verify this is called by Vercel cron or with the cron secret
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    console.log('[poll-inbox] Auth failed, header:', auth?.slice(0, 20))
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
+
+  console.log('[poll-inbox] Auth passed')
 
   // Env var check — surface missing vars clearly
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !supabaseKey) {
+    console.error('[poll-inbox] Missing Supabase env vars')
     return NextResponse.json({ error: 'Missing Supabase env vars', supabaseUrl: !!supabaseUrl, supabaseKey: !!supabaseKey }, { status: 500 })
   }
 
@@ -240,8 +246,9 @@ export async function GET(req: NextRequest) {
       await markAsRead(msgId)
     }
   } catch (err: any) {
+    console.error('[poll-inbox] Fatal error:', err.message, err.stack)
     results.push(`Fatal error: ${err.message}`)
-    return NextResponse.json({ ok: false, results }, { status: 500 })
+    return NextResponse.json({ ok: false, error: err.message, results }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true, results })
