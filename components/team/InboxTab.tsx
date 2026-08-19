@@ -309,17 +309,14 @@ export default function InboxTab() {
                     )}
 
                     {/* Actions */}
-                    {(isEnquiry || isHaulage || ['needs_attention', 'failed', 'processing', 'ignored'].includes(email.status)) && (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {isEnquiry && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setReplyingTo(email) }}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
-                            style={{ background: 'var(--accent)', color: '#fff' }}>
-                            <MessageSquare size={12} />
-                            {email.reply_text ? 'Send another reply' : 'Reply to enquiry'}
-                          </button>
-                        )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={e => { e.stopPropagation(); setReplyingTo(email) }}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
+                          style={{ background: 'var(--accent)', color: '#fff' }}>
+                          <MessageSquare size={12} />
+                          {email.reply_text ? 'Send another reply' : 'Reply'}
+                        </button>
                         {/* Re-process as haulage — for misclassified or stuck emails */}
                         {!isHaulage && email.body_text && (
                           <button
@@ -369,7 +366,6 @@ export default function InboxTab() {
                           </span>
                         )}
                       </div>
-                    )}
 
                     {email.error_message && (
                       <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
