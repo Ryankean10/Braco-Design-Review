@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, Mail, CheckCircle2, AlertCircle, Clock, HelpCircle, RefreshCw, ChevronDown, ChevronRight, MessageSquare, Send, X, Truck } from 'lucide-react'
+import { Loader2, Mail, CheckCircle2, AlertCircle, Clock, HelpCircle, RefreshCw, ChevronDown, ChevronRight, MessageSquare, Send, X, Truck, PenSquare } from 'lucide-react'
 
 interface InboxEmail {
   id: string
@@ -114,12 +114,93 @@ function ReplyDialog({ email, onClose, onSent }: { email: InboxEmail; onClose: (
   )
 }
 
+interface StaffPerson { id: string; name: string; email: string | null }
+
+function ComposeDialog({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
+  const [to, setTo] = useState('')
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [people, setPeople] = useState<StaffPerson[]>([])
+
+  useEffect(() => {
+    fetch('/api/people?limit=200').then(r => r.ok ? r.json() : []).then(d => setPeople(Array.isArray(d) ? d.filter((p: any) => p.email) : []))
+  }, [])
+
+  async function send() {
+    if (!to.trim() || !subject.trim() || !body.trim()) { setError('All fields required'); return }
+    setSending(true); setError('')
+    const res = await fetch('/api/email-inbox/compose', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, body }),
+    })
+    setSending(false)
+    if (res.ok) { onSent() } else { const d = await res.json(); setError(d.error ?? 'Failed to send') }
+  }
+
+  const inp = { background: 'var(--bg-elevated)', color: 'var(--text-primary)', borderColor: 'var(--border)' }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <div className="w-full max-w-lg rounded-xl shadow-xl p-6 space-y-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>New email</h2>
+          <button onClick={onClose}><X size={16} style={{ color: 'var(--text-muted)' }} /></button>
+        </div>
+
+        {/* To field — type or pick from staff */}
+        <div className="space-y-1">
+          <label className="text-xs" style={{ color: 'var(--text-muted)' }}>To</label>
+          <input
+            value={to} onChange={e => setTo(e.target.value)}
+            placeholder="email@example.com"
+            className="w-full rounded-lg border px-3 py-2 text-sm" style={inp} />
+          {people.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {people.map(p => (
+                <button key={p.id} onClick={() => setTo(p.email!)}
+                  className="text-[10px] px-2 py-0.5 rounded-full border transition-opacity hover:opacity-70"
+                  style={{ borderColor: to === p.email ? 'var(--accent)' : 'var(--border)', color: to === p.email ? 'var(--accent)' : 'var(--text-muted)', background: to === p.email ? 'rgba(var(--accent-rgb),0.08)' : 'transparent' }}>
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Subject</label>
+          <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject"
+            className="w-full rounded-lg border px-3 py-2 text-sm" style={inp} />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Message</label>
+          <textarea value={body} onChange={e => setBody(e.target.value)} rows={6} placeholder="Type your message…"
+            className="w-full rounded-lg border px-3 py-2 text-sm resize-none" style={inp} />
+        </div>
+
+        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg border text-xs" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>Cancel</button>
+          <button onClick={send} disabled={sending} className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-60" style={{ background: 'var(--accent)' }}>
+            <Send size={11} />{sending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function InboxTab() {
   const [emails, setEmails] = useState<InboxEmail[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [replyingTo, setReplyingTo] = useState<InboxEmail | null>(null)
+  const [composing, setComposing] = useState(false)
   const [actionMsg, setActionMsg] = useState<Record<string, string>>({})
 
   async function load(quiet = false) {
@@ -150,6 +231,9 @@ export default function InboxTab() {
       {replyingTo && (
         <ReplyDialog email={replyingTo} onClose={() => setReplyingTo(null)} onSent={() => load(true)} />
       )}
+      {composing && (
+        <ComposeDialog onClose={() => setComposing(false)} onSent={() => { setComposing(false); load(true) }} />
+      )}
 
       {/* Staff enquiries banner */}
       {needsAttention > 0 && (
@@ -176,11 +260,18 @@ export default function InboxTab() {
             </div>
           ))}
         </div>
-        <button onClick={() => load(true)} disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs hover:opacity-70"
-          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-          <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setComposing(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+            style={{ background: 'var(--accent)' }}>
+            <PenSquare size={12} /> New email
+          </button>
+          <button onClick={() => load(true)} disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs hover:opacity-70"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
       {loading ? (
