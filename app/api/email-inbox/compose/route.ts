@@ -21,10 +21,9 @@ export async function POST(req: NextRequest) {
   const headersList = await headers()
   const companySlug = headersList.get('x-company-slug') ?? null
   const { resend, fromEmail } = getResendClient(companySlug)
-  const senderName = (profile as any)?.full_name ?? 'Admin'
 
   const { error } = await resend.emails.send({
-    from: `${senderName} <${fromEmail}>`,
+    from: fromEmail,
     to: to.trim(),
     subject: subject.trim(),
     text: body.trim(),
