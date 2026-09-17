@@ -6,6 +6,7 @@ import {
   ArrowLeft, Sparkles, CheckCircle2, XCircle, Clock, AlertTriangle,
   ChevronDown, ChevronRight, FileText, ShoppingCart, Eye, EyeOff,
 } from 'lucide-react'
+import MarkupBox from './MarkupBox'
 
 const LENSES = [
   { key: 'er_compliance',    label: "ER Compliance",       color: '#60a5fa', desc: "Non-conformances with Employer's Requirements" },
@@ -57,6 +58,9 @@ interface Finding {
   reviewed_at: string | null
   review_notes: string | null
   reviewer_name: string | null
+  quote: string | null
+  designer_response: string | null
+  designer_responded_at: string | null
 }
 
 interface Run {
@@ -67,6 +71,7 @@ interface Run {
   document_ids: string[]
   runner_name: string | null
   error: string | null
+  markup_html: string | null
 }
 
 interface Props {
@@ -685,6 +690,16 @@ export default function ReviewsPanel({
                 )
               })}
             </>
+          )}
+
+          {/* Markup box — always show if there are findings or a run exists */}
+          {(runs.length > 0 || findings.length > 0) && (
+            <MarkupBox
+              projectId={projectId}
+              run={runs[0] ?? null}
+              findings={findings.filter(f => runs[0] ? f.run_id === runs[0].id : true)}
+              canEdit={canEdit}
+            />
           )}
         </div>
       </div>

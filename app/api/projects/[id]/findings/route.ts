@@ -28,14 +28,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const body = await req.json() as {
     id: string
-    status: 'Approved' | 'Rejected'
-    decision_type: string
-    comment: string
+    status?: 'Approved' | 'Rejected'
+    decision_type?: string
+    comment?: string
+    designer_response?: string
   }
-  const { id: findingId, status, decision_type, comment } = body
+  const { id: findingId, status, decision_type, comment, designer_response } = body
 
-  if (!findingId || !['Approved', 'Rejected'].includes(status))
-    return NextResponse.json({ error: 'id and status required' }, { status: 400 })
+  if (!findingId)
+    return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  // Designer response update path
+  if (designer_response !== undefined) {
+    const { error } = await supabase
+      .from('design_findings')
+      .update({
+        designer_response: designer_response.trim() || null,
+        designer_responded_at: designer_response.trim() ? new Date().toISOString() : null,
+      })
+      .eq('id', findingId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (!status || !['Approved', 'Rejected'].includes(status))
+    return NextResponse.json({ error: 'status required' }, { status: 400 })
 
   if (!comment?.trim())
     return NextResponse.json({ error: 'A comment is required when reviewing a finding' }, { status: 400 })
