@@ -49,7 +49,7 @@ export default function ProjectITPUpload({ projectId, siteId, initialItps, canEd
   const inputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
-  const isAdmin = ['admin', 'superadmin'].includes(userRole)
+  const isAdmin = ['admin', 'superadmin'].includes(userRole ?? '')
   const baselineLocked = itps.length > 0
 
   async function handleUpload(file: File) {
