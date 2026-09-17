@@ -3,9 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
