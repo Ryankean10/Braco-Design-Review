@@ -113,8 +113,15 @@ Respond with valid JSON only (no markdown fences):
     }).catch(() => {})
 
     const quotesRaw = quotesResponse.content[0]?.type === 'text' ? quotesResponse.content[0].text : ''
-    const quotesParsed = extractAndParse<{ quotes: Record<string, string> }>(quotesRaw)
-    const quotes: Record<string, string> = quotesParsed?.quotes ?? {}
+    // Strip markdown code fences before parsing (model sometimes wraps JSON in ```json...```)
+    const quotesClean = quotesRaw.replace(/^```[\w]*\s*/gm, '').replace(/\s*```\s*$/gm, '').trim()
+    let quotes: Record<string, string> = {}
+    try {
+      const quotesParsed = extractAndParse<{ quotes: Record<string, string> }>(quotesClean)
+      quotes = quotesParsed?.quotes ?? {}
+    } catch {
+      // Quotes are nice-to-have; proceed to HTML generation without them
+    }
 
     // ── Call 2: generate HTML letter as raw text (no JSON wrapping) ────────────
     const htmlPrompt = `You are a professional design review engineer producing a formal design review markup letter.
