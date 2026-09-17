@@ -146,7 +146,7 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
     setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, for_client_review: next } as any : d))
   }
 
-  const canEdit = ['admin', 'engineer'].includes(userRole)
+  const canEdit = ['admin', 'superadmin', 'project_manager', 'engineer'].includes(userRole)
 
   // Group by doc_no (latest revision first per group)
   const byDocNo = documents.reduce<Record<string, Document[]>>((acc, doc) => {
