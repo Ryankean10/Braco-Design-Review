@@ -104,7 +104,7 @@ export default async function ProjectsPage() {
             {activeProjects.length} active{completedProjects.length > 0 ? ` · ${completedProjects.length} complete` : ''}
           </p>
         </div>
-        {['admin', 'engineer'].includes(role) && (
+        {['admin', 'superadmin', 'engineer'].includes(role) && (
           <Link href="/projects/new"
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
             style={{ background: 'var(--accent)' }}>
@@ -120,7 +120,7 @@ export default async function ProjectsPage() {
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <FolderOpen size={36} style={{ color: 'var(--text-muted)' }} />
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No active projects</p>
-            {['admin', 'engineer'].includes(role) && (
+            {['admin', 'superadmin', 'engineer'].includes(role) && (
               <Link href="/projects/new" className="text-sm px-4 py-2 rounded-lg text-white" style={{ background: 'var(--accent)' }}>
                 Create your first project
               </Link>

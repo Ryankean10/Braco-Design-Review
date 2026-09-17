@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const ALLOWED_ROLES = ['admin', 'engineer', 'project_manager']
+const ALLOWED_ROLES = ['admin', 'superadmin', 'engineer', 'project_manager']
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()

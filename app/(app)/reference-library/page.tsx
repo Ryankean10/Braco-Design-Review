@@ -9,7 +9,7 @@ export default async function ReferenceLibraryPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role === 'client') redirect('/dashboard')
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = ['admin', 'superadmin'].includes(profile?.role ?? '')
 
   const [{ data: standards }, { data: hsRefs }, { data: lessons }, { data: opRules }] = await Promise.all([
     supabase.from('standards').select('*, standard_clauses(*), ai_summary, ai_key_points, ai_bess_applicability, ai_analysed_at').order('category').order('ref'),
