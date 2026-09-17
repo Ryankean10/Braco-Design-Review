@@ -77,14 +77,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ).join('\n\n')
 
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+    const projectName = (project as any).name
+    const clientName = (project as any).client ?? '—'
+    const location = (project as any).location ?? '—'
+    const companyId = (project as any).company_id ?? null
 
-    const prompt = `You are a professional design review engineer producing a formal design review markup letter.
+    const client = new Anthropic()
 
-PROJECT: ${project.name}
-CLIENT: ${(project as any).client ?? '—'}
-LOCATION: ${(project as any).location ?? '—'}
-DATE: ${today}
-TOTAL FINDINGS: ${findings.length}
+    // ── Call 1: extract quotes only (small JSON, low token budget) ─────────────
+    const quotesPrompt = `You are a professional design review engineer.
+
+Given the following findings and document extracts, identify the most relevant 1–3 sentence passage from the documents that each finding relates to.
 
 FINDINGS:
 ${findingsSummary}
@@ -92,47 +95,68 @@ ${findingsSummary}
 DOCUMENT EXTRACTS:
 ${combinedDocText}
 
-Your task:
-1. For each finding (identified by its ID), find the most relevant 1–3 sentence passage from the document extracts that the finding relates to. If no relevant passage can be found, leave the quote empty ("").
-2. Produce a complete, professional engineering design review letter as an HTML document. The letter should:
-   - Have a clear header with project details, date, and review reference number
-   - Include an executive summary of the overall findings
-   - List all findings in a structured table: No., Severity, Category, Finding, Clause Ref, Action Required
-   - Use professional engineering language
-   - Be formatted cleanly with inline CSS (no external stylesheets) suitable for printing
-
 Respond with valid JSON only (no markdown fences):
-{
-  "quotes": {
-    "<finding_id>": "1–3 sentence excerpt from document text, or empty string if none found",
-    ...one entry per finding id...
-  },
-  "markup_html": "<complete self-contained HTML document as a string>"
-}`
+{ "quotes": { "<finding_id>": "1–3 sentence excerpt from document text, or empty string if none found" } }`
 
-    const client = new Anthropic()
-
-    const response = await client.messages.create({
+    const quotesResponse = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 8000,
-      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 3000,
+      messages: [{ role: 'user', content: quotesPrompt }],
     })
 
     logApiUsage({
-      companyId: (project as any).company_id ?? null,
-      endpoint: 'generate-markup',
+      companyId,
+      endpoint: 'generate-markup-quotes',
       model: 'claude-sonnet-4-6',
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
+      inputTokens: quotesResponse.usage.input_tokens,
+      outputTokens: quotesResponse.usage.output_tokens,
     }).catch(() => {})
 
-    const rawText = response.content[0]?.type === 'text' ? response.content[0].text : ''
-    const parsed = extractAndParse<{ quotes: Record<string, string>; markup_html: string }>(rawText)
+    const quotesRaw = quotesResponse.content[0]?.type === 'text' ? quotesResponse.content[0].text : ''
+    const quotesParsed = extractAndParse<{ quotes: Record<string, string> }>(quotesRaw)
+    const quotes: Record<string, string> = quotesParsed?.quotes ?? {}
 
-    if (!parsed?.markup_html)
-      return NextResponse.json({ error: 'AI did not produce markup HTML — try again' }, { status: 500 })
+    // ── Call 2: generate HTML letter as raw text (no JSON wrapping) ────────────
+    const htmlPrompt = `You are a professional design review engineer producing a formal design review markup letter.
 
-    const quotes = parsed.quotes ?? {}
+PROJECT: ${projectName}
+CLIENT: ${clientName}
+LOCATION: ${location}
+DATE: ${today}
+TOTAL FINDINGS: ${findings.length}
+
+FINDINGS:
+${findingsSummary}
+
+Produce a complete, professional engineering design review letter as a self-contained HTML document. Requirements:
+- Clear header: project name, client, location, date, review reference (use REV-${new Date().getFullYear()}-001)
+- Executive summary paragraph
+- Findings table: columns for No., Severity, Category, Finding Title, Description, Clause Ref, Action Required
+- Colour-code severity rows: Critical = #fee2e2, Major = #ffedd5, Minor = #fefce8, Observation = #f8fafc
+- Professional engineering language and tone
+- All CSS inline (no external stylesheets or fonts)
+- Suitable for printing (A4)
+
+Respond with the HTML document only. No JSON. No markdown fences. Begin your response with <!DOCTYPE html>.`
+
+    const htmlResponse = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 16000,
+      messages: [{ role: 'user', content: htmlPrompt }],
+    })
+
+    logApiUsage({
+      companyId,
+      endpoint: 'generate-markup-html',
+      model: 'claude-sonnet-4-6',
+      inputTokens: htmlResponse.usage.input_tokens,
+      outputTokens: htmlResponse.usage.output_tokens,
+    }).catch(() => {})
+
+    const rawHtml = htmlResponse.content[0]?.type === 'text' ? htmlResponse.content[0].text.trim() : ''
+
+    if (!rawHtml.startsWith('<!DOCTYPE') && !rawHtml.startsWith('<html'))
+      return NextResponse.json({ error: 'AI did not produce valid HTML — try again' }, { status: 500 })
 
     // Batch update quotes on findings
     const quoteUpdates = Object.entries(quotes)
@@ -145,10 +169,10 @@ Respond with valid JSON only (no markdown fences):
     // Store markup HTML on the run
     await supabase
       .from('design_review_runs')
-      .update({ markup_html: parsed.markup_html })
+      .update({ markup_html: rawHtml })
       .eq('id', runId)
 
-    return NextResponse.json({ markup_html: parsed.markup_html, quotes })
+    return NextResponse.json({ markup_html: rawHtml, quotes })
 
   } catch (e: any) {
     console.error('generate-markup error:', e)
