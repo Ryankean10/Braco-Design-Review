@@ -66,7 +66,13 @@ export default function MarkupBox({ projectId, run, findings, canEdit }: Props) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ runId: run.id }),
       })
-      const data = await res.json()
+      let data: any
+      try {
+        data = await res.json()
+      } catch {
+        setGenError(`Server error (${res.status}) — check that PDFs are readable and try again`)
+        return
+      }
       if (!res.ok) { setGenError(data.error ?? 'Generation failed'); return }
       setMarkupHtml(data.markup_html)
       // Update local findings with quotes from response
