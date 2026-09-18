@@ -21,6 +21,28 @@ function isERRef(ref: string): boolean {
   return /^ER\b/i.test(ref.trim()) || /employer.?s\s+req/i.test(ref)
 }
 
+function findBodyIndex(text: string, searchTerm: string): number {
+  const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  // Strategy A: skip lines whose remainder ends with a bare page number (ToC pattern)
+  const lineRe = new RegExp(escaped + '([^\n]*)', 'g')
+  let m: RegExpExecArray | null
+  while ((m = lineRe.exec(text)) !== null) {
+    if (!/[\s.]{0,40}\d{1,3}\s*$/.test(m[1])) return m.index
+  }
+
+  // Strategy B: find occurrence followed within two lines by prose (not another clause ref)
+  const proseRe = new RegExp(escaped + '[^\n]*\n(?:\\s*\n)?([^\n]+)', 'g')
+  while ((m = proseRe.exec(text)) !== null) {
+    const next = m[1].trim()
+    if (next.length > 40 && !/^\d+(\.\d+)+\s/.test(next) && !/^\d{1,3}$/.test(next))
+      return m.index
+  }
+
+  // Final fallback: last occurrence (ToC is always near the start)
+  return text.lastIndexOf(searchTerm)
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: projectId } = await params
@@ -64,10 +86,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           if (fileData) {
             const text = await extractPdfText(fileData)
             const searchTerm = clauseNum || ref.replace(/^ER\s*/i, '').trim()
-            const idx = text.indexOf(searchTerm)
+            const idx = findBodyIndex(text, searchTerm)
             if (idx !== -1) {
-              const start = Math.max(0, idx - 150)
-              const end = Math.min(text.length, idx + 900)
+              const start = Math.max(0, idx - 100)
+              const end = Math.min(text.length, idx + 1200)
               return NextResponse.json({ body: text.slice(start, end).trim(), source: 'ER' })
             }
           }
