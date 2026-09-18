@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Sparkles, CheckCircle2, XCircle, Clock, AlertTriangle,
-  ChevronDown, ChevronRight, FileText, ShoppingCart, Eye, EyeOff,
+  ChevronDown, ChevronRight, FileText, ShoppingCart, Eye, EyeOff, X, BookOpen,
 } from 'lucide-react'
 import MarkupBox from './MarkupBox'
 
@@ -74,10 +74,17 @@ interface Run {
   markup_html: string | null
 }
 
+interface ClauseContent {
+  heading?: string | null
+  body: string | null
+  source: string
+}
+
 interface Props {
   projectId: string
   projectName: string
   hasER: boolean
+  erStoragePath?: string | null
   canEdit: boolean
   documents: Doc[]
   initialRuns: Run[]
@@ -85,7 +92,7 @@ interface Props {
 }
 
 export default function ReviewsPanel({
-  projectId, projectName, hasER, canEdit,
+  projectId, projectName, hasER, erStoragePath, canEdit,
   documents, initialRuns, initialFindings,
 }: Props) {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([])
@@ -105,6 +112,22 @@ export default function ReviewsPanel({
   const [reviewNote, setReviewNote] = useState('')
   const [reviewDecisionType, setReviewDecisionType] = useState('')
   const [reviewError, setReviewError] = useState<string | null>(null)
+
+  // Clause reference drawer
+  const [clauseRef, setClauseRef] = useState<string | null>(null)
+  const [clauseContent, setClauseContent] = useState<ClauseContent | null>(null)
+  const [clauseLoading, setClauseLoading] = useState(false)
+
+  useEffect(() => {
+    if (!clauseRef) { setClauseContent(null); return }
+    setClauseLoading(true)
+    setClauseContent(null)
+    fetch(`/api/projects/${projectId}/clause-lookup?ref=${encodeURIComponent(clauseRef)}`)
+      .then(r => r.json())
+      .then(d => setClauseContent(d))
+      .catch(() => setClauseContent({ body: 'Could not load clause text.', source: clauseRef }))
+      .finally(() => setClauseLoading(false))
+  }, [clauseRef, projectId])
 
   function toggleDoc(id: string) {
     setSelectedDocs(prev => prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id])
@@ -521,7 +544,14 @@ export default function ReviewsPanel({
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{finding.title}</p>
                                     {finding.clause_ref && (
-                                      <p className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--accent)' }}>{finding.clause_ref}</p>
+                                      <button
+                                        onClick={() => setClauseRef(finding.clause_ref === clauseRef ? null : finding.clause_ref)}
+                                        className="flex items-center gap-1 text-[10px] font-mono mt-0.5 hover:underline text-left"
+                                        style={{ color: 'var(--accent)' }}
+                                        title="Click to view clause text">
+                                        <BookOpen size={9} />
+                                        {finding.clause_ref}
+                                      </button>
                                     )}
                                   </div>
                                   <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0"
@@ -703,6 +733,65 @@ export default function ReviewsPanel({
           )}
         </div>
       </div>
+      {/* Clause reference drawer */}
+      {clauseRef && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
+            onClick={() => setClauseRef(null)}
+          />
+          {/* Drawer */}
+          <div className="fixed top-0 right-0 h-screen w-[420px] z-50 flex flex-col shadow-2xl"
+            style={{ background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)' }}>
+            {/* Header */}
+            <div className="px-5 py-4 border-b flex items-start gap-3" style={{ borderColor: 'var(--border)' }}>
+              <BookOpen size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold font-mono" style={{ color: 'var(--accent)' }}>{clauseRef}</p>
+                {clauseContent?.source && clauseContent.source !== clauseRef && (
+                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{clauseContent.source}</p>
+                )}
+              </div>
+              <button onClick={() => setClauseRef(null)} className="flex-shrink-0 hover:opacity-70 p-1" style={{ color: 'var(--text-muted)' }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {clauseLoading ? (
+                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <Sparkles size={12} className="animate-pulse" style={{ color: 'var(--accent)' }} />
+                  Looking up clause…
+                </div>
+              ) : clauseContent?.body ? (
+                <>
+                  {clauseContent.heading && clauseContent.heading !== clauseRef && (
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{clauseContent.heading}</p>
+                  )}
+                  <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                    {clauseContent.body}
+                  </p>
+                </>
+              ) : (
+                <div className="text-center py-10">
+                  <FileText size={24} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Clause text not found in the {clauseRef.match(/^ER/i) ? 'ER document' : 'reference library'}.
+                  </p>
+                  {clauseRef.match(/^ER/i) && !erStoragePath && (
+                    <p className="text-[10px] mt-2" style={{ color: 'var(--text-muted)' }}>
+                      No ER document is uploaded for this project.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -77,6 +77,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
       projectId={projectId}
       projectName={project.name}
       hasER={!!project.er_storage_path}
+      erStoragePath={project.er_storage_path ?? null}
       canEdit={canEdit}
       documents={documents ?? []}
       initialRuns={enrichedRuns}
