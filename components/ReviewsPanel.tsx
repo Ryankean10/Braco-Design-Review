@@ -114,20 +114,20 @@ export default function ReviewsPanel({
   const [reviewError, setReviewError] = useState<string | null>(null)
 
   // Clause reference drawer
-  const [clauseRef, setClauseRef] = useState<string | null>(null)
+  const [clauseDrawer, setClauseDrawer] = useState<{ ref: string; quote: string | null } | null>(null)
   const [clauseContent, setClauseContent] = useState<ClauseContent | null>(null)
   const [clauseLoading, setClauseLoading] = useState(false)
 
   useEffect(() => {
-    if (!clauseRef) { setClauseContent(null); return }
+    if (!clauseDrawer) { setClauseContent(null); return }
     setClauseLoading(true)
     setClauseContent(null)
-    fetch(`/api/projects/${projectId}/clause-lookup?ref=${encodeURIComponent(clauseRef)}`)
+    fetch(`/api/projects/${projectId}/clause-lookup?ref=${encodeURIComponent(clauseDrawer.ref)}`)
       .then(r => r.json())
       .then(d => setClauseContent(d))
-      .catch(() => setClauseContent({ body: 'Could not load clause text.', source: clauseRef }))
+      .catch(() => setClauseContent({ body: 'Could not load clause text.', source: clauseDrawer.ref }))
       .finally(() => setClauseLoading(false))
-  }, [clauseRef, projectId])
+  }, [clauseDrawer?.ref, projectId])
 
   function toggleDoc(id: string) {
     setSelectedDocs(prev => prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id])
@@ -545,7 +545,7 @@ export default function ReviewsPanel({
                                     <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{finding.title}</p>
                                     {finding.clause_ref && (
                                       <button
-                                        onClick={() => setClauseRef(finding.clause_ref === clauseRef ? null : finding.clause_ref)}
+                                        onClick={() => setClauseDrawer(clauseDrawer?.ref === finding.clause_ref ? null : { ref: finding.clause_ref!, quote: finding.quote ?? null })}
                                         className="flex items-center gap-1 text-[10px] font-mono mt-0.5 hover:underline text-left"
                                         style={{ color: 'var(--accent)' }}
                                         title="Click to view clause text">
@@ -563,20 +563,35 @@ export default function ReviewsPanel({
                                 {/* Description */}
                                 <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{finding.description}</p>
 
+                                {/* Document excerpt */}
+                                {finding.quote && (
+                                  <div className="rounded-lg px-3 py-2 text-xs"
+                                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                                    <p className="text-[10px] font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>FROM THE DOCUMENT</p>
+                                    <p className="italic leading-relaxed" style={{ color: 'var(--text-secondary)' }}>"{finding.quote}"</p>
+                                  </div>
+                                )}
+
                                 {/* Refs */}
                                 {(finding.drawing_refs?.length > 0 || finding.document_refs?.length > 0) && (
                                   <div className="flex flex-wrap gap-1.5">
                                     {finding.drawing_refs?.map((ref, i) => (
-                                      <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
-                                        style={{ background: 'rgba(108,114,245,0.1)', color: 'var(--accent)' }}>
+                                      <button key={i}
+                                        onClick={() => setClauseDrawer(clauseDrawer?.ref === ref ? null : { ref, quote: finding.quote ?? null })}
+                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded hover:opacity-70"
+                                        style={{ background: 'rgba(108,114,245,0.1)', color: 'var(--accent)' }}
+                                        title="Click to view document context">
                                         <FileText size={9} /> {ref}
-                                      </span>
+                                      </button>
                                     ))}
                                     {finding.document_refs?.map((ref, i) => (
-                                      <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
-                                        style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-muted)' }}>
+                                      <button key={i}
+                                        onClick={() => setClauseDrawer(clauseDrawer?.ref === ref ? null : { ref, quote: finding.quote ?? null })}
+                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded hover:opacity-70"
+                                        style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-muted)' }}
+                                        title="Click to view document context">
                                         <FileText size={9} /> {ref}
-                                      </span>
+                                      </button>
                                     ))}
                                     {finding.procurement_item_id && (
                                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
@@ -734,13 +749,13 @@ export default function ReviewsPanel({
         </div>
       </div>
       {/* Clause reference drawer */}
-      {clauseRef && (
+      {clauseDrawer && (
         <>
           {/* Backdrop */}
           <div
             className="fixed inset-0 z-40"
             style={{ background: 'rgba(0,0,0,0.4)' }}
-            onClick={() => setClauseRef(null)}
+            onClick={() => setClauseDrawer(null)}
           />
           {/* Drawer */}
           <div className="fixed top-0 right-0 h-screen w-[420px] z-50 flex flex-col shadow-2xl"
@@ -749,45 +764,70 @@ export default function ReviewsPanel({
             <div className="px-5 py-4 border-b flex items-start gap-3" style={{ borderColor: 'var(--border)' }}>
               <BookOpen size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold font-mono" style={{ color: 'var(--accent)' }}>{clauseRef}</p>
-                {clauseContent?.source && clauseContent.source !== clauseRef && (
+                <p className="text-sm font-semibold font-mono" style={{ color: 'var(--accent)' }}>{clauseDrawer.ref}</p>
+                {clauseContent?.source && clauseContent.source !== clauseDrawer.ref && (
                   <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{clauseContent.source}</p>
                 )}
               </div>
-              <button onClick={() => setClauseRef(null)} className="flex-shrink-0 hover:opacity-70 p-1" style={{ color: 'var(--text-muted)' }}>
+              <button onClick={() => setClauseDrawer(null)} className="flex-shrink-0 hover:opacity-70 p-1" style={{ color: 'var(--text-muted)' }}>
                 <X size={14} />
               </button>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-              {clauseLoading ? (
-                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                  <Sparkles size={12} className="animate-pulse" style={{ color: 'var(--accent)' }} />
-                  Looking up clause…
-                </div>
-              ) : clauseContent?.body ? (
-                <>
-                  {clauseContent.heading && clauseContent.heading !== clauseRef && (
-                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{clauseContent.heading}</p>
-                  )}
-                  <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
-                    {clauseContent.body}
-                  </p>
-                </>
-              ) : (
-                <div className="text-center py-10">
-                  <FileText size={24} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Clause text not found in the {clauseRef.match(/^ER/i) ? 'ER document' : 'reference library'}.
-                  </p>
-                  {clauseRef.match(/^ER/i) && !erStoragePath && (
-                    <p className="text-[10px] mt-2" style={{ color: 'var(--text-muted)' }}>
-                      No ER document is uploaded for this project.
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+              {/* ── Requirement section ── */}
+              <div>
+                <p className="text-[10px] font-semibold mb-2 uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                  Requirement (ER / Standard)
+                </p>
+                {clauseLoading ? (
+                  <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    <Sparkles size={12} className="animate-pulse" style={{ color: 'var(--accent)' }} />
+                    Looking up clause…
+                  </div>
+                ) : clauseContent?.body ? (
+                  <>
+                    {clauseContent.heading && clauseContent.heading !== clauseDrawer.ref && (
+                      <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{clauseContent.heading}</p>
+                    )}
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                      {clauseContent.body}
                     </p>
-                  )}
-                </div>
-              )}
+                  </>
+                ) : (
+                  <div className="text-center py-6">
+                    <FileText size={20} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Clause text not found in the {clauseDrawer.ref.match(/^ER/i) ? 'ER document' : 'reference library'}.
+                    </p>
+                    {clauseDrawer.ref.match(/^ER/i) && !erStoragePath && (
+                      <p className="text-[10px] mt-2" style={{ color: 'var(--text-muted)' }}>
+                        No ER document is uploaded for this project.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid var(--border)' }} />
+
+              {/* ── From the submitted document section ── */}
+              <div>
+                <p className="text-[10px] font-semibold mb-2 uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                  From the submitted document
+                </p>
+                {clauseDrawer.quote ? (
+                  <p className="text-xs italic leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    "{clauseDrawer.quote}"
+                  </p>
+                ) : (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Run Generate Markup to extract the relevant passage from this document.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </>
