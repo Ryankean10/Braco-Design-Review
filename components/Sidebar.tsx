@@ -67,6 +67,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
 
   useEffect(() => {
     if (!['admin', 'superadmin'].includes(role)) return
+    if (company?.slug !== 'scotplant') return
     async function fetchInboxCount() {
       const res = await fetch('/api/admin/email-inbox?limit=200')
       if (!res.ok) return
@@ -76,7 +77,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
     fetchInboxCount()
     const interval = setInterval(fetchInboxCount, 60_000)
     return () => clearInterval(interval)
-  }, [role])
+  }, [role, company?.slug])
 
   async function signOut() {
     const supabase = createClient()
@@ -86,6 +87,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   }
 
   function isVisible(item: NavItem) {
+    if (item.href === '/inbox' && company?.slug !== 'scotplant') return false
     if (item.roles && !item.roles.includes(role)) return false
     if (item.module && !isSuperadmin && !enabledModules.includes(item.module)) return false
     return true

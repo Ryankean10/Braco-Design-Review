@@ -1,15 +1,13 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { getCompanyContext } from '@/lib/getCompanyContext'
 import InboxTab from '@/components/team/InboxTab'
 
 export default async function InboxPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, profile, company } = await getCompanyContext()
   if (!user) redirect('/login')
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (company?.slug !== 'scotplant') redirect('/dashboard')
   if (!['superadmin', 'admin'].includes((profile as any)?.role ?? '')) redirect('/dashboard')
 
   return (
