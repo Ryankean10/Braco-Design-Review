@@ -123,6 +123,8 @@ export interface Company {
   secondary_color: string | null
   tagline: string | null
   industry: 'bess' | 'civils' | string
+  login_bg: 'dark' | 'light' | null
+  from_email: string | null
   created_at: string
   updated_at: string
 }

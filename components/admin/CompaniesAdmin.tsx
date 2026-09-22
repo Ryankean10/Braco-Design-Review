@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Company, Module } from '@/lib/types'
-import { Building2, Plus, Check, X, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
+import { Building2, Plus, Check, X, ArrowLeft, ChevronDown, ChevronRight, Palette, Save } from 'lucide-react'
 
 const MODULE_GROUPS: {
   label: string
@@ -151,6 +151,16 @@ function CompanyDetail({
   const supabase = createClient()
   const modules = company.modules as string[]
 
+  // Branding edit state
+  const [brandName, setBrandName]         = useState(company.name)
+  const [brandTagline, setBrandTagline]   = useState(company.tagline ?? '')
+  const [brandAccent, setBrandAccent]     = useState(company.accent_color ?? '#6c72f5')
+  const [brandLogoUrl, setBrandLogoUrl]   = useState(company.logo_url ?? '')
+  const [brandLoginBg, setBrandLoginBg]   = useState<'dark' | 'light'>(company.login_bg ?? 'dark')
+  const [brandSaving, setBrandSaving]     = useState(false)
+  const [brandError, setBrandError]       = useState<string | null>(null)
+  const [brandSaved, setBrandSaved]       = useState(false)
+
   async function toggle(key: string) {
     const updated = modules.includes(key) ? modules.filter(m => m !== key) : [...modules, key]
     const { error } = await supabase
@@ -158,6 +168,31 @@ function CompanyDetail({
       .update({ modules: updated, updated_at: new Date().toISOString() })
       .eq('id', company.id)
     if (!error) onUpdate({ ...company, modules: updated as Module[] })
+  }
+
+  async function saveBranding() {
+    setBrandSaving(true)
+    setBrandError(null)
+    setBrandSaved(false)
+    const { error } = await supabase
+      .from('companies')
+      .update({
+        name: brandName.trim(),
+        tagline: brandTagline.trim() || null,
+        accent_color: brandAccent,
+        logo_url: brandLogoUrl.trim() || null,
+        login_bg: brandLoginBg,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', company.id)
+    if (error) {
+      setBrandError(error.message)
+    } else {
+      onUpdate({ ...company, name: brandName.trim(), tagline: brandTagline.trim() || null, accent_color: brandAccent, logo_url: brandLogoUrl.trim() || null, login_bg: brandLoginBg })
+      setBrandSaved(true)
+      setTimeout(() => setBrandSaved(false), 2000)
+    }
+    setBrandSaving(false)
   }
 
   const enabledCount = MODULE_GROUPS.flatMap(g => g.modules).filter(m => modules.includes(m.key)).length
@@ -178,21 +213,110 @@ function CompanyDetail({
         <span style={{ color: 'var(--border)' }}>/</span>
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
-          style={{ background: company.accent_color ?? 'var(--accent)' }}
+          style={{ background: brandAccent }}
         >
-          {company.name[0].toUpperCase()}
+          {brandName[0]?.toUpperCase() ?? 'C'}
         </div>
         <div>
-          <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{company.name}</p>
+          <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{brandName}</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{company.slug}.yacht-gitana.com · {enabledCount}/{totalCount} modules enabled</p>
         </div>
       </div>
 
       {/* Module groups */}
-      <div className="grid grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-2 gap-4 items-start mb-6">
         {MODULE_GROUPS.map(group => (
           <ModuleGroup key={group.label} group={group} modules={modules} onToggle={toggle} />
         ))}
+      </div>
+
+      {/* Branding section */}
+      <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+        <div className="flex items-center gap-2 mb-4">
+          <Palette size={15} style={{ color: 'var(--accent)' }} />
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Branding & Identity</p>
+        </div>
+
+        {/* Live preview */}
+        <div className="rounded-lg p-3 mb-4 flex items-center gap-3"
+          style={{ background: brandLoginBg === 'dark' ? '#1e293b' : '#f8fafc', border: '1px solid var(--border)' }}>
+          {brandLogoUrl ? (
+            <img src={brandLogoUrl} alt="Logo" className="h-8 object-contain" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+              style={{ background: brandAccent }}>
+              {brandName[0]?.toUpperCase() ?? 'C'}
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-semibold" style={{ color: brandLoginBg === 'dark' ? '#f1f5f9' : '#0f172a' }}>{brandName || 'Company Name'}</p>
+            {brandTagline && <p className="text-[10px]" style={{ color: brandLoginBg === 'dark' ? '#94a3b8' : '#64748b' }}>{brandTagline}</p>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          {/* Name */}
+          <div>
+            <label className="text-xs mb-1 block" style={{ color: 'var(--text-muted)' }}>Company name</label>
+            <input value={brandName} onChange={e => setBrandName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+          </div>
+          {/* Tagline */}
+          <div>
+            <label className="text-xs mb-1 block" style={{ color: 'var(--text-muted)' }}>Tagline</label>
+            <input value={brandTagline} onChange={e => setBrandTagline(e.target.value)}
+              placeholder="High Voltage Specialists"
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+          </div>
+          {/* Accent colour */}
+          <div>
+            <label className="text-xs mb-1 block" style={{ color: 'var(--text-muted)' }}>Accent colour</label>
+            <div className="flex items-center gap-2">
+              <input type="color" value={brandAccent} onChange={e => setBrandAccent(e.target.value)}
+                className="w-10 h-9 rounded cursor-pointer border-0 p-0.5"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border)' }} />
+              <input value={brandAccent} onChange={e => setBrandAccent(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg text-sm border font-mono"
+                style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+            </div>
+          </div>
+          {/* Logo URL */}
+          <div>
+            <label className="text-xs mb-1 block" style={{ color: 'var(--text-muted)' }}>Logo URL</label>
+            <input value={brandLogoUrl} onChange={e => setBrandLogoUrl(e.target.value)}
+              placeholder="https://…/logo.png"
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+          </div>
+        </div>
+
+        {/* Login theme */}
+        <div className="mb-4">
+          <label className="text-xs mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Login theme</label>
+          <div className="flex gap-2">
+            {(['dark', 'light'] as const).map(t => (
+              <button key={t} onClick={() => setBrandLoginBg(t)}
+                className="px-4 py-1.5 rounded-lg text-xs font-medium border transition-colors"
+                style={{
+                  borderColor: brandLoginBg === t ? brandAccent : 'var(--border)',
+                  background: brandLoginBg === t ? `${brandAccent}22` : 'transparent',
+                  color: brandLoginBg === t ? brandAccent : 'var(--text-muted)',
+                }}>
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {brandError && <p className="text-xs text-red-500 mb-3">{brandError}</p>}
+
+        <button onClick={saveBranding} disabled={brandSaving}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+          style={{ background: brandSaved ? '#4ade80' : brandAccent, color: brandSaved ? '#000' : '#fff' }}>
+          {brandSaved ? <><Check size={13} /> Saved</> : brandSaving ? 'Saving…' : <><Save size={13} /> Save branding</>}
+        </button>
       </div>
     </div>
   )
@@ -204,6 +328,10 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [newSlug, setNewSlug] = useState('')
+  const [newTagline, setNewTagline] = useState('')
+  const [newAccentColor, setNewAccentColor] = useState('#6c72f5')
+  const [newLogoUrl, setNewLogoUrl] = useState('')
+  const [newLoginBg, setNewLoginBg] = useState<'dark' | 'light'>('dark')
   const [newModules, setNewModules] = useState<Module[]>(['projects', 'documents', 'reviews', 'reference_library'])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -221,7 +349,15 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
     setError(null)
     const { data, error } = await supabase
       .from('companies')
-      .insert({ name: newName.trim(), slug: newSlug.trim().toLowerCase(), modules: newModules })
+      .insert({
+        name: newName.trim(),
+        slug: newSlug.trim().toLowerCase(),
+        modules: newModules,
+        tagline: newTagline.trim() || null,
+        accent_color: newAccentColor,
+        logo_url: newLogoUrl.trim() || null,
+        login_bg: newLoginBg,
+      })
       .select()
       .single()
     if (error) {
@@ -231,6 +367,10 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
       setCreating(false)
       setNewName('')
       setNewSlug('')
+      setNewTagline('')
+      setNewAccentColor('#6c72f5')
+      setNewLogoUrl('')
+      setNewLoginBg('dark')
       setNewModules(['projects', 'documents', 'reviews', 'reference_library'])
     }
     setSaving(false)
@@ -293,6 +433,53 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
                 style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
               {newSlug && <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>{newSlug}.yacht-gitana.com</p>}
+            </div>
+            <div>
+              <label className="text-xs mb-1 block" style={{ color: 'var(--text-muted)' }}>Tagline</label>
+              <input
+                value={newTagline}
+                onChange={e => setNewTagline(e.target.value)}
+                placeholder="High Voltage Specialists"
+                className="w-full px-3 py-2 rounded-lg text-sm border"
+                style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+            <div>
+              <label className="text-xs mb-1 block" style={{ color: 'var(--text-muted)' }}>Accent colour</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={newAccentColor} onChange={e => setNewAccentColor(e.target.value)}
+                  className="w-10 h-9 rounded cursor-pointer p-0.5"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border)' }} />
+                <input value={newAccentColor} onChange={e => setNewAccentColor(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg text-sm border font-mono"
+                  style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs mb-1 block" style={{ color: 'var(--text-muted)' }}>Logo URL</label>
+              <input
+                value={newLogoUrl}
+                onChange={e => setNewLogoUrl(e.target.value)}
+                placeholder="https://…/logo.png"
+                className="w-full px-3 py-2 rounded-lg text-sm border"
+                style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+            <div>
+              <label className="text-xs mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Login theme</label>
+              <div className="flex gap-2">
+                {(['dark', 'light'] as const).map(t => (
+                  <button key={t} type="button" onClick={() => setNewLoginBg(t)}
+                    className="px-4 py-1.5 rounded-lg text-xs font-medium border transition-colors"
+                    style={{
+                      borderColor: newLoginBg === t ? newAccentColor : 'var(--border)',
+                      background: newLoginBg === t ? `${newAccentColor}22` : 'transparent',
+                      color: newLoginBg === t ? newAccentColor : 'var(--text-muted)',
+                    }}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="mb-4">
