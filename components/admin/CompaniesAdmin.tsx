@@ -363,6 +363,17 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
     if (error) {
       setError(error.message)
     } else {
+      // Auto-appoint Safet Consultancy admin to every new company
+      fetch('/api/admin/invite-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'admin@safetconsultancy.co.uk',
+          role: 'admin',
+          full_name: 'Safet Admin',
+          company_id: data.id,
+        }),
+      })
       setCompanies(cs => [...cs, data])
       setCreating(false)
       setNewName('')

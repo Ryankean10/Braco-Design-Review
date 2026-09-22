@@ -10,8 +10,10 @@ export async function POST(req: NextRequest) {
   const { data: callerProfile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   if (!['admin', 'superadmin'].includes(callerProfile?.role ?? '')) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const companyId: string = callerProfile?.company_id ?? ''
-  const { email, role, full_name } = await req.json()
+  const { email, role, full_name, company_id: companyIdOverride } = await req.json()
+  const companyId: string = (callerProfile?.role === 'superadmin' && companyIdOverride)
+    ? companyIdOverride
+    : (callerProfile?.company_id ?? '')
   if (!email || !role) return NextResponse.json({ error: 'Email and role required' }, { status: 400 })
 
   const admin = createAdminClient(
