@@ -369,7 +369,7 @@ export default function CompaniesAdmin({ companies: initial }: { companies: Comp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: 'admin@safetconsultancy.co.uk',
-          role: 'admin',
+          role: 'superadmin',
           full_name: 'Safet Admin',
           company_id: data.id,
         }),
