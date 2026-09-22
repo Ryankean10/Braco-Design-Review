@@ -1,19 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { CheckCircle2, Clock, AlertCircle, MessageSquare, FileText, FlaskConical } from 'lucide-react'
-import type { ClientComment } from '@/components/ClientCommentThread'
-
-const STAGE_ORDER = ['Feasibility','Design','Procure','Build & Install','Test & Commission','Energise & Handover']
-
-type Stage = string
+import { CheckCircle2, Clock, MessageSquare, FileText, FlaskConical } from 'lucide-react'
+import { getStageOrder, getStageColour } from '@/lib/stageDefaults'
 
 interface ProjectSummary {
   id: string
   name: string
   client: string
   location: string
-  stage: Stage
+  stage: string
   stageStatuses: Record<string, string>
   capacity_mw: number | null
   docCount: number
@@ -26,18 +22,11 @@ interface ProjectSummary {
 interface Props {
   profile: { full_name: string | null; email: string }
   projects: ProjectSummary[]
+  industry?: string
 }
 
-const STAGE_COLORS: Record<string, string> = {
-  'Feasibility':          '#94a3b8',
-  'Design':               '#60a5fa',
-  'Procure':              '#c084fc',
-  'Build & Install':      '#fb923c',
-  'Test & Commission':    '#facc15',
-  'Energise & Handover':  '#4ade80',
-}
-
-export default function ClientDashboard({ profile, projects }: Props) {
+export default function ClientDashboard({ profile, projects, industry = 'bess' }: Props) {
+  const stageOrder = getStageOrder(industry)
   const totalOpenComments = projects.reduce((sum, p) => sum + p.openComments, 0)
   const totalAwaiting = projects.reduce((sum, p) => sum + p.awaitingResponseCount, 0)
 
@@ -88,12 +77,12 @@ export default function ClientDashboard({ profile, projects }: Props) {
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.location}{p.capacity_mw ? ` · ${p.capacity_mw} MW` : ''}</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5 justify-end flex-shrink-0 max-w-[200px]">
-                  {STAGE_ORDER.map(s => {
+                  {stageOrder.map(s => {
                     const status = p.stageStatuses[s] ?? 'Not Started'
                     const isComplete = status === 'Complete'
                     const isActive   = status === 'In Progress' || status === 'On Hold'
                     if (!isComplete && !isActive) return null
-                    const col = STAGE_COLORS[s] ?? '#94a3b8'
+                    const col = getStageColour(s, industry)
                     return (
                       <span key={s} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
                         style={{

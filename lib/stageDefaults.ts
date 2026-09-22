@@ -23,7 +23,17 @@ export const CIVILS_STAGE_ORDER = [
 
 export type CivilsStageName = typeof CIVILS_STAGE_ORDER[number]
 
-export type AnyStage = StageName | CivilsStageName
+// ── HV Electrical / SAP contractor stages ──────────────────────────────────
+
+export const ELECTRICAL_STAGE_ORDER = [
+  'Preparation',
+  'Active',
+  'Complete',
+] as const
+
+export type ElectricalStageName = typeof ELECTRICAL_STAGE_ORDER[number]
+
+export type AnyStage = StageName | CivilsStageName | ElectricalStageName
 
 // ── Shared types ───────────────────────────────────────────────────────────
 
@@ -164,6 +174,35 @@ export const CIVILS_DEFAULT_CHECKLISTS: Record<CivilsStageName, string[]> = {
   ],
 }
 
+// ── Electrical checklists ──────────────────────────────────────────────────
+
+export const ELECTRICAL_DEFAULT_CHECKLISTS: Record<ElectricalStageName, string[]> = {
+  'Preparation': [
+    'Contract / personal services agreement signed',
+    'Client working rules received and reviewed',
+    'Switching programme received and accepted',
+    'Competency verification complete for all personnel',
+    'Risk assessment approved',
+    'Permit to Work procedures agreed with client AP',
+    'Site survey / cable records received',
+  ],
+  'Active': [
+    'All Permits to Work issued and active',
+    'HV switching operations underway per schedule',
+    'SAT documents under review',
+    'Progress reports issued to client',
+    'Switching schedule updated as operations complete',
+  ],
+  'Complete': [
+    'All SAT tests complete and signed off',
+    'All Permits to Work closed and returned',
+    'Switching schedule archived and countersigned',
+    'Contract final account agreed',
+    'Compliance records and test certificates filed',
+    'Post-job debriefing complete',
+  ],
+}
+
 // ── Colour maps ────────────────────────────────────────────────────────────
 
 export const STAGE_COLOURS: Record<StageName, string> = {
@@ -183,7 +222,14 @@ export const CIVILS_STAGE_COLOURS: Record<CivilsStageName, string> = {
   'Complete':  '#10b981',
 }
 
+export const ELECTRICAL_STAGE_COLOURS: Record<ElectricalStageName, string> = {
+  'Preparation': '#6366f1',
+  'Active':      '#f59e0b',
+  'Complete':    '#16a34a',
+}
+
 export function getStageColour(stage: string, industry = 'bess'): string {
+  if (industry === 'electrical') return ELECTRICAL_STAGE_COLOURS[stage as ElectricalStageName] ?? '#4b5563'
   if (industry === 'civils') return CIVILS_STAGE_COLOURS[stage as CivilsStageName] ?? '#4b5563'
   return STAGE_COLOURS[stage as StageName] ?? '#4b5563'
 }
@@ -191,6 +237,27 @@ export function getStageColour(stage: string, industry = 'bess'): string {
 // ── Factory functions ──────────────────────────────────────────────────────
 
 export function makeDefaultStages(projectId: string, industry = 'bess'): Omit<ProjectStage, 'id' | 'created_at' | 'updated_at'>[] {
+  if (industry === 'electrical') {
+    return ELECTRICAL_STAGE_ORDER.map(stage => ({
+      project_id: projectId,
+      stage,
+      status: 'Not Started' as StageStatus,
+      checklist: ELECTRICAL_DEFAULT_CHECKLISTS[stage].map((label, i) => ({
+        id: `${stage.replace(/\s+/g, '_').toLowerCase()}_${i}`,
+        label,
+        checked: false,
+        checked_by: null,
+        checked_by_name: null,
+        checked_at: null,
+      })),
+      signed_off_by: null,
+      signed_off_at: null,
+      sign_off_notes: null,
+      started_at: null,
+      completed_at: null,
+    }))
+  }
+
   if (industry === 'civils') {
     return CIVILS_STAGE_ORDER.map(stage => ({
       project_id: projectId,
@@ -233,5 +300,7 @@ export function makeDefaultStages(projectId: string, industry = 'bess'): Omit<Pr
 }
 
 export function getStageOrder(industry = 'bess'): readonly string[] {
-  return industry === 'civils' ? CIVILS_STAGE_ORDER : STAGE_ORDER
+  if (industry === 'electrical') return ELECTRICAL_STAGE_ORDER
+  if (industry === 'civils') return CIVILS_STAGE_ORDER
+  return STAGE_ORDER
 }

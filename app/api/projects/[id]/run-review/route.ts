@@ -6,7 +6,7 @@ import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 300
 
-type Lens = 'er_compliance' | 'standards' | 'constructability' | 'procurement' | 'clash'
+type Lens = 'er_compliance' | 'standards' | 'constructability' | 'procurement' | 'clash' | 'contract_review'
 
 const LENS_LABELS: Record<Lens, string> = {
   er_compliance:    'ER Compliance',
@@ -14,6 +14,7 @@ const LENS_LABELS: Record<Lens, string> = {
   constructability: 'Constructability',
   procurement:      'Procurement Linkage',
   clash:            'Clash Detection',
+  contract_review:  'Contract Review',
 }
 
 interface FindingRaw {
@@ -193,6 +194,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (lenses.includes('clash')) lensInstructions.push(`
 "clash": Identify physical and compliance clashes across ALL documents: ducting vs drainage, buried services vs foundations, earthing conflicts, above-ground clearances, cross-document contradictions, interface gaps between packages. Reference both clashing documents.`)
+
+  if (lenses.includes('contract_review')) lensInstructions.push(`
+"contract_review": Review this personal services / subcontract agreement for commercial risk and compliance gaps. Flag: (1) unclear or missing scope of work; (2) payment terms that deviate from standard 30-day terms; (3) absent or inadequate liability caps; (4) liquidated damages clauses with no cap; (5) intellectual property ownership not addressed; (6) working rules and safety obligations not explicitly passed down to the contractor; (7) indemnity gaps; (8) termination provisions that unfairly favour one party; (9) absence of insurance requirements; (10) missing dispute resolution mechanism. Use clause_ref to cite the relevant contract clause number or section heading. Severity: Critical = unacceptable risk without amendment; Major = requires negotiation before signing; Minor = improvement advisable; Observation = advisory note.`)
 
   // ── Single Claude call for all lenses ─────────────────────────────────────
   const systemPrompt = `You are a senior UK BESS engineering reviewer. Conduct a thorough multi-lens design review. Be specific and technical. Every finding must include at least one drawing_ref or document_ref — do not raise a finding without a reference. Severity: Critical = safety/legal/grid connection risk; Major = significant design flaw; Minor = improvement needed; Observation = advisory note.`

@@ -13,6 +13,8 @@ export default async function DashboardPage() {
   const industry = company?.industry ?? 'bess'
   const dashboardSubtitle = industry === 'civils'
     ? 'Construction management overview'
+    : industry === 'electrical'
+    ? 'HV electrical services overview'
     : 'BESS project review overview'
 
   // ── Client dashboard ───────────────────────────────────────────────────────
@@ -59,7 +61,7 @@ export default async function DashboardPage() {
       awaitingResponseCount:  (comments ?? []).filter((c: any) => c.project_id === p.id && c.status === 'Responded' && c.created_by === user.id).length,
     }))
 
-    return <ClientDashboard profile={{ full_name: profile?.full_name ?? null, email: profile?.email ?? user.email ?? '' }} projects={enriched} />
+    return <ClientDashboard profile={{ full_name: profile?.full_name ?? null, email: profile?.email ?? user.email ?? '' }} projects={enriched} industry={industry} />
   }
 
   // ── Internal dashboard ─────────────────────────────────────────────────────

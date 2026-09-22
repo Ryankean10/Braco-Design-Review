@@ -14,6 +14,7 @@ const LENSES = [
   { key: 'constructability', label: 'Constructability',    color: '#fb923c', desc: 'Build-sequence, access and rework risks' },
   { key: 'procurement',      label: 'Procurement Linkage', color: '#34d399', desc: 'Design-to-register gaps and lead-time flags' },
   { key: 'clash',            label: 'Clash Detection',     color: '#f472b6', desc: 'Physical and compliance clashes across documents' },
+  { key: 'contract_review',  label: 'Contract Review',     color: '#fbbf24', desc: 'Commercial risk and compliance gaps in contracts' },
 ] as const
 
 type LensKey = typeof LENSES[number]['key']

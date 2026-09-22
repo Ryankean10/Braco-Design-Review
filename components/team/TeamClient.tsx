@@ -486,7 +486,8 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   interface Credential {
     id: string; person_id: string; credential_type: string; name: string
     issuer: string | null; reference: string | null; issue_date: string | null
-    expiry_date: string | null; notes: string | null; created_at: string
+    expiry_date: string | null; notes: string | null; category: string | null
+    voltage_kv: string | null; created_at: string
     certificates: { id: string; file_name: string; storage_path: string; uploaded_at: string }[]
   }
   const [credentials, setCredentials] = useState<Credential[]>([])
@@ -494,7 +495,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   const [credsLoaded, setCredsLoaded] = useState(false)
   const [addingCred, setAddingCred] = useState(false)
   const [editingCred, setEditingCred] = useState<Credential | null>(null)
-  const [credForm, setCredForm] = useState({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '' })
+  const [credForm, setCredForm] = useState({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '', category: '', voltage_kv: '' })
   const [savingCred, setSavingCred] = useState(false)
   const [credError, setCredError] = useState('')
   const [uploadingCertFor, setUploadingCertFor] = useState<string | null>(null)
@@ -594,7 +595,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   }
 
   function resetCredForm() {
-    setCredForm({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '' })
+    setCredForm({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '', category: '', voltage_kv: '' })
     setCredError(''); setAddingCred(false); setEditingCred(null)
   }
 
@@ -926,6 +927,26 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                         />
                       </div>
                     ))}
+                    {/* HV competence fields */}
+                    <div>
+                      <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Category</label>
+                      <select value={credForm.category} onChange={e => setCredForm(f => ({ ...f, category: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-1.5 text-xs border focus:outline-none"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                        <option value="">— None —</option>
+                        {['HV Authorisation','HV Competency','Safety Rules Acceptance','Permit Issuer','Cable Testing','First Aid','Other'].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Voltage (kV)</label>
+                      <input type="text" value={credForm.voltage_kv} placeholder="e.g. 11kV"
+                        onChange={e => setCredForm(f => ({ ...f, voltage_kv: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-1.5 text-xs border focus:outline-none"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
                     <div className="col-span-2">
                       <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Notes</label>
                       <textarea value={credForm.notes} onChange={e => setCredForm(f => ({ ...f, notes: e.target.value }))}
@@ -985,6 +1006,12 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                           )}
                         </div>
                         <div className="flex flex-wrap gap-3 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {c.category && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                              style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>
+                              {c.category}{c.voltage_kv ? ` · ${c.voltage_kv}` : ''}
+                            </span>
+                          )}
                           {c.issuer && <span>{c.issuer}</span>}
                           {c.reference && <span>Ref: {c.reference}</span>}
                           {c.issue_date && <span>Issued {fmtDate(c.issue_date)}</span>}
@@ -996,7 +1023,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                       </div>
                       {canEdit && (
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => { setEditingCred(c); setAddingCred(false); setCredForm({ credential_type: c.credential_type, name: c.name, issuer: c.issuer??'', reference: c.reference??'', issue_date: c.issue_date??'', expiry_date: c.expiry_date??'', notes: c.notes??'' }) }}
+                          <button onClick={() => { setEditingCred(c); setAddingCred(false); setCredForm({ credential_type: c.credential_type, name: c.name, issuer: c.issuer??'', reference: c.reference??'', issue_date: c.issue_date??'', expiry_date: c.expiry_date??'', notes: c.notes??'', category: c.category??'', voltage_kv: c.voltage_kv??'' }) }}
                             className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
                             <Edit2 size={12} />
                           </button>
