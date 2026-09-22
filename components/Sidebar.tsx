@@ -89,7 +89,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   function isVisible(item: NavItem) {
     if (item.href === '/inbox' && company?.slug !== 'scotplant') return false
     if (item.roles && !item.roles.includes(role)) return false
-    if (item.module && !isSuperadmin && !enabledModules.includes(item.module)) return false
+    if (item.module && !enabledModules.includes(item.module)) return false
     return true
   }
 
