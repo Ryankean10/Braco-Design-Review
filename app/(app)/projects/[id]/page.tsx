@@ -1,7 +1,10 @@
+export const dynamic = 'force-dynamic'
+
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen } from 'lucide-react'
+import { ArrowLeft, Pencil, FileText, ShoppingCart, FlaskConical, MessageSquare, Sparkles, AlertTriangle, Zap, BookMarked, BookOpen, TrendingUp, ShieldCheck, Calculator, FileQuestion } from 'lucide-react'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import type { Stage } from '@/lib/types'
 import ProjectReferences from '@/components/ProjectReferences'
 import ProjectER from '@/components/ProjectER'
@@ -9,7 +12,10 @@ import ClientProjectView from '@/components/ClientProjectView'
 import InternalCommentPanel from '@/components/InternalCommentPanel'
 import ProjectStageTracker from '@/components/ProjectStageTracker'
 import ClientAccessPanel from '@/components/ClientAccessPanel'
-import { makeDefaultStages, STAGE_ORDER as STAGE_NAMES } from '@/lib/stageDefaults'
+import TeamAccessPanel from '@/components/TeamAccessPanel'
+import { makeDefaultStages, getStageOrder } from '@/lib/stageDefaults'
+import ProjectITPUpload from '@/components/ProjectITPUpload'
+import ProjectMilestonesPanel from '@/components/ProjectMilestonesPanel'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,7 +26,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   const [{ data: project }, { data: profile }] = await Promise.all([
     supabase.from('projects').select('*').eq('id', id).single(),
-    supabase.from('profiles').select('role').eq('id', user.id).single(),
+    supabase.from('profiles').select('role, company_id').eq('id', user.id).single(),
   ])
 
   if (!project) notFound()
@@ -116,6 +122,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     { data: allHs },
     { data: allLessons },
     { data: allOps },
+    { data: projectItps },
+    { data: constructionSite },
+    { data: projectMembers },
+    { data: allInternalProfiles },
+    { data: erTaskRows },
   ] = await Promise.all([
     supabase.from('client_comments')
       .select('*, comment_attachments(*)')
@@ -139,6 +150,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     supabase.from('hs_references').select('*').order('category').order('ref'),
     supabase.from('lessons_learned').select('*').order('severity').order('category'),
     supabase.from('operator_rules').select('*').order('operator').order('category'),
+    supabase.from('project_itps').select('*').eq('project_id', id).order('uploaded_at', { ascending: false }),
+    supabase.from('construction_sites').select('id').eq('project_id', id).maybeSingle(),
+    supabase.from('project_members').select('id, user_id').eq('project_id', id),
+    supabase.from('profiles').select('id, full_name, email, role').in('role', ['admin', 'engineer', 'project_manager', 'operative']),
+    supabase.from('er_tasks').select('*').eq('project_id', id).order('stage').order('created_at'),
   ])
 
   const linkedStandards = (linkedStandardRows ?? []).map((r: any) => r.standards).filter(Boolean)
@@ -163,22 +179,43 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     responder_name: c.responded_by ? (nameMap[c.responded_by] ?? null) : null,
   }))
 
+  // Look up company industry + modules via profile's company_id
+  const companyId = (profile as any)?.company_id ?? project?.company_id
+  const { data: companyRow } = companyId
+    ? await supabase.from('companies').select('industry, modules').eq('id', companyId).single()
+    : { data: null }
+  const industry: string = (companyRow as any)?.industry ?? 'bess'
+  const companyModules: string[] = (companyRow as any)?.modules ?? []
+  // If no projects.* sub-feature flags set, default everything on (backwards compat)
+  const hasProjectSubFeatures = companyModules.some((m: string) => m.startsWith('projects.'))
+  const pfeat = (key: string) => !hasProjectSubFeatures || companyModules.includes(key)
+
   // Seed project_stages if this project has none yet
+  const stageTemplate: string | undefined = (project as any).stage_template ?? undefined
   let projectStages = projectStageRows ?? []
   if (projectStages.length === 0) {
-    const defaults = makeDefaultStages(id)
+    const defaults = makeDefaultStages(id, industry, stageTemplate)
     const { data: seeded } = await supabase
       .from('project_stages')
       .insert(defaults)
       .select()
     projectStages = seeded ?? []
   }
-  // Ensure all 6 stages present (handles projects created before migration)
-  const stagesOrdered = STAGE_NAMES.map(name =>
+  // Order stages by the industry's stage order (respecting per-project template)
+  const stageOrder = getStageOrder(industry, stageTemplate)
+  const stagesOrdered = stageOrder.map(name =>
     projectStages.find((s: any) => s.stage === name)
   ).filter(Boolean) as any[]
 
-  const canEdit = ['admin', 'engineer'].includes(role)
+  const canEdit = ['superadmin', 'admin', 'engineer'].includes(role)
+
+  // Fetch linked estimates
+  const adminSvc = createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
+  const { data: linkedEstimates } = await adminSvc
+    .from('estimates')
+    .select('id, reference, title, status, estimate_items(total_cost, markup_pct)')
+    .eq('project_id', id)
+    .order('created_at', { ascending: false })
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -204,6 +241,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <BookOpen size={13} /> Technical
           </Link>
         )}
+        {role !== 'client' && (
+          <Link href={`/projects/${id}/assurance`}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border hover:opacity-80"
+            style={{ color: '#22c55e', borderColor: '#22c55e44', background: '#22c55e0d' }}>
+            <ShieldCheck size={13} /> Assurance
+          </Link>
+        )}
         <Link href={`/projects/${id}/edit`}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border hover:opacity-80"
           style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
@@ -218,19 +262,79 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           canEdit={canEdit}
           userId={user.id}
           userName={userName}
+          projectId={id}
         />
       </div>
 
+
+      {/* Estimates panel — only show if estimating module is on OR there are linked estimates */}
+      {(companyModules.includes('estimating') || (linkedEstimates ?? []).length > 0) && role !== 'client' && (
+        <div className="mb-6 rounded-xl border p-4" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Calculator size={16} style={{ color: 'var(--accent)' }} />
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Estimates</p>
+            </div>
+            <Link href={`/estimating`} className="text-xs" style={{ color: 'var(--accent)' }}>View all →</Link>
+          </div>
+          {(linkedEstimates ?? []).length === 0 ? (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No estimates linked to this project yet. Open an estimate and link it via Edit details.</p>
+          ) : (
+            <div className="space-y-2">
+              {(linkedEstimates ?? []).map((est: any) => {
+                const STATUS_COLORS: Record<string, string> = { draft: '#94a3b8', sent: '#f59e0b', accepted: '#10b981', rejected: '#ef4444', void: '#6b7280' }
+                const clientTotal = (est.estimate_items ?? []).reduce((s: number, i: any) => s + i.total_cost * (1 + (i.markup_pct ?? 15) / 100), 0)
+                const grandTotal = clientTotal * 1.20
+                return (
+                  <Link key={est.id} href={`/estimating/${est.id}`}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg hover:opacity-80"
+                    style={{ background: 'var(--bg-base)' }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium text-white shrink-0" style={{ background: STATUS_COLORS[est.status] ?? '#94a3b8' }}>{est.status}</span>
+                      <span className="text-xs font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>{est.reference}</span>
+                      <span className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>{est.title}</span>
+                    </div>
+                    <span className="text-sm font-semibold shrink-0 ml-4" style={{ color: 'var(--text-primary)' }}>
+                      {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(grandTotal)}
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payment milestones panel */}
+      {role !== 'client' && (
+        <div className="mb-6">
+          <ProjectMilestonesPanel projectId={id} canEdit={canEdit} />
+        </div>
+      )}
+
       {/* Feature panels */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <Link href={`/projects/${id}/documents`}
-          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-          <FileText size={20} style={{ color: 'var(--accent)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Document Library</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Upload and manage project documents</p>
-        </Link>
-        {role !== 'client' && (
+        {role !== 'client' && pfeat('projects.assurance') && (
+          <Link href={`/projects/${id}/assurance`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80 col-span-2"
+            style={{ background: '#0d2818', borderColor: '#22c55e44', minHeight: 80 }}>
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={20} style={{ color: '#22c55e' }} />
+              <p className="text-sm font-medium" style={{ color: '#22c55e' }}>Project Assurance</p>
+            </div>
+            <p className="text-xs" style={{ color: '#4ade8088' }}>ITP, Quality Check Sheets (QCS) and construction sign-off</p>
+          </Link>
+        )}
+        {pfeat('projects.documents') && (
+          <Link href={`/projects/${id}/documents`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+            <FileText size={20} style={{ color: 'var(--accent)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Document Library</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Upload and manage project documents</p>
+          </Link>
+        )}
+        {role !== 'client' && pfeat('projects.references') && (
           <Link href={`/projects/${id}/technical`}
             className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
             style={{ background: 'var(--bg-surface)', borderColor: 'rgba(108,114,245,0.3)', minHeight: 100 }}>
@@ -239,21 +343,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Manuals, studies &amp; received docs — AI compliance cross-check</p>
           </Link>
         )}
-        <Link href={`/projects/${id}/procurement`}
-          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-          <ShoppingCart size={20} style={{ color: 'var(--accent)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Procurement</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Equipment register, quotes and lead times</p>
-        </Link>
-        <Link href={`/projects/${id}/tests`}
-          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-          <FlaskConical size={20} style={{ color: 'var(--accent)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Test Register</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Plate loads, GIs, cable tests, FAT &amp; SAT</p>
-        </Link>
-        {role !== 'operative' && (
+        {pfeat('projects.procurement') && (
+          <Link href={`/projects/${id}/procurement`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+            <ShoppingCart size={20} style={{ color: 'var(--accent)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Procurement</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Equipment register, quotes and lead times</p>
+          </Link>
+        )}
+        {pfeat('projects.tests') && (
+          <Link href={`/projects/${id}/tests`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+            <FlaskConical size={20} style={{ color: 'var(--accent)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Test Register</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Plate loads, GIs, cable tests, FAT &amp; SAT</p>
+          </Link>
+        )}
+        {role !== 'operative' && pfeat('projects.comments') && (
           <Link href={`/comments?project=${id}`}
             className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
             style={{ background: 'var(--bg-surface)', borderColor: (projectComments ?? []).some((c: any) => c.status === 'Open') ? 'rgba(251,146,60,0.5)' : 'var(--border)', minHeight: 100 }}>
@@ -272,38 +380,64 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </p>
           </Link>
         )}
-        <Link href={`/projects/${id}/reviews`}
-          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-          <Sparkles size={20} style={{ color: 'var(--accent)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>AI Design Reviews</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>ER compliance, standards, constructability, procurement & clash</p>
-        </Link>
-        <Link href={`/projects/${id}/reviews`}
-          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-          <AlertTriangle size={20} style={{ color: '#fb923c' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Findings</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Review and sign off AI-raised findings</p>
-        </Link>
-        <Link href={`/projects/${id}/reviews#clash`}
-          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-          <Zap size={20} style={{ color: '#f472b6' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Clash Detection</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Physical & compliance clashes across all design documents</p>
-        </Link>
-        <Link href={`/projects/${id}/decision-log`}
-          className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
-          <BookMarked size={20} style={{ color: '#34d399' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Decision Log</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Full audit trail of all findings, decisions and actions</p>
-        </Link>
+        {pfeat('projects.reviews') && (
+          <Link href={`/projects/${id}/reviews`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+            <Sparkles size={20} style={{ color: 'var(--accent)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>AI Design Reviews</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>ER compliance, standards, constructability, procurement & clash</p>
+          </Link>
+        )}
+        {pfeat('projects.reviews') && (
+          <Link href={`/projects/${id}/reviews`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+            <AlertTriangle size={20} style={{ color: '#fb923c' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Findings</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Review and sign off AI-raised findings</p>
+          </Link>
+        )}
+        {pfeat('projects.reviews') && (
+          <Link href={`/projects/${id}/reviews#clash`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+            <Zap size={20} style={{ color: '#f472b6' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Clash Detection</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Physical & compliance clashes across all design documents</p>
+          </Link>
+        )}
+        {pfeat('projects.reviews') && (
+          <Link href={`/projects/${id}/decision-log`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
+            <BookMarked size={20} style={{ color: '#34d399' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Decision Log</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Full audit trail of all findings, decisions and actions</p>
+          </Link>
+        )}
+        {pfeat('projects.work_planner') && (
+          <Link href={`/projects/${id}/work-planner`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'rgba(251,191,36,0.3)', minHeight: 100 }}>
+            <TrendingUp size={20} style={{ color: '#fbbf24' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Work Planner</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>AI forecast — manpower, cost & long lead procurement</p>
+          </Link>
+        )}
+        {pfeat('projects.rfi_tq') && (
+          <Link href={`/projects/${id}/rfi-tq`}
+            className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
+            style={{ background: 'var(--bg-surface)', borderColor: 'rgba(99,102,241,0.3)', minHeight: 100 }}>
+            <FileQuestion size={20} style={{ color: '#818cf8' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>RFI / TQ Register</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Technical queries & requests for information — workflow & response tracking</p>
+          </Link>
+        )}
       </div>
 
       {/* Client comments — visible to admin/PM/engineer, hidden from operative */}
-      {role !== 'operative' && (projectComments ?? []).length > 0 && (
+      {role !== 'operative' && pfeat('projects.comments') && (projectComments ?? []).length > 0 && (
         <div className="mb-4">
           <InternalCommentPanel
             projectId={id}
@@ -313,51 +447,69 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* Client access — admin/PM only */}
+      {/* Team & client access — admin/PM only */}
       {['admin', 'project_manager'].includes(role) && (
-        <div className="mb-4">
-          <ClientAccessPanel
+        <div className="mb-4 grid grid-cols-2 gap-4">
+          <TeamAccessPanel
             projectId={id}
-            initialAssigned={(assignedClients ?? []).map((a: any) => {
-              const profile = (allClientProfiles ?? []).find((p: any) => p.id === a.user_id)
-              return {
-                id: a.id,
-                user_id: a.user_id,
-                full_name: profile?.full_name ?? null,
-                email: profile?.email ?? '',
-              }
+            initialMembers={((projectMembers ?? []) as any[]).map((m) => {
+              const p = ((allInternalProfiles ?? []) as any[]).find((p) => p.id === m.user_id)
+              return { id: m.id, user_id: m.user_id, full_name: p?.full_name ?? null, email: p?.email ?? '', role: p?.role ?? 'engineer' }
             })}
-            availableClients={(allClientProfiles ?? []).map((p: any) => ({
-              id: p.id,
-              full_name: p.full_name ?? null,
-              email: p.email ?? '',
+            availableUsers={((allInternalProfiles ?? []) as any[]).map((p) => ({
+              id: p.id, full_name: p.full_name ?? null, email: p.email ?? '', role: p.role ?? 'engineer',
             }))}
           />
+          {pfeat('projects.comments') && (
+            <ClientAccessPanel
+              projectId={id}
+              initialAssigned={(assignedClients ?? []).map((a: any) => {
+                const profile = (allClientProfiles ?? []).find((p: any) => p.id === a.user_id)
+                return { id: a.id, user_id: a.user_id, full_name: profile?.full_name ?? null, email: profile?.email ?? '' }
+              })}
+              availableClients={(allClientProfiles ?? []).map((p: any) => ({
+                id: p.id, full_name: p.full_name ?? null, email: p.email ?? '',
+              }))}
+            />
+          )}
         </div>
       )}
 
       {/* ER */}
-      <div className="mb-4">
-        <ProjectER
-          projectId={id}
-          erStoragePath={project.er_storage_path ?? null}
-          erFileName={project.er_file_name ?? null}
-          erMissingStandards={project.er_missing_standards ?? []}
-          erAnalysedAt={project.er_analysed_at ?? null}
-        />
-      </div>
+      {pfeat('projects.er') && (
+        <div className="mb-4">
+          <ProjectER
+            projectId={id}
+            erStoragePath={project.er_storage_path ?? null}
+            erFileName={project.er_file_name ?? null}
+            erMissingStandards={project.er_missing_standards ?? []}
+            erAnalysedAt={project.er_analysed_at ?? null}
+            erRevisions={(project as any).er_revisions ?? []}
+            erRagSummary={(project as any).er_rag_summary ?? null}
+            erRagAnalysedAt={(project as any).er_rag_analysed_at ?? null}
+            erDeepAnalysis={(project as any).er_deep_analysis ?? null}
+            erDeepAnalysedAt={(project as any).er_deep_analysed_at ?? null}
+            initialTasks={(erTaskRows ?? []) as any[]}
+            constructionSiteId={(constructionSite as any)?.id ?? null}
+            canUpload={['admin', 'superadmin'].includes((profile as any)?.role) && industry === 'civils'}
+            linkedStandardRefs={linkedStandards.map((s: any) => ({ ref: s.ref, title: s.title }))}
+          />
+        </div>
+      )}
 
-      <ProjectReferences
-        projectId={id}
-        linkedStandards={linkedStandards}
-        linkedHs={linkedHs}
-        linkedLessons={linkedLessons}
-        linkedOps={linkedOps}
-        allStandards={allStandards ?? []}
-        allHs={allHs ?? []}
-        allLessons={allLessons ?? []}
-        allOps={allOps ?? []}
-      />
+      {pfeat('projects.references') && (
+        <ProjectReferences
+          projectId={id}
+          linkedStandards={linkedStandards}
+          linkedHs={linkedHs}
+          linkedLessons={linkedLessons}
+          linkedOps={linkedOps}
+          allStandards={allStandards ?? []}
+          allHs={allHs ?? []}
+          allLessons={allLessons ?? []}
+          allOps={allOps ?? []}
+        />
+      )}
     </div>
   )
 }

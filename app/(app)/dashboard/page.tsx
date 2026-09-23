@@ -1,30 +1,22 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { FolderOpen, Plus, MessageSquare } from 'lucide-react'
-import ClientDashboard from '@/components/ClientDashboard'
-import { STAGE_ORDER } from '@/lib/stageDefaults'
-import type { StageName } from '@/lib/stageDefaults'
+export const dynamic = 'force-dynamic'
 
-function stageColour(stage: StageName) {
-  const map: Record<StageName, string> = {
-    'Feasibility':         '#4b5563',
-    'Design':              '#2563eb',
-    'Procure':             '#7c3aed',
-    'Build & Install':     '#d97706',
-    'Test & Commission':   '#dc2626',
-    'Energise & Handover': '#16a34a',
-  }
-  return map[stage] ?? '#4b5563'
-}
+import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
+import Link from 'next/link'
+import { getCompanyContext } from '@/lib/getCompanyContext'
+import { FolderOpen, Plus, MessageSquare, ShieldAlert, TrendingDown } from 'lucide-react'
+import ClientDashboard from '@/components/ClientDashboard'
+import { getStageOrder, getStageColour } from '@/lib/stageDefaults'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase.from('profiles').select('role, full_name, email').eq('id', user.id).single()
-  const role = profile?.role ?? 'engineer'
+  const { supabase, user, profile, role, company, effectiveCompanyId } = await getCompanyContext()
+  const industry = company?.industry ?? 'bess'
+  const dashboardSubtitle = industry === 'civils'
+    ? 'Construction management overview'
+    : industry === 'electrical'
+    ? 'HV electrical services overview'
+    : 'BESS project review overview'
 
   // ── Client dashboard ───────────────────────────────────────────────────────
   if (role === 'client') {
@@ -70,14 +62,17 @@ export default async function DashboardPage() {
       awaitingResponseCount:  (comments ?? []).filter((c: any) => c.project_id === p.id && c.status === 'Responded' && c.created_by === user.id).length,
     }))
 
-    return <ClientDashboard profile={{ full_name: profile?.full_name ?? null, email: profile?.email ?? user.email ?? '' }} projects={enriched} />
+    return <ClientDashboard profile={{ full_name: profile?.full_name ?? null, email: profile?.email ?? user.email ?? '' }} projects={enriched} industry={industry} />
   }
 
   // ── Internal dashboard ─────────────────────────────────────────────────────
 
-  // Non-admin roles only see their assigned projects
+  // Always scope to the subdomain company — even superadmin
   let projectQuery = supabase.from('projects').select('*').order('updated_at', { ascending: false })
-  if (role !== 'admin') {
+  if (effectiveCompanyId) {
+    projectQuery = projectQuery.eq('company_id', effectiveCompanyId)
+  }
+  if (!['superadmin', 'admin'].includes(role)) {
     const { data: memberships } = await supabase
       .from('project_members').select('project_id').eq('user_id', user.id)
     const ids = (memberships ?? []).map((m: any) => m.project_id)
@@ -93,16 +88,57 @@ export default async function DashboardPage() {
     projectQuery = projectQuery.in('id', ids)
   }
 
-  const [{ data: projects }, { data: allProjectStages }, { data: openComments }] = await Promise.all([
-    projectQuery,
-    supabase.from('project_stages').select('project_id, stage, status, checklist'),
-    role !== 'operative'
-      ? supabase.from('client_comments').select('id, project_id, subject_label, created_at, status').eq('status', 'Open').order('created_at', { ascending: false })
+  const { data: projects } = await projectQuery
+
+  const projectIds = (projects ?? []).map((p: any) => p.id)
+
+  const [{ data: allProjectStages }, { data: openComments }] = await Promise.all([
+    projectIds.length > 0
+      ? supabase.from('project_stages').select('project_id, stage, status, checklist').in('project_id', projectIds)
+      : Promise.resolve({ data: [] }),
+    role !== 'operative' && projectIds.length > 0
+      ? supabase.from('client_comments').select('id, project_id, subject_label, created_at, status').eq('status', 'Open').in('project_id', projectIds).order('created_at', { ascending: false })
       : Promise.resolve({ data: [] }),
   ])
 
+  // ── Compliance + cashflow (admin-scoped, no RLS bypass needed for counts) ──
+  const adminDb = createAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+  const today = new Date().toISOString().split('T')[0]
+  const in60Days = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  const [{ data: companyPeople }, { data: expiringPlant }, { data: overdueMs }, { data: dueSoonMs }] = await Promise.all([
+    effectiveCompanyId
+      ? adminDb.from('people').select('id').eq('company_id', effectiveCompanyId)
+      : Promise.resolve({ data: [] }),
+    effectiveCompanyId
+      ? adminDb.from('plant_certificates').select('id, expiry_date').eq('company_id', effectiveCompanyId).not('expiry_date', 'is', null).lte('expiry_date', in60Days)
+      : Promise.resolve({ data: [] }),
+    effectiveCompanyId
+      ? adminDb.from('payment_milestones').select('id, amount').eq('company_id', effectiveCompanyId).in('status', ['pending', 'invoiced']).not('due_date', 'is', null).lt('due_date', today)
+      : Promise.resolve({ data: [] }),
+    effectiveCompanyId
+      ? adminDb.from('payment_milestones').select('id, amount').eq('company_id', effectiveCompanyId).in('status', ['pending', 'invoiced']).not('due_date', 'is', null).gte('due_date', today).lte('due_date', in30Days)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const personIds = (companyPeople ?? []).map((p: any) => p.id)
+  const { data: expiringCreds } = personIds.length > 0
+    ? await adminDb.from('person_credentials').select('id, expiry_date').in('person_id', personIds).not('expiry_date', 'is', null).lte('expiry_date', in60Days)
+    : { data: [] }
+
+  const totalExpired = [...(expiringCreds ?? []), ...(expiringPlant ?? [])].filter((c: any) => c.expiry_date < today).length
+  const totalExpiringSoon = [...(expiringCreds ?? []), ...(expiringPlant ?? [])].filter((c: any) => c.expiry_date >= today).length
+  const amountOverdue = (overdueMs ?? []).reduce((s: number, m: any) => s + (m.amount ?? 0), 0)
+  const amountDueSoon = (dueSoonMs ?? []).reduce((s: number, m: any) => s + (m.amount ?? 0), 0)
+
   // Count projects with each stage "In Progress"
-  const byStage = STAGE_ORDER.map(stage => ({
+  const stageOrder = getStageOrder(industry)
+  const byStage = stageOrder.map(stage => ({
     stage,
     inProgress: (allProjectStages ?? []).filter(s => s.stage === stage && s.status === 'In Progress').length,
     complete:   (allProjectStages ?? []).filter(s => s.stage === stage && s.status === 'Complete').length,
@@ -122,7 +158,7 @@ export default async function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Dashboard</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>BESS project review overview</p>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>{dashboardSubtitle}</p>
         </div>
         {['admin', 'engineer'].includes(role) && (
           <Link href="/projects/new"
@@ -162,14 +198,53 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* Compliance banner */}
+      {(totalExpired > 0 || totalExpiringSoon > 0) && (
+        <div className="rounded-xl border p-4" style={{ background: totalExpired > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(251,191,36,0.08)', borderColor: totalExpired > 0 ? 'rgba(248,113,113,0.3)' : 'rgba(251,191,36,0.3)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert size={14} style={{ color: totalExpired > 0 ? '#f87171' : '#fbbf24' }} />
+              <p className="text-sm font-semibold" style={{ color: totalExpired > 0 ? '#f87171' : '#fbbf24' }}>
+                {totalExpired > 0
+                  ? `${totalExpired} expired certificate${totalExpired !== 1 ? 's' : ''}`
+                  : `${totalExpiringSoon} certificate${totalExpiringSoon !== 1 ? 's' : ''} expiring within 60 days`}
+              </p>
+            </div>
+            <Link href="/team" className="text-xs hover:underline" style={{ color: totalExpired > 0 ? '#f87171' : '#fbbf24' }}>View →</Link>
+          </div>
+          {totalExpired > 0 && totalExpiringSoon > 0 && (
+            <p className="text-xs mt-1 ml-5" style={{ color: totalExpired > 0 ? '#fca5a5' : '#fde68a' }}>+{totalExpiringSoon} expiring soon</p>
+          )}
+        </div>
+      )}
+
+      {/* Cashflow banner */}
+      {(amountOverdue > 0 || amountDueSoon > 0) && (
+        <div className="rounded-xl border p-4" style={{ background: amountOverdue > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(96,165,250,0.08)', borderColor: amountOverdue > 0 ? 'rgba(248,113,113,0.3)' : 'rgba(96,165,250,0.3)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingDown size={14} style={{ color: amountOverdue > 0 ? '#f87171' : '#60a5fa' }} />
+              <p className="text-sm font-semibold" style={{ color: amountOverdue > 0 ? '#f87171' : '#60a5fa' }}>
+                {amountOverdue > 0
+                  ? `GBP ${amountOverdue.toLocaleString('en-GB', { minimumFractionDigits: 2 })} overdue`
+                  : `GBP ${amountDueSoon.toLocaleString('en-GB', { minimumFractionDigits: 2 })} due in 30 days`}
+              </p>
+            </div>
+          </div>
+          {amountOverdue > 0 && amountDueSoon > 0 && (
+            <p className="text-xs mt-1 ml-5" style={{ color: '#fca5a5' }}>+GBP {amountDueSoon.toLocaleString('en-GB', { minimumFractionDigits: 2 })} due in 30 days</p>
+          )}
+        </div>
+      )}
+
       {/* Stage summary */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Active stages across all projects</p>
         <div className="grid grid-cols-3 gap-3">
           {byStage.map(({ stage, inProgress, complete }) => (
-            <div key={stage} className="rounded-xl p-4 border" style={{ background: 'var(--bg-surface)', borderColor: inProgress > 0 ? `${stageColour(stage)}55` : 'var(--border)' }}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: inProgress > 0 ? stageColour(stage) : 'var(--text-muted)' }}>{stage}</p>
-              <p className="text-3xl font-bold mb-1" style={{ color: inProgress > 0 ? stageColour(stage) : 'var(--text-muted)' }}>{inProgress}</p>
+            <div key={stage} className="rounded-xl p-4 border" style={{ background: 'var(--bg-surface)', borderColor: inProgress > 0 ? `${getStageColour(stage, industry)}55` : 'var(--border)' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: inProgress > 0 ? getStageColour(stage, industry) : 'var(--text-muted)' }}>{stage}</p>
+              <p className="text-3xl font-bold mb-1" style={{ color: inProgress > 0 ? getStageColour(stage, industry) : 'var(--text-muted)' }}>{inProgress}</p>
               <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                 in progress{complete > 0 ? ` · ${complete} complete` : ''}
               </p>
@@ -209,7 +284,7 @@ export default async function DashboardPage() {
                     {active.length > 0
                       ? active.map(s => (
                           <span key={s} className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap"
-                            style={{ background: `${stageColour(s as StageName)}22`, color: stageColour(s as StageName), border: `1px solid ${stageColour(s as StageName)}55` }}>
+                            style={{ background: `${getStageColour(s, industry)}22`, color: getStageColour(s, industry), border: `1px solid ${getStageColour(s, industry)}55` }}>
                             {s}
                           </span>
                         ))

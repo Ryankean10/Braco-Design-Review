@@ -12,19 +12,27 @@
     "@anthropic-ai/sdk": "^0.104.1",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
+    "adm-zip": "^0.5.18",
+    "imapflow": "^1.6.5",
     "lucide-react": "^1.17.0",
     "next": "16.2.9",
     "pdf-parse": "^1.1.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "resend": "^6.17.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^20",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "mammoth": "^1.12.0",
+    "pg": "^8.22.0",
+    "pst-extractor": "^1.12.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "xlsx": "^0.18.5"

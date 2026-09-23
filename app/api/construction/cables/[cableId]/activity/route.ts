@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
 
 // PATCH — update or create an activity on a cable
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ cableId: string }> }) {
   const { cableId } = await params
+  const auth = await requireRole(INTERNAL_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const { activity, end_side, status, completed_by, notes, needs_review } = await req.json()
   if (!activity || !status) return NextResponse.json({ error: 'activity and status required' }, { status: 400 })

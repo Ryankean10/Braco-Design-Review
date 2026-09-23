@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
 
 // PATCH — update cable-level fields (flagged, containment_route, notes)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ cableId: string }> }) {
   const { cableId } = await params
+  const auth = await requireRole(INTERNAL_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const body = await req.json()
   const allowed = ['flagged', 'flag_reason', 'containment_route', 'notes']

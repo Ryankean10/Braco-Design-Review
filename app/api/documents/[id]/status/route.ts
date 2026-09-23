@@ -12,14 +12,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const { data: profile } = await supabase.from('profiles').select('role, full_name, email').eq('id', user.id).single()
-  if (!['admin', 'engineer'].includes(profile?.role ?? ''))
+  if (!['admin', 'superadmin', 'engineer'].includes(profile?.role ?? ''))
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
 
   const { status, note } = await req.json() as { status: DocStatus; note?: string }
   if (!VALID_STATUSES.includes(status))
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
 
-  if (status === 'Approved for Construction' && profile?.role !== 'admin')
+  if (status === 'Approved for Construction' && !['admin', 'superadmin'].includes(profile?.role ?? ''))
     return NextResponse.json({ error: 'Only admins can approve for construction' }, { status: 403 })
 
   const { data: doc } = await supabase

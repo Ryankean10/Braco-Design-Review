@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Sparkles, CheckCircle2, XCircle, Clock, AlertTriangle,
-  ChevronDown, ChevronRight, FileText, ShoppingCart, Eye, EyeOff,
+  ChevronDown, ChevronRight, FileText, ShoppingCart, Eye, EyeOff, X, BookOpen,
 } from 'lucide-react'
+import MarkupBox from './MarkupBox'
 
 const LENSES = [
   { key: 'er_compliance',    label: "ER Compliance",       color: '#60a5fa', desc: "Non-conformances with Employer's Requirements" },
@@ -13,6 +14,7 @@ const LENSES = [
   { key: 'constructability', label: 'Constructability',    color: '#fb923c', desc: 'Build-sequence, access and rework risks' },
   { key: 'procurement',      label: 'Procurement Linkage', color: '#34d399', desc: 'Design-to-register gaps and lead-time flags' },
   { key: 'clash',            label: 'Clash Detection',     color: '#f472b6', desc: 'Physical and compliance clashes across documents' },
+  { key: 'contract_review',  label: 'Contract Review',     color: '#fbbf24', desc: 'Commercial risk and compliance gaps in contracts' },
 ] as const
 
 type LensKey = typeof LENSES[number]['key']
@@ -57,6 +59,9 @@ interface Finding {
   reviewed_at: string | null
   review_notes: string | null
   reviewer_name: string | null
+  quote: string | null
+  designer_response: string | null
+  designer_responded_at: string | null
 }
 
 interface Run {
@@ -67,12 +72,20 @@ interface Run {
   document_ids: string[]
   runner_name: string | null
   error: string | null
+  markup_html: string | null
+}
+
+interface ClauseContent {
+  heading?: string | null
+  body: string | null
+  source: string
 }
 
 interface Props {
   projectId: string
   projectName: string
   hasER: boolean
+  erStoragePath?: string | null
   canEdit: boolean
   documents: Doc[]
   initialRuns: Run[]
@@ -80,7 +93,7 @@ interface Props {
 }
 
 export default function ReviewsPanel({
-  projectId, projectName, hasER, canEdit,
+  projectId, projectName, hasER, erStoragePath, canEdit,
   documents, initialRuns, initialFindings,
 }: Props) {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([])
@@ -95,11 +108,28 @@ export default function ReviewsPanel({
   const [expandedLenses, setExpandedLenses] = useState<Set<string>>(new Set(['er_compliance']))
   const [filterStatus, setFilterStatus] = useState<'all' | 'Pending' | 'Approved' | 'Rejected'>('all')
   const [activeRunId, setActiveRunId] = useState<string>('all')
+  const [commercialOpen, setCommercialOpen] = useState(true)
   const [reviewingId, setReviewingId] = useState<string | null>(null)
   const [reviewingAction, setReviewingAction] = useState<'Approved' | 'Rejected' | null>(null)
   const [reviewNote, setReviewNote] = useState('')
   const [reviewDecisionType, setReviewDecisionType] = useState('')
   const [reviewError, setReviewError] = useState<string | null>(null)
+
+  // Clause reference drawer
+  const [clauseDrawer, setClauseDrawer] = useState<{ ref: string; quote: string | null } | null>(null)
+  const [clauseContent, setClauseContent] = useState<ClauseContent | null>(null)
+  const [clauseLoading, setClauseLoading] = useState(false)
+
+  useEffect(() => {
+    if (!clauseDrawer) { setClauseContent(null); return }
+    setClauseLoading(true)
+    setClauseContent(null)
+    fetch(`/api/projects/${projectId}/clause-lookup?ref=${encodeURIComponent(clauseDrawer.ref)}`)
+      .then(r => r.json())
+      .then(d => setClauseContent(d))
+      .catch(() => setClauseContent({ body: 'Could not load clause text.', source: clauseDrawer.ref }))
+      .finally(() => setClauseLoading(false))
+  }, [clauseDrawer?.ref, projectId])
 
   function toggleDoc(id: string) {
     setSelectedDocs(prev => prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id])
@@ -516,7 +546,14 @@ export default function ReviewsPanel({
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{finding.title}</p>
                                     {finding.clause_ref && (
-                                      <p className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--accent)' }}>{finding.clause_ref}</p>
+                                      <button
+                                        onClick={() => setClauseDrawer(clauseDrawer?.ref === finding.clause_ref ? null : { ref: finding.clause_ref!, quote: finding.quote ?? null })}
+                                        className="flex items-center gap-1 text-[10px] font-mono mt-0.5 hover:underline text-left"
+                                        style={{ color: 'var(--accent)' }}
+                                        title="Click to view clause text">
+                                        <BookOpen size={9} />
+                                        {finding.clause_ref}
+                                      </button>
                                     )}
                                   </div>
                                   <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0"
@@ -528,20 +565,35 @@ export default function ReviewsPanel({
                                 {/* Description */}
                                 <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{finding.description}</p>
 
+                                {/* Document excerpt */}
+                                {finding.quote && (
+                                  <div className="rounded-lg px-3 py-2 text-xs"
+                                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                                    <p className="text-[10px] font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>FROM THE DOCUMENT</p>
+                                    <p className="italic leading-relaxed" style={{ color: 'var(--text-secondary)' }}>"{finding.quote}"</p>
+                                  </div>
+                                )}
+
                                 {/* Refs */}
                                 {(finding.drawing_refs?.length > 0 || finding.document_refs?.length > 0) && (
                                   <div className="flex flex-wrap gap-1.5">
                                     {finding.drawing_refs?.map((ref, i) => (
-                                      <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
-                                        style={{ background: 'rgba(108,114,245,0.1)', color: 'var(--accent)' }}>
+                                      <button key={i}
+                                        onClick={() => setClauseDrawer(clauseDrawer?.ref === ref ? null : { ref, quote: finding.quote ?? null })}
+                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded hover:opacity-70"
+                                        style={{ background: 'rgba(108,114,245,0.1)', color: 'var(--accent)' }}
+                                        title="Click to view document context">
                                         <FileText size={9} /> {ref}
-                                      </span>
+                                      </button>
                                     ))}
                                     {finding.document_refs?.map((ref, i) => (
-                                      <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
-                                        style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-muted)' }}>
+                                      <button key={i}
+                                        onClick={() => setClauseDrawer(clauseDrawer?.ref === ref ? null : { ref, quote: finding.quote ?? null })}
+                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded hover:opacity-70"
+                                        style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-muted)' }}
+                                        title="Click to view document context">
                                         <FileText size={9} /> {ref}
-                                      </span>
+                                      </button>
                                     ))}
                                     {finding.procurement_item_id && (
                                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
@@ -686,8 +738,179 @@ export default function ReviewsPanel({
               })}
             </>
           )}
+
+          {/* Commercial Terms — grouped view for contract_review findings */}
+          {visibleFindings.some(f => f.lens === 'contract_review') && (
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(251,191,36,0.4)' }}>
+              <button
+                onClick={() => setCommercialOpen(v => !v)}
+                className="w-full flex items-center justify-between px-5 py-3.5 hover:opacity-80"
+                style={{ background: 'rgba(251,191,36,0.06)' }}>
+                <div className="flex items-center gap-3">
+                  {commercialOpen ? <ChevronDown size={14} style={{ color: '#fbbf24' }} /> : <ChevronRight size={14} style={{ color: '#fbbf24' }} />}
+                  <span className="text-sm font-semibold" style={{ color: '#fbbf24' }}>Commercial Terms</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>
+                    grouped by clause
+                  </span>
+                </div>
+              </button>
+              {commercialOpen && (() => {
+                const contractFindings = visibleFindings.filter(f => f.lens === 'contract_review')
+                const byClause: Record<string, Finding[]> = {}
+                for (const f of contractFindings) {
+                  const key = f.clause_ref ?? 'General'
+                  if (!byClause[key]) byClause[key] = []
+                  byClause[key].push(f)
+                }
+                return (
+                  <div className="divide-y" style={{ borderColor: 'rgba(251,191,36,0.2)' }}>
+                    {Object.entries(byClause).map(([clause, cFindings]) => (
+                      <div key={clause} className="px-5 py-4 space-y-3">
+                        <p className="text-xs font-semibold font-mono" style={{ color: '#fbbf24' }}>{clause}</p>
+                        {cFindings.map(finding => {
+                          const sev = SEVERITY_CFG[finding.severity] ?? SEVERITY_CFG.Observation
+                          const statusCfg = STATUS_CFG[finding.status]
+                          const isReviewing = reviewingId === finding.id
+                          return (
+                            <div key={finding.id} className="rounded-lg border p-3 space-y-2"
+                              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
+                              <div className="flex items-start gap-2">
+                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold mt-0.5"
+                                  style={{ background: sev.bg, color: sev.color }}>{finding.severity}</span>
+                                <p className="text-xs font-medium flex-1" style={{ color: 'var(--text-primary)' }}>{finding.title}</p>
+                                <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                  style={{ color: statusCfg.color, background: `${statusCfg.color}20` }}>
+                                  {statusCfg.icon} {finding.status}
+                                </span>
+                              </div>
+                              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{finding.description}</p>
+                              {canEdit && finding.status === 'Pending' && !isReviewing && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => { setReviewingId(finding.id); setReviewingAction('Approved'); setReviewNote(''); setReviewDecisionType(''); setReviewError(null) }}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium"
+                                    style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                                    <CheckCircle2 size={10} /> Approve
+                                  </button>
+                                  <button
+                                    onClick={() => { setReviewingId(finding.id); setReviewingAction('Rejected'); setReviewNote(''); setReviewDecisionType(''); setReviewError(null) }}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium"
+                                    style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>
+                                    <XCircle size={10} /> Reject
+                                  </button>
+                                </div>
+                              )}
+                              {finding.status !== 'Pending' && finding.review_notes && (
+                                <p className="text-[11px] px-2 py-1.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+                                  {finding.review_notes}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
+          {/* Markup box — always show if there are findings or a run exists */}
+          {(runs.length > 0 || findings.length > 0) && (
+            <MarkupBox
+              projectId={projectId}
+              run={runs[0] ?? null}
+              findings={findings.filter(f => runs[0] ? f.run_id === runs[0].id : true)}
+              canEdit={canEdit}
+            />
+          )}
         </div>
       </div>
+      {/* Clause reference drawer */}
+      {clauseDrawer && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
+            onClick={() => setClauseDrawer(null)}
+          />
+          {/* Drawer */}
+          <div className="fixed top-0 right-0 h-screen w-[420px] z-50 flex flex-col shadow-2xl"
+            style={{ background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)' }}>
+            {/* Header */}
+            <div className="px-5 py-4 border-b flex items-start gap-3" style={{ borderColor: 'var(--border)' }}>
+              <BookOpen size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold font-mono" style={{ color: 'var(--accent)' }}>{clauseDrawer.ref}</p>
+                {clauseContent?.source && clauseContent.source !== clauseDrawer.ref && (
+                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{clauseContent.source}</p>
+                )}
+              </div>
+              <button onClick={() => setClauseDrawer(null)} className="flex-shrink-0 hover:opacity-70 p-1" style={{ color: 'var(--text-muted)' }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+              {/* ── Requirement section ── */}
+              <div>
+                <p className="text-[10px] font-semibold mb-2 uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                  Requirement (ER / Standard)
+                </p>
+                {clauseLoading ? (
+                  <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    <Sparkles size={12} className="animate-pulse" style={{ color: 'var(--accent)' }} />
+                    Looking up clause…
+                  </div>
+                ) : clauseContent?.body ? (
+                  <>
+                    {clauseContent.heading && clauseContent.heading !== clauseDrawer.ref && (
+                      <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{clauseContent.heading}</p>
+                    )}
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                      {clauseContent.body}
+                    </p>
+                  </>
+                ) : (
+                  <div className="text-center py-6">
+                    <FileText size={20} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Clause text not found in the {clauseDrawer.ref.match(/^ER/i) ? 'ER document' : 'reference library'}.
+                    </p>
+                    {clauseDrawer.ref.match(/^ER/i) && !erStoragePath && (
+                      <p className="text-[10px] mt-2" style={{ color: 'var(--text-muted)' }}>
+                        No ER document is uploaded for this project.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid var(--border)' }} />
+
+              {/* ── From the submitted document section ── */}
+              <div>
+                <p className="text-[10px] font-semibold mb-2 uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                  From the submitted document
+                </p>
+                {clauseDrawer.quote ? (
+                  <p className="text-xs italic leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    "{clauseDrawer.quote}"
+                  </p>
+                ) : (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Run Generate Markup to extract the relevant passage from this document.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

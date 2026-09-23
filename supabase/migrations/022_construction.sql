@@ -157,7 +157,6 @@ create table if not exists public.cable_activities (
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
 
-  unique (cable_id, activity, coalesce(end_side, ''))
 );
 
 -- ── Containment activities ────────────────────────────────────────────────────
@@ -272,6 +271,10 @@ begin
 end $$;
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
+-- Expression unique index for cable_activities (coalesce not allowed inline)
+create unique index if not exists cable_activities_unique_idx
+  on public.cable_activities (cable_id, activity, coalesce(end_side, ''));
+
 create index if not exists cable_items_site_idx       on public.cable_items(site_id);
 create index if not exists cable_items_mvs_idx        on public.cable_items(site_id, mvs);
 create index if not exists cable_items_package_idx    on public.cable_items(site_id, package_name);

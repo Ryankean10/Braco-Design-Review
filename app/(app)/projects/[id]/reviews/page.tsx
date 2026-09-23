@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import ReviewsPanel from '@/components/ReviewsPanel'
+import MarkupBox from '@/components/MarkupBox'
 
 export default async function ReviewsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params
@@ -19,7 +20,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
   const role = profile?.role ?? 'engineer'
   if (role === 'client') redirect(`/projects/${projectId}`)
 
-  const canEdit = ['admin', 'engineer'].includes(role)
+  const canEdit = ['superadmin', 'admin', 'engineer'].includes(role)
 
   const [
     { data: documents },
@@ -33,13 +34,13 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
       .order('doc_no'),
     supabase
       .from('design_review_runs')
-      .select('id, run_at, status, lenses, document_ids, run_by, error')
+      .select('id, run_at, status, lenses, document_ids, run_by, error, markup_html')
       .eq('project_id', projectId)
       .order('run_at', { ascending: false })
       .limit(10),
     supabase
       .from('design_findings')
-      .select('id, run_id, lens, severity, title, description, clause_ref, drawing_refs, document_refs, procurement_item_id, status, reviewed_by, reviewed_at, review_notes, decision_type')
+      .select('id, run_id, lens, severity, title, description, clause_ref, drawing_refs, document_refs, procurement_item_id, status, reviewed_by, reviewed_at, review_notes, decision_type, quote, designer_response, designer_responded_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false }),
   ])
@@ -76,6 +77,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ id: st
       projectId={projectId}
       projectName={project.name}
       hasER={!!project.er_storage_path}
+      erStoragePath={project.er_storage_path ?? null}
       canEdit={canEdit}
       documents={documents ?? []}
       initialRuns={enrichedRuns}

@@ -12,6 +12,7 @@ export default async function ProcurementPage({ params }: { params: Promise<{ id
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role === 'client') redirect(`/projects/${id}`)
 
   const { data: project } = await supabase.from('projects').select('*').eq('id', id).single()
   if (!project) notFound()
@@ -29,7 +30,7 @@ export default async function ProcurementPage({ params }: { params: Promise<{ id
       .order('company_name'),
   ])
 
-  const canEdit = ['admin', 'engineer'].includes(profile?.role ?? '')
+  const canEdit = ['superadmin', 'admin', 'engineer'].includes(profile?.role ?? '')
 
   return (
     <div className="p-6 max-w-6xl mx-auto">

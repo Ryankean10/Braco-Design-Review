@@ -2,22 +2,86 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, Users, HardHat } from 'lucide-react'
+import {
+  LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, ChevronDown,
+  Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck, Receipt, Calculator, Inbox,
+  Camera, CalendarDays, ShieldCheck,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Profile } from '@/lib/types'
+import type { Profile, Company, Module } from '@/lib/types'
+import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 
-const NAV = [
-  { href: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard, roles: null },
-  { href: '/projects',          label: 'Projects',         icon: FolderOpen,      roles: null },
-  { href: '/construction',       label: 'Construction',     icon: HardHat,         roles: ['admin', 'engineer', 'project_manager', 'operative'] },
-  { href: '/reference-library', label: 'Reference Library',icon: BookOpen,        roles: null },
-  { href: '/users',             label: 'Users',            icon: Users,           roles: ['admin'] },
+const BugPanel = dynamic(() => import('@/components/admin/BugPanel'), { ssr: false })
+
+type NavItem = {
+  href: string
+  label: string
+  icon: React.ComponentType<{ size?: number }>
+  roles?: string[]
+  module?: Module
+}
+
+const NAV: NavItem[] = [
+  { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard },
+  { href: '/inbox',             label: 'Email Inbox',       icon: Inbox,                                 roles: ['superadmin', 'admin'] },
+  { href: '/projects',          label: 'Projects',          icon: FolderOpen,     module: 'projects' },
+  { href: '/construction',      label: 'Construction',      icon: HardHat,        module: 'construction', roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
+  { href: '/reference-library', label: 'Reference Library', icon: BookOpen,       module: 'reference_library' },
+  { href: '/planning',          label: 'Work Planner',      icon: ClipboardList,  module: 'planning',    roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/team',              label: 'Team',              icon: UsersRound,     module: 'team',        roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/plant',             label: 'Plant',             icon: Truck,          module: 'plant',       roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/estimating',        label: 'Estimating',        icon: Calculator,     module: 'estimating',  roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/haulage',           label: 'Haulage',           icon: Truck,          module: 'haulage',     roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/capture',           label: 'Field Capture',     icon: Camera,         module: 'tests',       roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
+  { href: '/resource-schedule', label: 'Resource Schedule', icon: CalendarDays,   module: 'planning',    roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/users',             label: 'Users',             icon: Users,          roles: ['superadmin', 'admin'] },
+  { href: '/admin/compliance',  label: 'Compliance Alerts', icon: ShieldCheck,                           roles: ['superadmin', 'admin'] },
 ]
 
-export default function Sidebar({ profile }: { profile: Profile | null }) {
+const SUPERADMIN_NAV: NavItem[] = [
+  { href: '/admin/companies', label: 'Companies', icon: Building2 },
+  { href: '/admin/costs',     label: 'Cost Tracker', icon: Receipt },
+]
+
+export default function Sidebar({ profile, company }: { profile: Profile | null; company: Company | null }) {
   const pathname = usePathname()
   const router = useRouter()
   const role = profile?.role ?? 'engineer'
+  const isSuperadmin = role === 'superadmin'
+  const enabledModules = company?.modules ?? []
+  const [bugPanelOpen, setBugPanelOpen] = useState(false)
+  const [inboxCount, setInboxCount] = useState(0)
+  const [projectsOpen, setProjectsOpen] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/projects')
+  )
+  const [constructionOpen, setConstructionOpen] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/construction')
+  )
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
+  const [sites, setSites] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    const supabase = createClient()
+    const companyId = company?.id
+    if (!companyId) return
+    supabase.from('projects').select('id, name').eq('company_id', companyId).order('name').then(({ data }) => setProjects(data ?? []))
+    supabase.from('construction_sites').select('id, name, project_id, projects!inner(company_id)').eq('projects.company_id', companyId).order('name').then(({ data }) => setSites(data ?? []))
+  }, [company?.id])
+
+  useEffect(() => {
+    if (!['admin', 'superadmin'].includes(role)) return
+    if (company?.slug !== 'scotplant') return
+    async function fetchInboxCount() {
+      const res = await fetch('/api/admin/email-inbox?limit=200')
+      if (!res.ok) return
+      const data: any[] = await res.json()
+      setInboxCount(data.filter(e => e.status === 'needs_attention' || e.status === 'failed' || e.status === 'processing').length)
+    }
+    fetchInboxCount()
+    const interval = setInterval(fetchInboxCount, 60_000)
+    return () => clearInterval(interval)
+  }, [role, company?.slug])
 
   async function signOut() {
     const supabase = createClient()
@@ -26,76 +90,236 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
     router.refresh()
   }
 
+  function isVisible(item: NavItem) {
+    if (item.href === '/inbox' && company?.slug !== 'scotplant') return false
+    if (item.roles && !item.roles.includes(role)) return false
+    if (item.module && !enabledModules.includes(item.module)) return false
+    return true
+  }
+
+  const companyInitial = (company?.name ?? 'G')[0].toUpperCase()
+  const companyName = company?.name ?? 'MRRK'
+
   return (
     <aside
       className="w-56 flex flex-col shrink-0 border-r"
-      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+      style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--sidebar-border)', color: 'var(--sidebar-text)' }}
     >
-      {/* Logo */}
-      <div className="px-4 py-5 border-b flex items-center gap-2.5" style={{ borderColor: 'var(--border)' }}>
-        <div
-          className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0"
-          style={{ background: 'var(--accent)' }}
-        >
-          B
-        </div>
+      {/* Company logo / name */}
+      <div className="px-4 py-5 border-b flex items-center gap-2.5" style={{ borderColor: 'var(--sidebar-border)' }}>
+        {company?.logo_url ? (
+          <img src={company.logo_url} alt={companyName} className="w-7 h-7 rounded-md object-contain" />
+        ) : (
+          <div
+            className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0"
+            style={{ background: 'var(--accent)' }}
+          >
+            {companyInitial}
+          </div>
+        )}
         <div className="min-w-0">
-          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-            Safe T Projects
+          <p className="text-sm font-semibold truncate" style={{ color: 'var(--sidebar-text)' }}>
+            {companyName}
           </p>
-          <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>BESS Project Platform</p>
+          <p className="text-[10px] truncate" style={{ color: 'var(--sidebar-subtext)' }}>{company?.tagline ?? 'BESS Project Platform'}</p>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5">
-        {NAV.filter(({ roles }) => !roles || roles.includes(role)).map(({ href, label, icon: Icon }) => {
+      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+        {NAV.filter(isVisible).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
+          const isProjects = href === '/projects'
+          const isConstruction = href === '/construction'
+
+          if (isProjects) {
+            return (
+              <div key={href}>
+                <button
+                  onClick={() => { setProjectsOpen(v => !v) }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left"
+                  style={{
+                    color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-muted)',
+                    background: active ? 'var(--sidebar-active-bg)' : 'transparent',
+                  }}
+                >
+                  <Icon size={15} />
+                  <Link href="/projects" onClick={e => e.stopPropagation()} className="flex-1">
+                    {label}
+                  </Link>
+                  {projectsOpen
+                    ? <ChevronDown size={12} className="ml-auto shrink-0" />
+                    : <ChevronRight size={12} className="ml-auto shrink-0" />}
+                </button>
+
+                {projectsOpen && (
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: 'var(--sidebar-border)' }}>
+                    {projects.length === 0 && (
+                      <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--sidebar-subtext)' }}>No projects</p>
+                    )}
+                    {projects.map(p => {
+                      const pActive = pathname === `/projects/${p.id}` || pathname.startsWith(`/projects/${p.id}/`)
+                      return (
+                        <Link
+                          key={p.id}
+                          href={`/projects/${p.id}`}
+                          className="flex items-center px-2 py-1.5 rounded-md text-xs transition-colors truncate"
+                          style={{
+                            color: pActive ? 'var(--sidebar-active-text)' : 'var(--sidebar-subtext)',
+                            background: pActive ? 'var(--sidebar-active-bg)' : 'transparent',
+                          }}
+                        >
+                          {p.name}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          if (isConstruction) {
+            return (
+              <div key={href}>
+                <button
+                  onClick={() => setConstructionOpen(v => !v)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left"
+                  style={{
+                    color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-muted)',
+                    background: active ? 'var(--sidebar-active-bg)' : 'transparent',
+                  }}
+                >
+                  <Icon size={15} />
+                  <Link href="/construction" onClick={e => e.stopPropagation()} className="flex-1">
+                    {label}
+                  </Link>
+                  {constructionOpen
+                    ? <ChevronDown size={12} className="ml-auto shrink-0" />
+                    : <ChevronRight size={12} className="ml-auto shrink-0" />}
+                </button>
+
+                {constructionOpen && (
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: 'var(--sidebar-border)' }}>
+                    {sites.length === 0 && (
+                      <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--sidebar-subtext)' }}>No sites</p>
+                    )}
+                    {sites.map(s => {
+                      const sActive = pathname === `/construction/${s.id}` || pathname.startsWith(`/construction/${s.id}/`)
+                      return (
+                        <Link
+                          key={s.id}
+                          href={`/construction/${s.id}`}
+                          className="flex items-center px-2 py-1.5 rounded-md text-xs transition-colors truncate"
+                          style={{
+                            color: sActive ? 'var(--sidebar-active-text)' : 'var(--sidebar-subtext)',
+                            background: sActive ? 'var(--sidebar-active-bg)' : 'transparent',
+                          }}
+                        >
+                          {s.name}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          const isInbox = href === '/inbox'
           return (
             <Link
               key={href}
               href={href}
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
               style={{
-                color: active ? 'var(--accent)' : 'var(--text-muted)',
-                background: active ? 'rgba(108,114,245,0.12)' : 'transparent',
+                color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-muted)',
+                background: active ? 'var(--sidebar-active-bg)' : 'transparent',
               }}
             >
               <Icon size={15} />
               {label}
-              {active && <ChevronRight size={12} className="ml-auto" />}
+              {isInbox && inboxCount > 0 && (
+                <span className="ml-auto flex items-center justify-center rounded-full text-[10px] font-bold text-white min-w-[16px] h-4 px-1"
+                  style={{ background: '#ef4444' }}>
+                  {inboxCount}
+                </span>
+              )}
+              {!isInbox && active && <ChevronRight size={12} className="ml-auto" />}
+              {isInbox && inboxCount === 0 && active && <ChevronRight size={12} className="ml-auto" />}
             </Link>
           )
         })}
+
+        {/* Superadmin section */}
+        {isSuperadmin && (
+          <>
+            <div className="pt-3 pb-1 px-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--sidebar-subtext)' }}>
+                Super Admin
+              </p>
+            </div>
+            {SUPERADMIN_NAV.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href + '/')
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
+                  style={{
+                    color: active ? 'var(--sidebar-active-text)' : 'var(--sidebar-muted)',
+                    background: active ? 'var(--sidebar-active-bg)' : 'transparent',
+                  }}
+                >
+                  <Icon size={15} />
+                  {label}
+                  {active && <ChevronRight size={12} className="ml-auto" />}
+                </Link>
+              )
+            })}
+          </>
+        )}
       </nav>
 
       {/* User */}
-      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
+      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--sidebar-border)' }}>
         <div className="flex items-center gap-2 px-2 mb-2">
           <div
             className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-            style={{ background: 'var(--accent)' }}
+            style={{ background: 'var(--sidebar-active-text)' }}
           >
             {profile?.full_name?.[0]?.toUpperCase() ?? profile?.email?.[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+            <p className="text-xs font-medium truncate" style={{ color: 'var(--sidebar-text)' }}>
               {profile?.full_name ?? profile?.email}
             </p>
-            <p className="text-[10px] capitalize" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[10px] capitalize" style={{ color: 'var(--sidebar-subtext)' }}>
               {profile?.role ?? 'engineer'}
             </p>
           </div>
         </div>
+        {(role === 'admin' || isSuperadmin) && (
+          <button
+            onClick={() => setBugPanelOpen(true)}
+            className="flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-80"
+            style={{ color: 'var(--sidebar-subtext)' }}
+            title="Bug reports"
+          >
+            <Bug size={13} />
+            Bug reports
+          </button>
+        )}
         <button
           onClick={signOut}
           className="flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-80"
-          style={{ color: 'var(--text-muted)' }}
+          style={{ color: 'var(--sidebar-subtext)' }}
         >
           <LogOut size={13} />
           Sign out
         </button>
       </div>
+      {bugPanelOpen && <BugPanel onClose={() => setBugPanelOpen(false)} />}
     </aside>
   )
 }

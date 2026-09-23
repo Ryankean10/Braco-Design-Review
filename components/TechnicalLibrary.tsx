@@ -98,8 +98,8 @@ export default function TechnicalLibrary({ projectId, initialDocs, userRole }: P
   const [docType, setDocType] = useState<TechDocType>('Manual')
   const [notes, setNotes] = useState('')
 
-  const canEdit = ['admin', 'engineer'].includes(userRole)
-  const canAnalyse = ['admin', 'engineer'].includes(userRole)
+  const canEdit = ['admin', 'superadmin', 'engineer'].includes(userRole)
+  const canAnalyse = ['admin', 'superadmin', 'engineer'].includes(userRole)
 
   function resetForm() {
     setFile(null); setTitle(''); setDocRef(''); setSource('Manufacturer')

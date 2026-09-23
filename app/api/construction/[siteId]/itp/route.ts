@@ -1,0 +1,385 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import Anthropic from '@anthropic-ai/sdk'
+import * as XLSX from 'xlsx'
+import { logApiUsage } from '@/lib/logApiUsage'
+
+export const maxDuration = 120
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+async function extractTextFromBuffer(buf: Buffer, fileName: string): Promise<string> {
+  const ext = fileName.split('.').pop()?.toLowerCase()
+
+  if (ext === 'pdf') {
+    const pdf = (await import('pdf-parse')).default
+    const result = await pdf(buf)
+    return result.text
+  }
+  if (ext === 'docx') {
+    const mammoth = await import('mammoth')
+    const result = await mammoth.extractRawText({ buffer: buf })
+    return result.value
+  }
+  if (ext === 'xlsx' || ext === 'xlsb' || ext === 'xls' || ext === 'xlsm') {
+    const wb = XLSX.read(buf, { type: 'buffer', cellText: true, cellDates: true })
+    // Prefer sheets whose name looks like "ITP" — send that first and in full
+    const itpFirst = [...wb.SheetNames].sort((a, b) => {
+      const aItp = /itp/i.test(a) ? 0 : 1
+      const bItp = /itp/i.test(b) ? 0 : 1
+      return aItp - bItp
+    })
+    const lines: string[] = []
+    for (const sheetName of itpFirst) {
+      const ws = wb.Sheets[sheetName]
+      const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
+      if (csv.trim()) {
+        lines.push(`=== Sheet: ${sheetName} ===`)
+        lines.push(csv)
+      }
+    }
+    return lines.join('\n')
+  }
+  // Plain text / CSV fallback
+  return buf.toString('utf-8')
+}
+
+// ── GET: list ITP revisions for a site ──────────────────────────────────────
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ siteId: string }> }
+) {
+  const { siteId } = await params
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const { data, error } = await supabase
+    .from('itp_revisions')
+    .select('id,revision,file_name,is_baseline,uploaded_at,analysed_at,diff_summary,ai_activities')
+    .eq('site_id', siteId)
+    .order('uploaded_at', { ascending: false })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
+// ── POST: upload + analyse a new ITP revision ────────────────────────────────
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ siteId: string }> }
+) {
+  const { siteId } = await params
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!['admin', 'engineer', 'project_manager'].includes((profile as any)?.role ?? ''))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const form = await req.formData()
+  const file = form.get('file') as File | null
+  const revision = (form.get('revision') as string | null)?.trim() || 'Rev 1'
+
+  if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
+
+  // Read buffer once — reuse for both extraction and storage
+  const fileBuf = Buffer.from(await file.arrayBuffer())
+
+  // Extract text
+  let rawText: string
+  try {
+    rawText = await extractTextFromBuffer(fileBuf, file.name)
+  } catch (e: any) {
+    return NextResponse.json({ error: `Text extraction failed: ${e.message}` }, { status: 422 })
+  }
+
+  // Load existing revisions to determine baseline
+  const { data: existing, error: existingErr } = await supabase
+    .from('itp_revisions')
+    .select('id,revision,is_baseline,ai_activities')
+    .eq('site_id', siteId)
+    .order('uploaded_at', { ascending: true })
+
+  if (existingErr) return NextResponse.json({ error: existingErr.message }, { status: 500 })
+
+  // Load current civils activities before baseline determination
+  const { data: currentActivities } = await supabase
+    .from('civils_activities')
+    .select('id,activity_group,category,status,progress_pct,itp_ref,sort_order')
+    .eq('site_id', siteId)
+    .order('sort_order')
+
+  const existingBaseline = existing?.find(r => r.is_baseline)
+  const baselineHasActivities = (existingBaseline?.ai_activities as any[] | null)?.length ?? 0
+  // Re-baseline if: no prior records, prior baseline had 0 activities, or all seeded activities
+  // have progress_pct=0 (indicating the first upload produced no completions — allow re-seed with fixes)
+  const allZeroProgress = (currentActivities ?? []).length > 0 &&
+    (currentActivities ?? []).every(a => a.progress_pct === 0)
+  const isFirstRevision = !existing || existing.length === 0 || baselineHasActivities === 0 || allZeroProgress
+  const baseline = isFirstRevision ? null : existingBaseline
+
+  // If re-baselining, clear out the old records so we start fresh
+  if (isFirstRevision && existing && existing.length > 0) {
+    await supabase.from('itp_revisions').delete().eq('site_id', siteId)
+    await supabase.from('civils_activities').delete().eq('site_id', siteId)
+  }
+
+  // Upload file to storage (non-fatal if bucket missing)
+  const storagePath = `itp/${siteId}/${Date.now()}_${file.name}`
+  await supabase.storage.from('documents').upload(storagePath, fileBuf, {
+    contentType: file.type || 'application/octet-stream', upsert: false,
+  })
+
+  // Build a compact group summary for Claude.
+  // Supports two ITP formats:
+  //   Format A (OCU/Hardy): section header rows + data rows starting with 5-digit project code.
+  //                         Col D = discipline, Col F = date submitted, Col H = client status (Yes = complete).
+  //   Format B (Braco):     Col A = activity group, Col E = discipline code, subsequent rows are detail items.
+  const allLines = rawText.split('\n').map(l => l.trim()).filter(Boolean)
+  const projectRowRe = /^\d{5}/
+
+  // Detect format: if >10% of non-header lines start with a 5-digit code → OCU format
+  const nonHeaderLines = allLines.filter(l => l.length > 10)
+  const ocuRowCount = nonHeaderLines.filter(l => projectRowRe.test(l)).length
+  const isOcuFormat = ocuRowCount / Math.max(nonHeaderLines.length, 1) > 0.1
+
+  interface GroupData { discipline: string; total: number; signed: number; ref: string }
+  const groups = new Map<string, GroupData>()
+
+  if (isOcuFormat) {
+    // OCU format: group data rows under the nearest preceding section header
+    const SKIP_HEADER = /^(=|project|keys|stage|resp|other|discipline|ref|date|status|title|sheet|doc|all stage|civils,|mechanical,|m&e,)/i
+    let currentGroup = ''
+    for (const line of allLines) {
+      const cols = line.split(',').map(v => v.replace(/^"|"$/g, '').trim())
+      const c0 = cols[0] ?? ''
+      if (projectRowRe.test(c0)) {
+        // Data row — add to current group
+        if (currentGroup) {
+          const g = groups.get(currentGroup) ?? { discipline: 'Civils', total: 0, signed: 0, ref: '' }
+          g.total++
+          // Col D (index 3) = discipline code; Col H (index 7) = client status
+          const disc = cols[3] ?? ''
+          if (!g.discipline || g.discipline === 'Civils') {
+            if (/^EME$/i.test(disc)) g.discipline = 'Electrical'
+            else if (/^ETC|^ECV.*T|commissioning/i.test(disc)) g.discipline = 'Commissioning'
+            else if (/^ECV$/i.test(disc)) g.discipline = 'Civils'
+          }
+          if (!g.ref) g.ref = cols[4] ?? ''
+          const clientStatus = cols[7] ?? ''
+          if (/^yes$/i.test(clientStatus)) g.signed++
+          groups.set(currentGroup, g)
+        }
+      } else if (c0.length > 5 && /^[A-Za-z]/.test(c0) && !SKIP_HEADER.test(line)) {
+        // Section header row — must start with a letter (filters out stray "(If Yes..." etc.)
+        // Also skip detail rows that look like headers (CT tests, bullet points)
+        if (/^(CT[0-9·]|·|·)/.test(c0)) continue
+        currentGroup = c0
+        if (!groups.has(currentGroup)) groups.set(currentGroup, { discipline: 'Civils', total: 0, signed: 0, ref: '' })
+      }
+    }
+  } else {
+    // Braco format: Col A = group name, Col E = discipline, scan all rows per group for sign-off
+    const SKIP = /^(=|,{3,}|project|document|keys|stage|resp|other|discipline|ref|date|status|title|sheet)/i
+    const groupRows = new Map<string, string[]>()
+    for (const l of allLines) {
+      const c0 = (l.split(',')[0] ?? '').trim()
+      if (c0.length > 3 && /^[A-Za-z]/.test(c0) && !SKIP.test(l)) {
+        const bucket = groupRows.get(c0) ?? []
+        bucket.push(l)
+        groupRows.set(c0, bucket)
+      }
+    }
+    for (const [name, rows] of groupRows) {
+      const firstCols = rows[0].split(',').map(v => v.replace(/^"|"$/g, '').trim())
+      const discCode = firstCols[4] ?? ''
+      const discipline = /^EME$/i.test(discCode) ? 'Electrical'
+        : /^ETC/i.test(discCode) ? 'Commissioning'
+        : 'Civils'
+      const signed = rows.filter(r => {
+        const cs = r.split(',').map(v => v.replace(/^"|"$/g, '').trim())
+        return cs.slice(5).some(v => /^(yes|y)$/i.test(v))
+          || /\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(cs.slice(5).join(','))
+      }).length
+      groups.set(name, { discipline, total: rows.length, signed, ref: firstCols[4] ?? '' })
+    }
+  }
+
+  // Build compact summary for Claude
+  const summaryLines: string[] = ['ACTIVITY GROUP | DISCIPLINE | SIGNED/TOTAL | SIGN_OFF_FLAG | ITP_REF']
+  for (const [name, g] of groups) {
+    if (g.total === 0) continue
+    const flag = g.signed === g.total ? 'SIGN_OFF:ALL'
+      : g.signed > 0 ? `SIGN_OFF:${g.signed}/${g.total}`
+      : 'SIGN_OFF:NONE'
+    summaryLines.push(`${name} | ${g.discipline} | ${g.signed}/${g.total} | ${flag} | ${g.ref}`)
+  }
+  const filteredText = summaryLines.join('\n')
+
+  // ── Claude analysis ──────────────────────────────────────────────────────
+  const baselineContext = baseline
+    ? `\nBASELINE ACTIVITIES:\n${JSON.stringify(baseline.ai_activities, null, 2)}\n`
+    : ''
+
+  const prompt = `You are processing a pre-analysed ITP (Inspection and Test Plan) summary for a UK construction project.
+
+Each line contains: ACTIVITY GROUP | DISCIPLINE | SIGNED/TOTAL | SIGN_OFF_FLAG | ITP_REF
+
+SIGN_OFF_FLAG meanings:
+- SIGN_OFF:ALL  → every QCS item signed off — set is_complete: true, progress 100%
+- SIGN_OFF:x/y  → x out of y items signed — set is_complete: false, partial_pct = round(x/y*100)
+- SIGN_OFF:NONE → nothing signed off — not started
+
+DISCIPLINE is already set — use it directly: "Civils" | "Electrical" | "Commissioning"
+
+For each activity group return:
+- activity_group: exact name from the line
+- description: one-line plain-English summary of what this activity covers
+- discipline: use the discipline from the line exactly
+- category: Civils only → "Below Ground" (foundations, piling, drainage, earthing below ground, ducting, drawpits) or "Above Ground". All others → "N/A"
+- itp_ref: the ITP_REF value, or null if blank
+- is_complete: true only if SIGN_OFF:ALL
+- partial_pct: integer 0–99 from SIGN_OFF:x/y ratio, else 0
+- completion_evidence: "All x items signed off" if complete, "x/y items complete" if partial, else null
+- sort_order: Civils below ground 1–49, Civils above ground 50–99, Electrical 100–199, Commissioning 200+
+${baselineContext}
+${baseline ? 'Compare against the baseline and set baseline_status for each.' : ''}
+
+ITP TEXT:
+${filteredText}
+
+Return valid JSON only — no markdown fences:
+{
+  "revision_summary": "string",
+  "activities": [
+    {
+      "activity_group": "string",
+      "description": "string",
+      "discipline": "Civils" | "Electrical" | "Commissioning",
+      "category": "Below Ground" | "Above Ground" | "N/A",
+      "itp_ref": "string or null",
+      "is_complete": boolean,
+      "partial_pct": "integer 0-99 derived from SIGN_OFF ratio when partially signed (e.g. SIGN_OFF:3/7 → 43), else 0",
+      "completion_evidence": "string or null",
+      "sort_order": number,
+      "baseline_status": "new" | "removed" | "completed" | "changed" | "unchanged" | null
+    }
+  ],
+  "diff_summary": { "added": [], "removed": [], "completed": [], "changed": [] }
+}`
+
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 8000,
+    messages: [{ role: 'user', content: prompt }],
+  })
+  logApiUsage({ companyId: null, endpoint: 'itp', model: msg.model, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens }).catch(() => {})
+
+  let aiResult: any = { activities: [], diff_summary: { added: [], removed: [], completed: [], changed: [] } }
+  try {
+    const block = msg.content.find(b => b.type === 'text')
+    const match = block && 'text' in block ? block.text.match(/\{[\s\S]*\}/) : null
+    if (match) aiResult = JSON.parse(match[0])
+  } catch { /* use defaults */ }
+
+  const activities: any[] = aiResult.activities ?? []
+
+  // ── Insert ITP revision record ───────────────────────────────────────────
+  const { data: itpRev, error: revErr } = await supabase
+    .from('itp_revisions')
+    .insert({
+      site_id:      siteId,
+      revision,
+      file_name:    file.name,
+      storage_path: storagePath,
+      raw_text:     rawText.slice(0, 10000),
+      ai_activities: activities,
+      is_baseline:  isFirstRevision,
+      diff_summary: aiResult.diff_summary ?? null,
+      uploaded_by:  user.id,
+      analysed_at:  new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+
+  if (revErr) return NextResponse.json({ error: revErr.message }, { status: 500 })
+
+  // ── Seed / update civils_activities ──────────────────────────────────────
+  let seeded = 0, updated = 0, completed = 0
+
+  if (isFirstRevision) {
+    // First upload: create all activities from scratch
+    const toInsert = activities
+      .filter(a => a.baseline_status !== 'removed')
+      .map((a, i) => ({
+        site_id:        siteId,
+        activity_group: a.activity_group,
+        description:    a.description ?? null,
+        discipline:     a.discipline ?? 'Civils',
+        // category only meaningful for Civils; Electrical/Commissioning → 'Above Ground' as neutral default
+        category:       (a.discipline === 'Civils') ? (a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground')) : 'Above Ground',
+        itp_ref:        a.itp_ref ?? null,
+        status:         a.is_complete ? 'Complete' : (a.completion_evidence ? 'In Progress' : 'Not Started'),
+        progress_pct:   a.is_complete ? 100 : (a.partial_pct ?? 0),
+        progress_note:  a.completion_evidence ?? null,
+        sort_order:     a.sort_order ?? (i + 1),
+      }))
+
+    if (toInsert.length > 0) {
+      const { error: insErr } = await supabase.from('civils_activities').insert(toInsert)
+      if (!insErr) seeded = toInsert.length
+    }
+  } else {
+    // Subsequent revision: update completions + handle structural changes
+    for (const a of activities) {
+      const existing = (currentActivities ?? []).find(
+        x => x.activity_group.toLowerCase() === a.activity_group.toLowerCase()
+      )
+
+      if (existing) {
+        // Update if newly complete or scope changed
+        if (a.is_complete && existing.progress_pct < 100) {
+          await supabase.from('civils_activities').update({
+            status:        'Complete',
+            progress_pct:  100,
+            progress_note: a.completion_evidence ?? 'Signed off in ITP',
+            itp_ref:       a.itp_ref ?? existing.itp_ref,
+          }).eq('id', existing.id)
+          completed++
+        } else if (a.itp_ref && a.itp_ref !== existing.itp_ref) {
+          await supabase.from('civils_activities').update({ itp_ref: a.itp_ref }).eq('id', existing.id)
+          updated++
+        }
+      } else if (a.baseline_status === 'new') {
+        // New activity added in this revision
+        const maxOrder = (currentActivities ?? []).reduce((m, x) => Math.max(m, x.sort_order ?? 0), 0)
+        await supabase.from('civils_activities').insert({
+          site_id:        siteId,
+          activity_group: a.activity_group,
+          description:    a.description ?? null,
+          discipline:     a.discipline ?? 'Civils',
+          category:       (a.discipline === 'Civils') ? (a.category === 'N/A' ? 'Above Ground' : (a.category ?? 'Above Ground')) : 'Above Ground',
+          itp_ref:        a.itp_ref ?? null,
+          status:         a.is_complete ? 'Complete' : 'Not Started',
+          progress_pct:   a.is_complete ? 100 : 0,
+          progress_note:  a.completion_evidence ?? null,
+          sort_order:     maxOrder + 1,
+        })
+        seeded++
+      }
+    }
+  }
+
+  return NextResponse.json({
+    itpRevisionId: itpRev.id,
+    revision,
+    isBaseline: isFirstRevision,
+    activitiesSeeded: seeded,
+    activitiesCompleted: completed,
+    activitiesUpdated: updated,
+    diffSummary: aiResult.diff_summary,
+    revisionSummary: aiResult.revision_summary,
+  })
+}
