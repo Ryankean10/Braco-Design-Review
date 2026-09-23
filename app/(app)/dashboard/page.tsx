@@ -4,9 +4,10 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { getCompanyContext } from '@/lib/getCompanyContext'
-import { FolderOpen, Plus, MessageSquare } from 'lucide-react'
+import { FolderOpen, Plus, MessageSquare, ShieldAlert, TrendingDown } from 'lucide-react'
 import ClientDashboard from '@/components/ClientDashboard'
 import { getStageOrder, getStageColour } from '@/lib/stageDefaults'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 
 export default async function DashboardPage() {
   const { supabase, user, profile, role, company, effectiveCompanyId } = await getCompanyContext()
@@ -100,6 +101,41 @@ export default async function DashboardPage() {
       : Promise.resolve({ data: [] }),
   ])
 
+  // ── Compliance + cashflow (admin-scoped, no RLS bypass needed for counts) ──
+  const adminDb = createAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+  const today = new Date().toISOString().split('T')[0]
+  const in60Days = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  const [{ data: companyPeople }, { data: expiringPlant }, { data: overdueMs }, { data: dueSoonMs }] = await Promise.all([
+    effectiveCompanyId
+      ? adminDb.from('people').select('id').eq('company_id', effectiveCompanyId)
+      : Promise.resolve({ data: [] }),
+    effectiveCompanyId
+      ? adminDb.from('plant_certificates').select('id, expiry_date').eq('company_id', effectiveCompanyId).not('expiry_date', 'is', null).lte('expiry_date', in60Days)
+      : Promise.resolve({ data: [] }),
+    effectiveCompanyId
+      ? adminDb.from('payment_milestones').select('id, amount').eq('company_id', effectiveCompanyId).in('status', ['pending', 'invoiced']).not('due_date', 'is', null).lt('due_date', today)
+      : Promise.resolve({ data: [] }),
+    effectiveCompanyId
+      ? adminDb.from('payment_milestones').select('id, amount').eq('company_id', effectiveCompanyId).in('status', ['pending', 'invoiced']).not('due_date', 'is', null).gte('due_date', today).lte('due_date', in30Days)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const personIds = (companyPeople ?? []).map((p: any) => p.id)
+  const { data: expiringCreds } = personIds.length > 0
+    ? await adminDb.from('person_credentials').select('id, expiry_date').in('person_id', personIds).not('expiry_date', 'is', null).lte('expiry_date', in60Days)
+    : { data: [] }
+
+  const totalExpired = [...(expiringCreds ?? []), ...(expiringPlant ?? [])].filter((c: any) => c.expiry_date < today).length
+  const totalExpiringSoon = [...(expiringCreds ?? []), ...(expiringPlant ?? [])].filter((c: any) => c.expiry_date >= today).length
+  const amountOverdue = (overdueMs ?? []).reduce((s: number, m: any) => s + (m.amount ?? 0), 0)
+  const amountDueSoon = (dueSoonMs ?? []).reduce((s: number, m: any) => s + (m.amount ?? 0), 0)
+
   // Count projects with each stage "In Progress"
   const stageOrder = getStageOrder(industry)
   const byStage = stageOrder.map(stage => ({
@@ -159,6 +195,45 @@ export default async function DashboardPage() {
               <p className="text-xs px-3" style={{ color: '#fb923c' }}>+{(openComments ?? []).length - 5} more</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Compliance banner */}
+      {(totalExpired > 0 || totalExpiringSoon > 0) && (
+        <div className="rounded-xl border p-4" style={{ background: totalExpired > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(251,191,36,0.08)', borderColor: totalExpired > 0 ? 'rgba(248,113,113,0.3)' : 'rgba(251,191,36,0.3)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert size={14} style={{ color: totalExpired > 0 ? '#f87171' : '#fbbf24' }} />
+              <p className="text-sm font-semibold" style={{ color: totalExpired > 0 ? '#f87171' : '#fbbf24' }}>
+                {totalExpired > 0
+                  ? `${totalExpired} expired certificate${totalExpired !== 1 ? 's' : ''}`
+                  : `${totalExpiringSoon} certificate${totalExpiringSoon !== 1 ? 's' : ''} expiring within 60 days`}
+              </p>
+            </div>
+            <Link href="/team" className="text-xs hover:underline" style={{ color: totalExpired > 0 ? '#f87171' : '#fbbf24' }}>View →</Link>
+          </div>
+          {totalExpired > 0 && totalExpiringSoon > 0 && (
+            <p className="text-xs mt-1 ml-5" style={{ color: totalExpired > 0 ? '#fca5a5' : '#fde68a' }}>+{totalExpiringSoon} expiring soon</p>
+          )}
+        </div>
+      )}
+
+      {/* Cashflow banner */}
+      {(amountOverdue > 0 || amountDueSoon > 0) && (
+        <div className="rounded-xl border p-4" style={{ background: amountOverdue > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(96,165,250,0.08)', borderColor: amountOverdue > 0 ? 'rgba(248,113,113,0.3)' : 'rgba(96,165,250,0.3)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingDown size={14} style={{ color: amountOverdue > 0 ? '#f87171' : '#60a5fa' }} />
+              <p className="text-sm font-semibold" style={{ color: amountOverdue > 0 ? '#f87171' : '#60a5fa' }}>
+                {amountOverdue > 0
+                  ? `GBP ${amountOverdue.toLocaleString('en-GB', { minimumFractionDigits: 2 })} overdue`
+                  : `GBP ${amountDueSoon.toLocaleString('en-GB', { minimumFractionDigits: 2 })} due in 30 days`}
+              </p>
+            </div>
+          </div>
+          {amountOverdue > 0 && amountDueSoon > 0 && (
+            <p className="text-xs mt-1 ml-5" style={{ color: '#fca5a5' }}>+GBP {amountDueSoon.toLocaleString('en-GB', { minimumFractionDigits: 2 })} due in 30 days</p>
+          )}
         </div>
       )}
 

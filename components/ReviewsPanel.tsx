@@ -108,6 +108,7 @@ export default function ReviewsPanel({
   const [expandedLenses, setExpandedLenses] = useState<Set<string>>(new Set(['er_compliance']))
   const [filterStatus, setFilterStatus] = useState<'all' | 'Pending' | 'Approved' | 'Rejected'>('all')
   const [activeRunId, setActiveRunId] = useState<string>('all')
+  const [commercialOpen, setCommercialOpen] = useState(true)
   const [reviewingId, setReviewingId] = useState<string | null>(null)
   const [reviewingAction, setReviewingAction] = useState<'Approved' | 'Rejected' | null>(null)
   const [reviewNote, setReviewNote] = useState('')
@@ -736,6 +737,83 @@ export default function ReviewsPanel({
                 )
               })}
             </>
+          )}
+
+          {/* Commercial Terms — grouped view for contract_review findings */}
+          {visibleFindings.some(f => f.lens === 'contract_review') && (
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(251,191,36,0.4)' }}>
+              <button
+                onClick={() => setCommercialOpen(v => !v)}
+                className="w-full flex items-center justify-between px-5 py-3.5 hover:opacity-80"
+                style={{ background: 'rgba(251,191,36,0.06)' }}>
+                <div className="flex items-center gap-3">
+                  {commercialOpen ? <ChevronDown size={14} style={{ color: '#fbbf24' }} /> : <ChevronRight size={14} style={{ color: '#fbbf24' }} />}
+                  <span className="text-sm font-semibold" style={{ color: '#fbbf24' }}>Commercial Terms</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>
+                    grouped by clause
+                  </span>
+                </div>
+              </button>
+              {commercialOpen && (() => {
+                const contractFindings = visibleFindings.filter(f => f.lens === 'contract_review')
+                const byClause: Record<string, Finding[]> = {}
+                for (const f of contractFindings) {
+                  const key = f.clause_ref ?? 'General'
+                  if (!byClause[key]) byClause[key] = []
+                  byClause[key].push(f)
+                }
+                return (
+                  <div className="divide-y" style={{ borderColor: 'rgba(251,191,36,0.2)' }}>
+                    {Object.entries(byClause).map(([clause, cFindings]) => (
+                      <div key={clause} className="px-5 py-4 space-y-3">
+                        <p className="text-xs font-semibold font-mono" style={{ color: '#fbbf24' }}>{clause}</p>
+                        {cFindings.map(finding => {
+                          const sev = SEVERITY_CFG[finding.severity] ?? SEVERITY_CFG.Observation
+                          const statusCfg = STATUS_CFG[finding.status]
+                          const isReviewing = reviewingId === finding.id
+                          return (
+                            <div key={finding.id} className="rounded-lg border p-3 space-y-2"
+                              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
+                              <div className="flex items-start gap-2">
+                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold mt-0.5"
+                                  style={{ background: sev.bg, color: sev.color }}>{finding.severity}</span>
+                                <p className="text-xs font-medium flex-1" style={{ color: 'var(--text-primary)' }}>{finding.title}</p>
+                                <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                  style={{ color: statusCfg.color, background: `${statusCfg.color}20` }}>
+                                  {statusCfg.icon} {finding.status}
+                                </span>
+                              </div>
+                              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{finding.description}</p>
+                              {canEdit && finding.status === 'Pending' && !isReviewing && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => { setReviewingId(finding.id); setReviewingAction('Approved'); setReviewNote(''); setReviewDecisionType(''); setReviewError(null) }}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium"
+                                    style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                                    <CheckCircle2 size={10} /> Approve
+                                  </button>
+                                  <button
+                                    onClick={() => { setReviewingId(finding.id); setReviewingAction('Rejected'); setReviewNote(''); setReviewDecisionType(''); setReviewError(null) }}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium"
+                                    style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>
+                                    <XCircle size={10} /> Reject
+                                  </button>
+                                </div>
+                              )}
+                              {finding.status !== 'Pending' && finding.review_notes && (
+                                <p className="text-[11px] px-2 py-1.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+                                  {finding.review_notes}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
           )}
 
           {/* Markup box — always show if there are findings or a run exists */}

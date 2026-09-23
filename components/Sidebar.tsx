@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, ChevronDown,
   Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck, Receipt, Calculator, Inbox,
+  Camera, CalendarDays, ShieldCheck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, Company, Module } from '@/lib/types'
@@ -32,7 +33,10 @@ const NAV: NavItem[] = [
   { href: '/plant',             label: 'Plant',             icon: Truck,          module: 'plant',       roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/estimating',        label: 'Estimating',        icon: Calculator,     module: 'estimating',  roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/haulage',           label: 'Haulage',           icon: Truck,          module: 'haulage',     roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
+  { href: '/capture',           label: 'Field Capture',     icon: Camera,         module: 'tests',       roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
+  { href: '/resource-schedule', label: 'Resource Schedule', icon: CalendarDays,   module: 'planning',    roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/users',             label: 'Users',             icon: Users,          roles: ['superadmin', 'admin'] },
+  { href: '/admin/compliance',  label: 'Compliance Alerts', icon: ShieldCheck,                           roles: ['superadmin', 'admin'] },
 ]
 
 const SUPERADMIN_NAV: NavItem[] = [

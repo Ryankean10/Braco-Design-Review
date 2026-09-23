@@ -38,6 +38,8 @@ export interface PlantItem {
   expected_off_hire: string | null
   actual_off_hire: string | null
   notes: string | null
+  calibration_date: string | null
+  calibration_due: string | null
   created_at: string
   updated_at: string
 }

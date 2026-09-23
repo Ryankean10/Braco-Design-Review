@@ -15,6 +15,7 @@ import ClientAccessPanel from '@/components/ClientAccessPanel'
 import TeamAccessPanel from '@/components/TeamAccessPanel'
 import { makeDefaultStages, getStageOrder } from '@/lib/stageDefaults'
 import ProjectITPUpload from '@/components/ProjectITPUpload'
+import ProjectMilestonesPanel from '@/components/ProjectMilestonesPanel'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -190,17 +191,18 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const pfeat = (key: string) => !hasProjectSubFeatures || companyModules.includes(key)
 
   // Seed project_stages if this project has none yet
+  const stageTemplate: string | undefined = (project as any).stage_template ?? undefined
   let projectStages = projectStageRows ?? []
   if (projectStages.length === 0) {
-    const defaults = makeDefaultStages(id, industry)
+    const defaults = makeDefaultStages(id, industry, stageTemplate)
     const { data: seeded } = await supabase
       .from('project_stages')
       .insert(defaults)
       .select()
     projectStages = seeded ?? []
   }
-  // Order stages by the industry's stage order
-  const stageOrder = getStageOrder(industry)
+  // Order stages by the industry's stage order (respecting per-project template)
+  const stageOrder = getStageOrder(industry, stageTemplate)
   const stagesOrdered = stageOrder.map(name =>
     projectStages.find((s: any) => s.stage === name)
   ).filter(Boolean) as any[]
@@ -300,6 +302,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Payment milestones panel */}
+      {role !== 'client' && (
+        <div className="mb-6">
+          <ProjectMilestonesPanel projectId={id} canEdit={canEdit} />
         </div>
       )}
 

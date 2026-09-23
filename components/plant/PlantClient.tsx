@@ -173,6 +173,11 @@ export default function PlantClient({ plant, projects, sites, people, companyId,
           {filtered.map(p => {
             const img = CATEGORY_IMAGE[p.category.toLowerCase()] ?? '/Plant/Default.png'
             const sc = STATUS_COLOURS[p.status] ?? STATUS_COLOURS.available
+            const now = new Date().toISOString().split('T')[0]
+            const in30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            const calDue = p.calibration_due
+            const calExpired = calDue && calDue < now
+            const calSoon = calDue && !calExpired && calDue <= in30
             return (
               <button
                 key={p.id}
@@ -193,6 +198,12 @@ export default function PlantClient({ plant, projects, sites, people, companyId,
                 </p>
                 {p.plant_ref && (
                   <p className="text-[10px] mt-1 font-mono" style={{ color: 'var(--text-muted)' }}>{p.plant_ref}</p>
+                )}
+                {(calExpired || calSoon) && (
+                  <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-medium mt-1"
+                    style={{ background: calExpired ? 'rgba(248,113,113,0.15)' : 'rgba(251,191,36,0.15)', color: calExpired ? '#f87171' : '#fbbf24' }}>
+                    Cal. {calExpired ? 'overdue' : `due ${calDue}`}
+                  </span>
                 )}
                 {p.project && (
                   <p className="text-[10px] mt-2 truncate" style={{ color: 'var(--accent)' }}>{p.project.name}</p>

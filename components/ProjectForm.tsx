@@ -10,6 +10,34 @@ const BESS_STAGES: Stage[] = [
   'Feasibility', 'Design', 'Procure', 'Build & Install', 'Test & Commission', 'Energise & Handover'
 ]
 
+// Stage templates available per industry
+type TemplateOption = { key: string; label: string }
+const TEMPLATES_BY_INDUSTRY: Record<string, TemplateOption[]> = {
+  electrical: [
+    { key: 'electrical',      label: 'HV 3-stage (Preparation → Active → Complete)' },
+    { key: 'hv_commissioning', label: 'HV Commissioning 5-stage (Pre-energisation → Sign-off)' },
+  ],
+  civils: [
+    { key: 'civils', label: 'Civils 5-stage (Tender → Complete)' },
+  ],
+  bess: [
+    { key: 'bess', label: 'BESS 6-stage (Feasibility → Handover)' },
+  ],
+}
+
+function getStagesForTemplate(template: string): string[] {
+  if (template === 'hv_commissioning') return getStageOrder('electrical', 'hv_commissioning') as string[]
+  if (template === 'electrical') return getStageOrder('electrical') as string[]
+  if (template === 'civils') return getStageOrder('civils') as string[]
+  return BESS_STAGES
+}
+
+function defaultTemplate(industry: string): string {
+  if (industry === 'electrical') return 'electrical'
+  if (industry === 'civils') return 'civils'
+  return 'bess'
+}
+
 interface Props {
   project?: Project
   industry?: string
@@ -19,12 +47,14 @@ export default function ProjectForm({ project, industry = 'bess' }: Props) {
   const router = useRouter()
   const isEdit = !!project
   const isCivils = industry === 'civils'
-  const stages = isCivils ? (getStageOrder('civils') as string[]) : BESS_STAGES
+  const templateOptions = TEMPLATES_BY_INDUSTRY[industry] ?? TEMPLATES_BY_INDUSTRY.bess
 
   const [name, setName] = useState(project?.name ?? '')
   const [client, setClient] = useState(project?.client ?? '')
   const [location, setLocation] = useState(project?.location ?? '')
   const [capacityMw, setCapacityMw] = useState(project?.capacity_mw?.toString() ?? '')
+  const [template, setTemplate] = useState<string>((project as any)?.stage_template ?? defaultTemplate(industry))
+  const stages = getStagesForTemplate(template)
   const [stage, setStage] = useState<string>(project?.stage ?? stages[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -41,9 +71,10 @@ export default function ProjectForm({ project, industry = 'bess' }: Props) {
       client: client.trim(),
       location: location.trim(),
       stage,
+      stage_template: template,
       updated_at: new Date().toISOString(),
     }
-    if (!isCivils && capacityMw) {
+    if (!isCivils && industry !== 'electrical' && capacityMw) {
       payload.capacity_mw = parseFloat(capacityMw)
     }
 
@@ -123,39 +154,60 @@ export default function ProjectForm({ project, industry = 'bess' }: Props) {
           </div>
         </div>
 
-        <div className={isCivils ? '' : 'grid grid-cols-2 gap-4'}>
-          {!isCivils && (
-            <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                Capacity (MW)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={capacityMw}
-                onChange={e => setCapacityMw(e.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                style={fieldStyle}
-                placeholder="e.g. 50"
-              />
-            </div>
-          )}
+        {industry === 'bess' && (
           <div>
             <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-              {isCivils ? 'Starting stage *' : 'Lifecycle stage *'}
+              Capacity (MW)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={capacityMw}
+              onChange={e => setCapacityMw(e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={fieldStyle}
+              placeholder="e.g. 50"
+            />
+          </div>
+        )}
+
+        {templateOptions.length > 1 && (
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
+              Stage template *
             </label>
             <select
-              value={stage}
-              onChange={e => setStage(e.target.value)}
+              value={template}
+              onChange={e => {
+                const t = e.target.value
+                setTemplate(t)
+                setStage(getStagesForTemplate(t)[0])
+              }}
               className="w-full rounded-lg px-3 py-2 text-sm outline-none"
               style={fieldStyle}
             >
-              {stages.map(s => (
-                <option key={s} value={s}>{s}</option>
+              {templateOptions.map(t => (
+                <option key={t.key} value={t.key}>{t.label}</option>
               ))}
             </select>
           </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            Starting stage *
+          </label>
+          <select
+            value={stage}
+            onChange={e => setStage(e.target.value)}
+            className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+            style={fieldStyle}
+          >
+            {stages.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </div>
       </div>
 
