@@ -22,6 +22,7 @@ interface Props {
   projects: Project[]
   assignmentMap: Record<string, string[]>
   currentUserId: string
+  companyId: string
 }
 
 const field: React.CSSProperties = {
@@ -30,7 +31,7 @@ const field: React.CSSProperties = {
   borderColor: 'var(--border)',
 }
 
-export default function UsersClient({ users: initial, projects, assignmentMap: initMap, currentUserId }: Props) {
+export default function UsersClient({ users: initial, projects, assignmentMap: initMap, currentUserId, companyId }: Props) {
   const [users, setUsers]         = useState<UserRow[]>(initial)
   const [assignMap, setAssignMap] = useState<Record<string, string[]>>(initMap)
   const [expanded, setExpanded]   = useState<string | null>(null)
@@ -54,7 +55,7 @@ export default function UsersClient({ users: initial, projects, assignmentMap: i
     if (!form.email.trim()) return
     setSaving(true); setErr(''); setSuccessMsg('')
     const res = await fetch('/api/admin/invite-user', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, company_id: companyId }),
     })
     const data = await res.json()
     setSaving(false)
