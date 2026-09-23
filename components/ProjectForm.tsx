@@ -33,7 +33,7 @@ function getStagesForTemplate(template: string): string[] {
 }
 
 function defaultTemplate(industry: string): string {
-  if (industry === 'electrical') return 'electrical'
+  if (industry === 'electrical') return 'hv_commissioning'
   if (industry === 'civils') return 'civils'
   return 'bess'
 }
@@ -121,7 +121,7 @@ export default function ProjectForm({ project, industry = 'bess' }: Props) {
             required
             className="w-full rounded-lg px-3 py-2 text-sm outline-none"
             style={fieldStyle}
-            placeholder={isCivils ? 'e.g. A9 Drainage Upgrade' : 'e.g. Braco 50 MW BESS'}
+            placeholder={isCivils ? 'e.g. A9 Drainage Upgrade' : industry === 'electrical' ? 'e.g. Inverurie 132kV HV Commissioning' : 'e.g. Braco 50 MW BESS'}
           />
         </div>
 

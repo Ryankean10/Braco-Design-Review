@@ -17,7 +17,7 @@ const STATUS_CFG: Record<StageStatus, { color: string; bg: string; border: strin
 }
 
 // Gate stages require sign-off before project can progress
-const GATE_STAGES: AnyStage[] = ['Feasibility', 'Energise & Handover', 'Awarded', 'Handover']
+const GATE_STAGES: AnyStage[] = ['Feasibility', 'Energise & Handover', 'Awarded', 'Handover', 'Pre-energisation checks', 'Sign-off']
 
 interface Props {
   stages: ProjectStage[]

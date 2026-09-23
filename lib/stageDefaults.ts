@@ -295,7 +295,8 @@ export const ELECTRICAL_STAGE_COLOURS: Record<ElectricalStageName, string> = {
 
 export function getStageColour(stage: string, industry = 'bess', template?: string): string {
   if (template === 'hv_commissioning') return HV_COMMISSIONING_STAGE_COLOURS[stage as HvCommissioningStageName] ?? '#4b5563'
-  if (industry === 'electrical') return ELECTRICAL_STAGE_COLOURS[stage as ElectricalStageName] ?? '#4b5563'
+  if (template === 'electrical') return ELECTRICAL_STAGE_COLOURS[stage as ElectricalStageName] ?? '#4b5563'
+  if (industry === 'electrical') return HV_COMMISSIONING_STAGE_COLOURS[stage as HvCommissioningStageName] ?? '#4b5563'
   if (industry === 'civils') return CIVILS_STAGE_COLOURS[stage as CivilsStageName] ?? '#4b5563'
   return STAGE_COLOURS[stage as StageName] ?? '#4b5563'
 }
@@ -303,7 +304,7 @@ export function getStageColour(stage: string, industry = 'bess', template?: stri
 // ── Factory functions ──────────────────────────────────────────────────────
 
 export function makeDefaultStages(projectId: string, industry = 'bess', template?: string): Omit<ProjectStage, 'id' | 'created_at' | 'updated_at'>[] {
-  if (template === 'hv_commissioning') {
+  if (template === 'hv_commissioning' || (industry === 'electrical' && !template)) {
     return HV_COMMISSIONING_STAGE_ORDER.map(stage => ({
       project_id: projectId,
       stage,
@@ -324,7 +325,7 @@ export function makeDefaultStages(projectId: string, industry = 'bess', template
     }))
   }
 
-  if (template === 'electrical' || (industry === 'electrical' && !template)) {
+  if (template === 'electrical') {
     return ELECTRICAL_STAGE_ORDER.map(stage => ({
       project_id: projectId,
       stage,
@@ -388,7 +389,8 @@ export function makeDefaultStages(projectId: string, industry = 'bess', template
 
 export function getStageOrder(industry = 'bess', template?: string): readonly string[] {
   if (template === 'hv_commissioning') return HV_COMMISSIONING_STAGE_ORDER
-  if (industry === 'electrical') return ELECTRICAL_STAGE_ORDER
+  if (template === 'electrical') return ELECTRICAL_STAGE_ORDER
+  if (industry === 'electrical') return HV_COMMISSIONING_STAGE_ORDER
   if (industry === 'civils') return CIVILS_STAGE_ORDER
   return STAGE_ORDER
 }

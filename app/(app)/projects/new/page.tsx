@@ -17,7 +17,7 @@ export default async function NewProjectPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>New project</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-          {isCivils ? 'Create a new civils project' : 'Create a new BESS project'}
+          {isCivils ? 'Create a new civils project' : industry === 'electrical' ? 'Create a new HV project' : 'Create a new BESS project'}
         </p>
       </div>
       <ProjectForm industry={industry} />
