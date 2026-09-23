@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const supabase = await createClient()
   const body = await req.json()
-  const { credential_type, name, issuer, reference, issue_date, expiry_date, notes } = body
+  const { credential_type, name, issuer, reference, issue_date, expiry_date, notes, category, voltage_kv, cert_standard, issuing_client } = body
 
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
 
@@ -42,6 +42,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       issue_date: issue_date || null,
       expiry_date: expiry_date || null,
       notes: notes || null,
+      category: category || null,
+      voltage_kv: voltage_kv || null,
+      cert_standard: cert_standard || null,
+      issuing_client: issuing_client || null,
     })
     .select('*, certificates:person_certificates(*)')
     .single()

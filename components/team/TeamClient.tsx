@@ -487,7 +487,8 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
     id: string; person_id: string; credential_type: string; name: string
     issuer: string | null; reference: string | null; issue_date: string | null
     expiry_date: string | null; notes: string | null; category: string | null
-    voltage_kv: string | null; created_at: string
+    voltage_kv: string | null; cert_standard: string | null; issuing_client: string | null
+    created_at: string
     certificates: { id: string; file_name: string; storage_path: string; uploaded_at: string }[]
   }
   const [credentials, setCredentials] = useState<Credential[]>([])
@@ -495,7 +496,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   const [credsLoaded, setCredsLoaded] = useState(false)
   const [addingCred, setAddingCred] = useState(false)
   const [editingCred, setEditingCred] = useState<Credential | null>(null)
-  const [credForm, setCredForm] = useState({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '', category: '', voltage_kv: '' })
+  const [credForm, setCredForm] = useState({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '', category: '', voltage_kv: '', cert_standard: '', issuing_client: '' })
   const [savingCred, setSavingCred] = useState(false)
   const [credError, setCredError] = useState('')
   const [uploadingCertFor, setUploadingCertFor] = useState<string | null>(null)
@@ -586,6 +587,11 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
     return { reg, ot1, ot2, hol }
   }
 
+  function credDaysUntil(expiry: string | null): number | null {
+    if (!expiry) return null
+    return Math.round((new Date(expiry).getTime() - Date.now()) / 86_400_000)
+  }
+
   function credExpiryStatus(expiry: string | null): 'valid' | 'soon' | 'expired' | 'none' {
     if (!expiry) return 'none'
     const days = Math.round((new Date(expiry).getTime() - new Date().getTime()) / 86_400_000)
@@ -595,7 +601,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   }
 
   function resetCredForm() {
-    setCredForm({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '', category: '', voltage_kv: '' })
+    setCredForm({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '', category: '', voltage_kv: '', cert_standard: '', issuing_client: '' })
     setCredError(''); setAddingCred(false); setEditingCred(null)
   }
 
@@ -910,13 +916,38 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                     ))}
                   </div>
 
+                  {/* Standard picker */}
+                  <div>
+                    <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Standard / type</label>
+                    <select value={credForm.cert_standard} onChange={e => setCredForm(f => ({ ...f, cert_standard: e.target.value, issuing_client: e.target.value !== 'SAP authorisation' ? '' : f.issuing_client }))}
+                      className="w-full rounded-lg px-2.5 py-1.5 text-xs border focus:outline-none"
+                      style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                      <option value="">— Select —</option>
+                      {['SAP authorisation','ECS','CSCS','IPAF','CCNSG','GWO','Offshore medical','Calibration','Other'].map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Issuing client — SAP only */}
+                  {credForm.cert_standard === 'SAP authorisation' && (
+                    <div>
+                      <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Issuing client</label>
+                      <input type="text" value={credForm.issuing_client} placeholder="e.g. SP Energy Networks"
+                        onChange={e => setCredForm(f => ({ ...f, issuing_client: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-1.5 text-xs border focus:outline-none"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3">
                     {([
-                      { k: 'name',       label: 'Name *',        span: true  },
-                      { k: 'issuer',     label: 'Issuing body',  span: false },
-                      { k: 'reference',  label: 'Ref / card no', span: false },
-                      { k: 'issue_date', label: 'Issue date',    span: false, type: 'date' },
-                      { k: 'expiry_date',label: 'Expiry date',   span: false, type: 'date' },
+                      { k: 'name',       label: 'Name *',                  span: true  },
+                      { k: 'issuer',     label: 'Issuing body / certifier', span: false },
+                      { k: 'reference',  label: 'Ref / card no',           span: false },
+                      { k: 'issue_date', label: 'Issue date',              span: false, type: 'date' },
+                      { k: 'expiry_date',label: 'Expiry date',             span: false, type: 'date' },
                     ] as { k: string; label: string; span?: boolean; type?: string }[]).map(({ k, label, span, type }) => (
                       <div key={k} className={span ? 'col-span-2' : ''}>
                         <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
@@ -982,84 +1013,116 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                 </div>
               )}
 
-              {credentials.map(c => {
-                const status = credExpiryStatus(c.expiry_date)
-                const statusColor = status === 'expired' ? '#f87171' : status === 'soon' ? '#fb923c' : status === 'valid' ? '#4ade80' : 'var(--text-muted)'
-                const typeColor: Record<string, string> = { certification: '#60a5fa', competency: '#c084fc', authorisation: '#fb923c', ticket: '#4ade80' }
-                return (
-                  <div key={c.id} className="rounded-xl border p-4 space-y-2"
-                    style={{ borderColor: status === 'expired' ? 'rgba(248,113,113,0.3)' : status === 'soon' ? 'rgba(251,146,60,0.3)' : 'var(--border)', background: 'var(--bg-elevated)' }}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{c.name}</p>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded capitalize"
-                            style={{ background: `${typeColor[c.credential_type] ?? 'var(--accent)'}22`, color: typeColor[c.credential_type] ?? 'var(--accent)' }}>
-                            {c.credential_type}
-                          </span>
-                          {status !== 'none' && (
-                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded"
-                              style={{ background: `${statusColor}18`, color: statusColor }}>
-                              {status === 'expired' ? <AlertTriangle size={9} /> : <ShieldCheck size={9} />}
-                              {status === 'expired' ? 'Expired' : status === 'soon' ? 'Expiring soon' : 'Valid'}
+              {/* SAP grouping */}
+              {(() => {
+                const sapCreds = credentials.filter(c => c.cert_standard === 'SAP authorisation')
+                const otherCreds = credentials.filter(c => c.cert_standard !== 'SAP authorisation')
+                const renderCard = (c: Credential) => {
+                  const days = credDaysUntil(c.expiry_date)
+                  const daysBadgeColor = days === null ? null : days < 0 ? '#f87171' : days <= 30 ? '#f87171' : days <= 60 ? '#fb923c' : '#4ade80'
+                  const daysBadgeText = days === null ? null : days < 0 ? `${-days}d overdue` : `${days}d`
+                  const borderColor = days !== null && days <= 30 ? 'rgba(248,113,113,0.3)' : days !== null && days <= 60 ? 'rgba(251,146,60,0.3)' : 'var(--border)'
+                  const typeColor: Record<string, string> = { certification: '#60a5fa', competency: '#c084fc', authorisation: '#fb923c', ticket: '#4ade80' }
+                  return (
+                    <div key={c.id} className="rounded-xl border p-4 space-y-2"
+                      style={{ borderColor, background: 'var(--bg-elevated)' }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{c.name}</p>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded capitalize"
+                              style={{ background: `${typeColor[c.credential_type] ?? 'var(--accent)'}22`, color: typeColor[c.credential_type] ?? 'var(--accent)' }}>
+                              {c.credential_type}
                             </span>
+                            {daysBadgeColor && daysBadgeText && (
+                              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium"
+                                style={{ background: `${daysBadgeColor}18`, color: daysBadgeColor }}>
+                                {(days ?? 0) < 0 ? <AlertTriangle size={9} /> : <ShieldCheck size={9} />}
+                                {daysBadgeText}
+                              </span>
+                            )}
+                          </div>
+                          {c.cert_standard && (
+                            <p className="text-xs font-bold mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                              {c.cert_standard}
+                              {c.issuing_client && <span className="font-normal text-[11px] ml-1.5" style={{ color: 'var(--text-muted)' }}>Client: {c.issuing_client}</span>}
+                            </p>
                           )}
+                          <div className="flex flex-wrap gap-3 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {c.category && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                                style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>
+                                {c.category}{c.voltage_kv ? ` · ${c.voltage_kv}` : ''}
+                              </span>
+                            )}
+                            {c.issuer && <span>{c.issuer}</span>}
+                            {c.reference && <span>Ref: {c.reference}</span>}
+                            {c.issue_date && <span>Issued {fmtDate(c.issue_date)}</span>}
+                            {c.expiry_date && (
+                              <span style={{ color: daysBadgeColor ?? 'var(--text-muted)' }}>Expires {fmtDate(c.expiry_date)}</span>
+                            )}
+                          </div>
+                          {c.notes && <p className="text-xs mt-1 italic" style={{ color: 'var(--text-muted)' }}>{c.notes}</p>}
                         </div>
-                        <div className="flex flex-wrap gap-3 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {c.category && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                              style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>
-                              {c.category}{c.voltage_kv ? ` · ${c.voltage_kv}` : ''}
-                            </span>
-                          )}
-                          {c.issuer && <span>{c.issuer}</span>}
-                          {c.reference && <span>Ref: {c.reference}</span>}
-                          {c.issue_date && <span>Issued {fmtDate(c.issue_date)}</span>}
-                          {c.expiry_date && (
-                            <span style={{ color: statusColor }}>Expires {fmtDate(c.expiry_date)}</span>
-                          )}
-                        </div>
-                        {c.notes && <p className="text-xs mt-1 italic" style={{ color: 'var(--text-muted)' }}>{c.notes}</p>}
+                        {canEdit && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button onClick={() => { setEditingCred(c); setAddingCred(false); setCredForm({ credential_type: c.credential_type, name: c.name, issuer: c.issuer??'', reference: c.reference??'', issue_date: c.issue_date??'', expiry_date: c.expiry_date??'', notes: c.notes??'', category: c.category??'', voltage_kv: c.voltage_kv??'', cert_standard: c.cert_standard??'', issuing_client: c.issuing_client??'' }) }}
+                              className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                              <Edit2 size={12} />
+                            </button>
+                            <button onClick={() => deleteCred(c.id)}
+                              className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {canEdit && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => { setEditingCred(c); setAddingCred(false); setCredForm({ credential_type: c.credential_type, name: c.name, issuer: c.issuer??'', reference: c.reference??'', issue_date: c.issue_date??'', expiry_date: c.expiry_date??'', notes: c.notes??'', category: c.category??'', voltage_kv: c.voltage_kv??'' }) }}
-                            className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
-                            <Edit2 size={12} />
-                          </button>
-                          <button onClick={() => deleteCred(c.id)}
-                            className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Certificates */}
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {c.certificates.map(cert => (
-                        <button key={cert.id} onClick={() => openCert(c.id, cert.storage_path)}
-                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border hover:opacity-80"
-                          style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>
-                          <FileText size={10} /> {cert.file_name} <ExternalLink size={9} />
-                        </button>
-                      ))}
-                      {canEdit && (
-                        <button
-                          onClick={() => { setCertCredId(c.id); certFileRef.current?.click() }}
-                          disabled={uploadingCertFor === c.id}
-                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border hover:opacity-80 disabled:opacity-50"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                          {uploadingCertFor === c.id
-                            ? <Loader2 size={10} className="animate-spin" />
-                            : <Upload size={10} />}
-                          Upload cert
-                        </button>
-                      )}
+                      {/* Certificates */}
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {c.certificates.map(cert => (
+                          <button key={cert.id} onClick={() => openCert(c.id, cert.storage_path)}
+                            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border hover:opacity-80"
+                            style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>
+                            <FileText size={10} /> {cert.file_name} <ExternalLink size={9} />
+                          </button>
+                        ))}
+                        {canEdit && (
+                          <button
+                            onClick={() => { setCertCredId(c.id); certFileRef.current?.click() }}
+                            disabled={uploadingCertFor === c.id}
+                            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border hover:opacity-80 disabled:opacity-50"
+                            style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                            {uploadingCertFor === c.id
+                              ? <Loader2 size={10} className="animate-spin" />
+                              : <Upload size={10} />}
+                            Upload cert
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )
+                }
+                return (
+                  <>
+                    {sapCreds.length >= 2 && (
+                      <details open className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(251,146,60,0.3)' }}>
+                        <summary className="px-4 py-2.5 text-xs font-semibold cursor-pointer select-none"
+                          style={{ background: 'rgba(251,146,60,0.07)', color: '#fb923c' }}>
+                          SAP Authorisations ({sapCreds.length})
+                        </summary>
+                        <div className="p-3 space-y-3">
+                          {[...sapCreds]
+                            .sort((a, b) => (a.issuing_client ?? '').localeCompare(b.issuing_client ?? '') || (a.expiry_date ?? '').localeCompare(b.expiry_date ?? ''))
+                            .map(renderCard)}
+                        </div>
+                      </details>
+                    )}
+                    {sapCreds.length < 2 && sapCreds.map(renderCard)}
+                    {otherCreds.map(renderCard)}
+                  </>
                 )
-              })}
+              })()}
 
               {/* Hidden file input for certificate upload */}
               <input ref={certFileRef} type="file" accept="*/*" className="hidden"

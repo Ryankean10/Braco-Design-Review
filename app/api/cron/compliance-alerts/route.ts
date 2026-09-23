@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     // Person credentials expiring within threshold or already expired
     const { data: credentials } = await admin
       .from('person_credentials')
-      .select('id, name, expiry_date, category, people!inner(name, company_id)')
+      .select('id, name, expiry_date, category, cert_standard, issuing_client, people!inner(name, company_id)')
       .eq('people.company_id', company_id)
       .not('expiry_date', 'is', null)
       .lte('expiry_date', warnDate)
@@ -105,7 +105,10 @@ export async function GET(req: NextRequest) {
       for (const c of credentials ?? []) {
         const days = daysUntil(c.expiry_date)
         const personName = (c as any).people?.name ?? 'Unknown'
-        body += `<tr><td style="padding:6px 10px;border:1px solid #e2e8f0;">${personName}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">${c.name}${c.category ? ` (${c.category})` : ''}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">${c.expiry_date}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">${expiryBadge(days)}</td></tr>`
+        const credLabel = (c as any).cert_standard
+          ? `${(c as any).cert_standard}${(c as any).issuing_client ? ` (${(c as any).issuing_client})` : ''}`
+          : `${c.name}${c.category ? ` (${c.category})` : ''}`
+        body += `<tr><td style="padding:6px 10px;border:1px solid #e2e8f0;">${personName}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">${credLabel}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">${c.expiry_date}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;">${expiryBadge(days)}</td></tr>`
       }
       body += `</table>`
     }
