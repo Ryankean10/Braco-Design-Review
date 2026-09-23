@@ -55,12 +55,13 @@ export async function middleware(request: NextRequest) {
   // Webhook/cron endpoints secured by their own secret header — bypass auth
   if (
     pathname.startsWith('/api/construction/inbound-email') ||
-    pathname.startsWith('/api/cron/')
+    pathname.startsWith('/api/cron/') ||
+    pathname.startsWith('/api/onboard')
   ) {
     return supabaseResponse
   }
 
-  if (!user && pathname !== '/login') {
+  if (!user && pathname !== '/login' && !pathname.startsWith('/onboard')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
