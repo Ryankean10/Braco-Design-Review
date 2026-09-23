@@ -11,8 +11,6 @@ const admin = createAdmin(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } }
 )
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 async function buildPersonnel(siteId: string, briefDate: string) {
   const { data: appointments } = await admin
     .from('job_appointments')
@@ -88,6 +86,8 @@ export async function GET(req: NextRequest) {
     .eq('status', 'active')
 
   if (!sites?.length) return NextResponse.json({ ok: true, results: ['No active sites'] })
+
+  const resend = new Resend(process.env.RESEND_API_KEY)
 
   for (const site of sites) {
     try {
