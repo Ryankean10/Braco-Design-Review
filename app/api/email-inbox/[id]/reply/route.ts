@@ -3,8 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const admin = createAdmin(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -42,6 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const senderName = (profile as any)?.full_name ?? 'Scotplant AI'
 
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const { error: sendError } = await resend.emails.send({
     from: `${senderName} <scotplantai@yacht-gitana.com>`,
     to: inbox.from_email,
