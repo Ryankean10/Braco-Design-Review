@@ -1,4 +1,5 @@
 import { createClient as createAdmin } from '@supabase/supabase-js'
+import { headers } from 'next/headers'
 
 // Pricing per million tokens (USD) — update when Anthropic pricing changes
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
@@ -22,7 +23,7 @@ export async function logApiUsage({
   inputTokens,
   outputTokens,
 }: {
-  companyId: string | null | undefined
+  companyId?: string | null
   endpoint: string
   model: string
   inputTokens: number
@@ -34,8 +35,23 @@ export async function logApiUsage({
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false } }
     )
+
+    // Subdomain slug is authoritative — read from x-company-slug header (set by middleware)
+    // and resolve to company_id. Falls back to the passed companyId if headers unavailable.
+    let effectiveCompanyId: string | null = companyId ?? null
+    try {
+      const headersList = await headers()
+      const slug = headersList.get('x-company-slug')
+      if (slug) {
+        const { data } = await admin.from('companies').select('id').eq('slug', slug).single()
+        if ((data as any)?.id) effectiveCompanyId = (data as any).id
+      }
+    } catch {
+      // headers() not available in this execution context — use companyId fallback
+    }
+
     await admin.from('api_usage_logs').insert({
-      company_id:    companyId ?? null,
+      company_id:    effectiveCompanyId,
       endpoint,
       model,
       input_tokens:  inputTokens,
