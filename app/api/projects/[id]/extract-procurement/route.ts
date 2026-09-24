@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractAndParse } from '@/lib/repairJson'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export const maxDuration = 60
 
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!['admin','project_manager','engineer'].includes(profile?.role ?? ''))
+  if (!['admin', 'superadmin', 'engineer'].includes(profile?.role ?? ''))
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
 
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
@@ -67,6 +68,7 @@ EMPLOYER'S REQUIREMENTS:
 ${erText}`
     }]
   })
+  logApiUsage({ companyId: project?.company_id ?? null, endpoint: 'extract-procurement', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
 
