@@ -72,27 +72,29 @@ export async function POST(req: NextRequest) {
       .join('')
 
     const resend = new Resend(process.env.RESEND_API_KEY)
-    resend.emails.send({
-      from: FROM_EMAIL,
-      to: ALERT_EMAIL,
-      subject: `📁 ${companyName} has uploaded ${inserts.length} template${inserts.length > 1 ? 's' : ''} — review required`,
-      html: `
-        <div style="font-family:sans-serif;max-width:600px">
-          <h2 style="margin-bottom:4px">New client template upload</h2>
-          <p style="color:#666;margin-top:0">${companyName} uploaded ${inserts.length} document${inserts.length > 1 ? 's' : ''} via the client portal.</p>
-          <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
-            <thead>
-              <tr>
-                <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #444">File</th>
-                <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #444">Description</th>
-              </tr>
-            </thead>
-            <tbody>${fileList}</tbody>
-          </table>
-          <p style="color:#888;font-size:12px">Review and configure these documents in the Safe T platform before ${companyName} goes live.</p>
-        </div>
-      `,
-    }).catch(() => {})
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: ALERT_EMAIL,
+        subject: `📁 ${companyName} has uploaded ${inserts.length} template${inserts.length > 1 ? 's' : ''} — review required`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px">
+            <h2 style="margin-bottom:4px">New client template upload</h2>
+            <p style="color:#666;margin-top:0">${companyName} uploaded ${inserts.length} document${inserts.length > 1 ? 's' : ''} via the client portal.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+              <thead>
+                <tr>
+                  <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #444">File</th>
+                  <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #444">Description</th>
+                </tr>
+              </thead>
+              <tbody>${fileList}</tbody>
+            </table>
+            <p style="color:#888;font-size:12px">Review and configure these documents in the Safe T platform before ${companyName} goes live.</p>
+          </div>
+        `,
+      })
+    } catch {}
   }
 
   if (errors.length > 0 && inserts.length === 0) {
