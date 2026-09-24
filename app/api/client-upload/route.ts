@@ -71,30 +71,37 @@ export async function POST(req: NextRequest) {
       .map((r, n) => `<tr><td style="padding:4px 8px;border-bottom:1px solid #333">${n + 1}. ${r.file_name}</td><td style="padding:4px 8px;border-bottom:1px solid #333;color:#aaa">${r.description}</td></tr>`)
       .join('')
 
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    try {
-      await resend.emails.send({
-        from: FROM_EMAIL,
-        to: ALERT_EMAIL,
-        subject: `📁 ${companyName} has uploaded ${inserts.length} template${inserts.length > 1 ? 's' : ''} — review required`,
-        html: `
-          <div style="font-family:sans-serif;max-width:600px">
-            <h2 style="margin-bottom:4px">New client template upload</h2>
-            <p style="color:#666;margin-top:0">${companyName} uploaded ${inserts.length} document${inserts.length > 1 ? 's' : ''} via the client portal.</p>
-            <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
-              <thead>
-                <tr>
-                  <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #444">File</th>
-                  <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #444">Description</th>
-                </tr>
-              </thead>
-              <tbody>${fileList}</tbody>
-            </table>
-            <p style="color:#888;font-size:12px">Review and configure these documents in the Safe T platform before ${companyName} goes live.</p>
-          </div>
-        `,
-      })
-    } catch {}
+    if (!process.env.RESEND_API_KEY) {
+      console.error('[client-upload] RESEND_API_KEY not set — skipping email')
+    } else {
+      const resend = new Resend(process.env.RESEND_API_KEY)
+      try {
+        const result = await resend.emails.send({
+          from: FROM_EMAIL,
+          to: ALERT_EMAIL,
+          subject: `📁 ${companyName} has uploaded ${inserts.length} template${inserts.length > 1 ? 's' : ''} — review required`,
+          html: `
+            <div style="font-family:sans-serif;max-width:600px">
+              <h2 style="margin-bottom:4px">New client template upload</h2>
+              <p style="color:#666;margin-top:0">${companyName} uploaded ${inserts.length} document${inserts.length > 1 ? 's' : ''} via the client portal.</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #444">File</th>
+                    <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #444">Description</th>
+                  </tr>
+                </thead>
+                <tbody>${fileList}</tbody>
+              </table>
+              <p style="color:#888;font-size:12px">Review and configure these documents in the Safe T platform before ${companyName} goes live.</p>
+            </div>
+          `,
+        })
+        console.log('[client-upload] Email sent:', JSON.stringify(result))
+      } catch (err) {
+        console.error('[client-upload] Resend error:', err)
+      }
+    }
   }
 
   if (errors.length > 0 && inserts.length === 0) {
