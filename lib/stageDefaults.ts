@@ -33,7 +33,19 @@ export const ELECTRICAL_STAGE_ORDER = [
 
 export type ElectricalStageName = typeof ELECTRICAL_STAGE_ORDER[number]
 
-export type AnyStage = StageName | CivilsStageName | ElectricalStageName
+// ── HV Commissioning (5-stage detailed workflow) ──────────────────────────────
+
+export const HV_COMMISSIONING_STAGE_ORDER = [
+  'Pre-energisation checks',
+  'Cable testing',
+  'Switching',
+  'Energisation',
+  'Sign-off',
+] as const
+
+export type HvCommissioningStageName = typeof HV_COMMISSIONING_STAGE_ORDER[number]
+
+export type AnyStage = StageName | CivilsStageName | ElectricalStageName | HvCommissioningStageName
 
 // ── Shared types ───────────────────────────────────────────────────────────
 
@@ -203,6 +215,59 @@ export const ELECTRICAL_DEFAULT_CHECKLISTS: Record<ElectricalStageName, string[]
   ],
 }
 
+// ── HV Commissioning checklists ───────────────────────────────────────────
+
+export const HV_COMMISSIONING_DEFAULT_CHECKLISTS: Record<HvCommissioningStageName, string[]> = {
+  'Pre-energisation checks': [
+    'Contract / personal services agreement signed and in place',
+    'Client site rules and working rules received and accepted',
+    'Switching programme received, reviewed and accepted',
+    'Risk assessment prepared and approved',
+    'Permit to Work procedures agreed with client Authorised Person',
+    'All personnel competency verification complete',
+    'Site survey and cable records received and reviewed',
+    'All test equipment calibrated and calibration certificates current',
+  ],
+  'Cable testing': [
+    'Cable route confirmed and isolated from service',
+    'Insulation resistance (IR) tests complete on all phases',
+    'High voltage pressure test complete and witnessed',
+    'Cable sheath integrity test complete',
+    'Test results recorded and signed off by SAP',
+    'Cable test report issued to client',
+  ],
+  'Switching': [
+    'Switching programme confirmed with client AP',
+    'All Permits to Work issued and confirmed active',
+    'HV switching operations carried out per programme',
+    'Switching schedule updated after each operation',
+    'All switching operations recorded and countersigned',
+  ],
+  'Energisation': [
+    'Pre-energisation checklist completed and signed by SAP',
+    'DNO / network operator consent obtained',
+    'Initial energisation carried out and witnessed',
+    'Post-energisation checks complete (voltage, phase rotation, protection)',
+    'Energisation recorded in switching schedule',
+  ],
+  'Sign-off': [
+    'All Permits to Work closed and returned to client AP',
+    'Switching schedule archived and countersigned by both parties',
+    'All test certificates and SAT documentation filed',
+    'Contract final account agreed with client',
+    'Compliance records and personnel authorisation letters filed',
+    'Post-job debriefing complete',
+  ],
+}
+
+export const HV_COMMISSIONING_STAGE_COLOURS: Record<HvCommissioningStageName, string> = {
+  'Pre-energisation checks': '#6366f1',
+  'Cable testing':           '#0ea5e9',
+  'Switching':               '#f59e0b',
+  'Energisation':            '#ef4444',
+  'Sign-off':                '#16a34a',
+}
+
 // ── Colour maps ────────────────────────────────────────────────────────────
 
 export const STAGE_COLOURS: Record<StageName, string> = {
@@ -228,16 +293,39 @@ export const ELECTRICAL_STAGE_COLOURS: Record<ElectricalStageName, string> = {
   'Complete':    '#16a34a',
 }
 
-export function getStageColour(stage: string, industry = 'bess'): string {
-  if (industry === 'electrical') return ELECTRICAL_STAGE_COLOURS[stage as ElectricalStageName] ?? '#4b5563'
+export function getStageColour(stage: string, industry = 'bess', template?: string): string {
+  if (template === 'hv_commissioning') return HV_COMMISSIONING_STAGE_COLOURS[stage as HvCommissioningStageName] ?? '#4b5563'
+  if (template === 'electrical') return ELECTRICAL_STAGE_COLOURS[stage as ElectricalStageName] ?? '#4b5563'
+  if (industry === 'electrical') return HV_COMMISSIONING_STAGE_COLOURS[stage as HvCommissioningStageName] ?? '#4b5563'
   if (industry === 'civils') return CIVILS_STAGE_COLOURS[stage as CivilsStageName] ?? '#4b5563'
   return STAGE_COLOURS[stage as StageName] ?? '#4b5563'
 }
 
 // ── Factory functions ──────────────────────────────────────────────────────
 
-export function makeDefaultStages(projectId: string, industry = 'bess'): Omit<ProjectStage, 'id' | 'created_at' | 'updated_at'>[] {
-  if (industry === 'electrical') {
+export function makeDefaultStages(projectId: string, industry = 'bess', template?: string): Omit<ProjectStage, 'id' | 'created_at' | 'updated_at'>[] {
+  if (template === 'hv_commissioning' || (industry === 'electrical' && !template)) {
+    return HV_COMMISSIONING_STAGE_ORDER.map(stage => ({
+      project_id: projectId,
+      stage,
+      status: 'Not Started' as StageStatus,
+      checklist: HV_COMMISSIONING_DEFAULT_CHECKLISTS[stage].map((label, i) => ({
+        id: `${stage.replace(/\s+/g, '_').toLowerCase()}_${i}`,
+        label,
+        checked: false,
+        checked_by: null,
+        checked_by_name: null,
+        checked_at: null,
+      })),
+      signed_off_by: null,
+      signed_off_at: null,
+      sign_off_notes: null,
+      started_at: null,
+      completed_at: null,
+    }))
+  }
+
+  if (template === 'electrical') {
     return ELECTRICAL_STAGE_ORDER.map(stage => ({
       project_id: projectId,
       stage,
@@ -258,7 +346,7 @@ export function makeDefaultStages(projectId: string, industry = 'bess'): Omit<Pr
     }))
   }
 
-  if (industry === 'civils') {
+  if (template === 'civils' || (industry === 'civils' && !template)) {
     return CIVILS_STAGE_ORDER.map(stage => ({
       project_id: projectId,
       stage,
@@ -299,8 +387,10 @@ export function makeDefaultStages(projectId: string, industry = 'bess'): Omit<Pr
   }))
 }
 
-export function getStageOrder(industry = 'bess'): readonly string[] {
-  if (industry === 'electrical') return ELECTRICAL_STAGE_ORDER
+export function getStageOrder(industry = 'bess', template?: string): readonly string[] {
+  if (template === 'hv_commissioning') return HV_COMMISSIONING_STAGE_ORDER
+  if (template === 'electrical') return ELECTRICAL_STAGE_ORDER
+  if (industry === 'electrical') return HV_COMMISSIONING_STAGE_ORDER
   if (industry === 'civils') return CIVILS_STAGE_ORDER
   return STAGE_ORDER
 }
