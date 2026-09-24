@@ -347,11 +347,11 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await admin.from('profiles').select('full_name, company_id').eq('id', user.id).maybeSingle()
   const userName = (profile as any)?.full_name ?? user.email ?? 'Unknown'
-  const companyId: string | null = (profile as any)?.company_id ?? null
 
-  const { data: company } = companyId
-    ? await admin.from('companies').select('industry, slug').eq('id', companyId).single()
-    : await admin.from('companies').select('industry, slug').eq('slug', req.headers.get('x-company-slug') ?? 'braco').single()
+  // Subdomain slug is authoritative (matches getCompanyContext.ts behaviour)
+  const slug = req.headers.get('x-company-slug') ?? 'braco'
+  const { data: company } = await admin.from('companies').select('id, industry, slug').eq('slug', slug).single()
+  const companyId: string | null = (company as any)?.id ?? (profile as any)?.company_id ?? null
   const industry = (company as any)?.industry ?? 'bess'
 
   // Agentic tool-use loop
