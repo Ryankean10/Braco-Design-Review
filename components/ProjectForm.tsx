@@ -14,7 +14,6 @@ const BESS_STAGES: Stage[] = [
 type TemplateOption = { key: string; label: string }
 const TEMPLATES_BY_INDUSTRY: Record<string, TemplateOption[]> = {
   electrical: [
-    { key: 'electrical',      label: 'HV 3-stage (Preparation → Active → Complete)' },
     { key: 'hv_commissioning', label: 'HV Commissioning 5-stage (Pre-energisation → Sign-off)' },
   ],
   civils: [
