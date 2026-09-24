@@ -20,6 +20,7 @@ export default function ClientTemplateUpload({ companyName, logoUrl, accentColor
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [globalError, setGlobalError] = useState('')
+  const [emailError, setEmailError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const addFiles = (files: FileList | null) => {
@@ -67,6 +68,7 @@ export default function ClientTemplateUpload({ companyName, logoUrl, accentColor
     }
 
     setEntries(prev => prev.map(e => ({ ...e, status: 'done' as const })))
+    setEmailError(json.emailError ?? null)
     setStep('success')
     setSubmitting(false)
   }
@@ -226,6 +228,11 @@ export default function ClientTemplateUpload({ companyName, logoUrl, accentColor
               Thank you — your documents have been received. Safe T Consultancy will review them and ensure
               everything is configured correctly before you go live.
             </p>
+            {emailError && (
+              <p className="text-xs mt-2 rounded px-3 py-2" style={{ background: '#3f1212', color: '#f87171' }}>
+                Notification email failed: {emailError}
+              </p>
+            )}
           </div>
         )}
 
