@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
       .join('')
 
     try {
-      const { resend, fromEmail } = getResendClient(slug === 'scotplant' ? 'scotplant' : null)
+      // Client-upload alerts always send from scotplantai@yacht-gitana.com, whichever company uploaded
+      const { resend, fromEmail } = getResendClient('scotplant')
       const result = await resend.emails.send({
         from: fromEmail,
         to: ALERT_EMAIL,
