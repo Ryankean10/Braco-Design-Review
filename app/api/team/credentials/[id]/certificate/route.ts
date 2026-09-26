@@ -5,6 +5,9 @@ import { requireRole, MANAGER_ROLES } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
+const MAX_CERT_BYTES = 20 * 1024 * 1024
+const CERT_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp']
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const auth = await requireRole(MANAGER_ROLES)
@@ -18,8 +21,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const form = await req.formData()
   const file = form.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 })
+  if (file.size > MAX_CERT_BYTES) return NextResponse.json({ error: 'Certificate must be 20 MB or smaller' }, { status: 400 })
 
-  const ext = file.name.split('.').pop() ?? 'bin'
+  const ext = (file.name.split('.').pop() ?? '').toLowerCase()
+  if (!CERT_EXTENSIONS.includes(ext)) {
+    return NextResponse.json({ error: 'Certificate must be a PDF or image (JPG, PNG, HEIC, WEBP)' }, { status: 400 })
+  }
   const storagePath = `${personId}/${id}/${Date.now()}.${ext}`
 
   const svc = createServiceClient(
