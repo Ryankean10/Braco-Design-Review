@@ -31,6 +31,7 @@ export default async function ReferenceLibraryPage() {
       companyId={effectiveCompanyId}
       isAdmin={isAdmin}
       isSuperAdmin={isSuperAdmin}
+      canManageTemplates={isAdmin || role === 'project_manager'}
     />
   )
 }

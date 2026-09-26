@@ -31,6 +31,7 @@ interface Props {
   companyId: string | null
   isAdmin: boolean
   isSuperAdmin: boolean
+  canManageTemplates: boolean
 }
 
 const severityColour: Record<string, string> = {
@@ -257,7 +258,7 @@ function OpRuleRow({ rule }: { rule: OperatorRule }) {
   )
 }
 
-export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, templates, companyId, isAdmin, isSuperAdmin }: Props) {
+export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, templates, companyId, isAdmin, isSuperAdmin, canManageTemplates }: Props) {
   const [tab, setTab] = useState<Tab>('standards')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -287,7 +288,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
     { id: 'hs', label: 'H&S References', icon: <AlertTriangle size={14} />, count: hsRefs.length },
     { id: 'lessons', label: 'Lessons Learned', icon: <Shield size={14} />, count: lessons.length },
     { id: 'operators', label: 'Operator / DNO Rules', icon: <Zap size={14} />, count: opRules.length },
-    { id: 'templates', label: 'Templates', icon: <FileText size={14} />, count: templates.length },
+    { id: 'templates', label: 'Templates', icon: <FileText size={14} />, count: templates.filter(t => !t.archived_at).length },
   ]
 
   const standardCategories = Array.from(new Set(standards.map(s => s.category))).sort()
@@ -370,7 +371,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
             : filteredOps.map(r => <OpRuleRow key={r.id} rule={r} />)
         )}
         {tab === 'templates' && (
-          <TemplatesLibrary initial={templates} companyId={companyId} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} />
+          <TemplatesLibrary initial={templates} companyId={companyId} canManage={canManageTemplates} canDelete={isAdmin} isSuperAdmin={isSuperAdmin} />
         )}
       </div>
     </div>

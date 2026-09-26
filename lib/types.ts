@@ -228,6 +228,23 @@ export interface ReferenceTemplate {
   created_by: string | null
   created_at: string
   updated_at: string
+  archived_at: string | null
+  archived_by: string | null
+  revision_notes: string | null
+  updated_by: string | null
+}
+
+export interface ReferenceTemplateRevision {
+  id: string
+  template_id: string
+  version: string | null
+  file_name: string
+  file_size: number | null
+  storage_path: string
+  revision_notes: string | null
+  uploaded_by: string | null
+  uploaded_at: string
+  superseded_at: string
 }
 
 export interface OperatorRule {
