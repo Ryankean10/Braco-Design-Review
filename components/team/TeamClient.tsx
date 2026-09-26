@@ -13,6 +13,8 @@ import {
   AlertTriangle, ExternalLink,
 } from 'lucide-react'
 
+const CERT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp'
+
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Person {
   id: string; name: string; role: string | null; discipline: string | null
@@ -501,6 +503,9 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
   const [uploadingCertFor, setUploadingCertFor] = useState<string | null>(null)
   const certFileRef = useRef<HTMLInputElement | null>(null)
   const [certCredId, setCertCredId] = useState<string | null>(null)
+  const [certError, setCertError] = useState<{ credId: string; msg: string } | null>(null)
+  const [pendingCertFile, setPendingCertFile] = useState<File | null>(null)
+  const formCertRef = useRef<HTMLInputElement | null>(null)
 
   async function loadCredentials() {
     if (credsLoaded) return
@@ -596,7 +601,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
 
   function resetCredForm() {
     setCredForm({ credential_type: 'certification', name: '', issuer: '', reference: '', issue_date: '', expiry_date: '', notes: '', category: '', voltage_kv: '' })
-    setCredError(''); setAddingCred(false); setEditingCred(null)
+    setCredError(''); setAddingCred(false); setEditingCred(null); setPendingCertFile(null)
   }
 
   async function saveCred() {
@@ -609,6 +614,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
       const data = await res.json()
       if (!res.ok) { setCredError(data.error); setSavingCred(false); return }
       setCredentials(prev => prev.map(c => c.id === data.id ? data : c))
+      if (pendingCertFile) await uploadCert(pendingCertFile, data.id)
     } else {
       const res = await fetch(`/api/team/people/${person.id}/credentials`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credForm),
@@ -616,6 +622,7 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
       const data = await res.json()
       if (!res.ok) { setCredError(data.error); setSavingCred(false); return }
       setCredentials(prev => [...prev, data])
+      if (pendingCertFile) await uploadCert(pendingCertFile, data.id)
     }
     setSavingCred(false); resetCredForm()
   }
@@ -627,14 +634,34 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
 
   async function uploadCert(file: File, credId: string) {
     setUploadingCertFor(credId)
+    setCertError(null)
     const form = new FormData(); form.set('file', file)
-    const res = await fetch(`/api/team/credentials/${credId}/certificate`, { method: 'POST', body: form })
-    const data = await res.json()
-    if (res.ok) {
-      setCredentials(prev => prev.map(c => c.id === credId
-        ? { ...c, certificates: [...c.certificates, data] } : c))
+    try {
+      const res = await fetch(`/api/team/credentials/${credId}/certificate`, { method: 'POST', body: form })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setCredentials(prev => prev.map(c => c.id === credId
+          ? { ...c, certificates: [...(c.certificates ?? []), data] } : c))
+      } else {
+        setCertError({ credId, msg: data.error ?? 'Certificate upload failed' })
+      }
+    } catch {
+      setCertError({ credId, msg: 'Certificate upload failed — check your connection' })
     }
     setUploadingCertFor(null)
+  }
+
+  async function deleteCert(credId: string, certId: string, fileName: string) {
+    if (!confirm(`Remove certificate "${fileName}"?`)) return
+    setCertError(null)
+    const res = await fetch(`/api/team/credentials/${credId}/certificate/${certId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setCertError({ credId, msg: data.error ?? 'Could not remove certificate' })
+      return
+    }
+    setCredentials(prev => prev.map(c => c.id === credId
+      ? { ...c, certificates: c.certificates.filter(x => x.id !== certId) } : c))
   }
 
   async function openCert(credId: string, storagePath: string) {
@@ -955,6 +982,31 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                     </div>
                   </div>
 
+                  {/* Certificate file */}
+                  <div>
+                    <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
+                      {editingCred ? 'Add certificate (PDF or image)' : 'Certificate (PDF or image)'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => formCertRef.current?.click()}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border hover:opacity-80"
+                        style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                        <Upload size={11} /> {pendingCertFile ? 'Change file' : 'Choose file'}
+                      </button>
+                      {pendingCertFile && (
+                        <span className="flex items-center gap-1 text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+                          <FileText size={11} /> {pendingCertFile.name}
+                          <button type="button" onClick={() => setPendingCertFile(null)} style={{ color: 'var(--text-muted)' }}><X size={11} /></button>
+                        </span>
+                      )}
+                    </div>
+                    <input ref={formCertRef} type="file" accept={CERT_ACCEPT} className="hidden"
+                      onChange={e => {
+                        setPendingCertFile(e.target.files?.[0] ?? null)
+                        if (formCertRef.current) formCertRef.current.value = ''
+                      }} />
+                  </div>
+
                   {credError && <p className="text-xs" style={{ color: 'var(--critical)' }}>{credError}</p>}
                   <div className="flex gap-2">
                     <button onClick={saveCred} disabled={savingCred}
@@ -1023,7 +1075,18 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                       </div>
                       {canEdit && (
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => { setEditingCred(c); setAddingCred(false); setCredForm({ credential_type: c.credential_type, name: c.name, issuer: c.issuer??'', reference: c.reference??'', issue_date: c.issue_date??'', expiry_date: c.expiry_date??'', notes: c.notes??'', category: c.category??'', voltage_kv: c.voltage_kv??'' }) }}
+                          <button
+                            onClick={() => { setCertCredId(c.id); certFileRef.current?.click() }}
+                            disabled={uploadingCertFor === c.id}
+                            title="Upload certificate"
+                            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border hover:opacity-80 disabled:opacity-50"
+                            style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
+                            {uploadingCertFor === c.id
+                              ? <Loader2 size={10} className="animate-spin" />
+                              : <Upload size={10} />}
+                            {uploadingCertFor === c.id ? 'Uploading…' : 'Upload certificate'}
+                          </button>
+                          <button onClick={() => { setPendingCertFile(null); setEditingCred(c); setAddingCred(false); setCredForm({ credential_type: c.credential_type, name: c.name, issuer: c.issuer??'', reference: c.reference??'', issue_date: c.issue_date??'', expiry_date: c.expiry_date??'', notes: c.notes??'', category: c.category??'', voltage_kv: c.voltage_kv??'' }) }}
                             className="p-1.5 rounded hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
                             <Edit2 size={12} />
                           </button>
@@ -1036,33 +1099,37 @@ function PersonProfileModal({ person, appointments, canEdit, onClose, onEditAppt
                     </div>
 
                     {/* Certificates */}
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {c.certificates.map(cert => (
-                        <button key={cert.id} onClick={() => openCert(c.id, cert.storage_path)}
-                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border hover:opacity-80"
-                          style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>
-                          <FileText size={10} /> {cert.file_name} <ExternalLink size={9} />
-                        </button>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {(c.certificates ?? []).length === 0 ? (
+                        <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded"
+                          style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>
+                          <AlertTriangle size={10} /> No certificate on file
+                        </span>
+                      ) : c.certificates.map(cert => (
+                        <span key={cert.id} className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border"
+                          style={{ borderColor: 'var(--border)' }}>
+                          <button onClick={() => openCert(c.id, cert.storage_path)} title="View certificate"
+                            className="flex items-center gap-1 hover:opacity-80" style={{ color: 'var(--accent)' }}>
+                            <FileText size={10} /> {cert.file_name} <ExternalLink size={9} />
+                          </button>
+                          {canEdit && (
+                            <button onClick={() => deleteCert(c.id, cert.id, cert.file_name)} title="Remove certificate"
+                              className="ml-1 hover:opacity-80" style={{ color: 'var(--text-muted)' }}>
+                              <X size={10} />
+                            </button>
+                          )}
+                        </span>
                       ))}
-                      {canEdit && (
-                        <button
-                          onClick={() => { setCertCredId(c.id); certFileRef.current?.click() }}
-                          disabled={uploadingCertFor === c.id}
-                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border hover:opacity-80 disabled:opacity-50"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                          {uploadingCertFor === c.id
-                            ? <Loader2 size={10} className="animate-spin" />
-                            : <Upload size={10} />}
-                          Upload cert
-                        </button>
-                      )}
                     </div>
+                    {certError?.credId === c.id && (
+                      <p className="text-[10px]" style={{ color: 'var(--critical)' }}>{certError.msg}</p>
+                    )}
                   </div>
                 )
               })}
 
               {/* Hidden file input for certificate upload */}
-              <input ref={certFileRef} type="file" accept="*/*" className="hidden"
+              <input ref={certFileRef} type="file" accept={CERT_ACCEPT} className="hidden"
                 onChange={e => {
                   const f = e.target.files?.[0]
                   if (f && certCredId) uploadCert(f, certCredId)
