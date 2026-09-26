@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { BookOpen, Shield, AlertTriangle, Zap, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
-import type { Standard, HsReference, LessonLearned, OperatorRule } from '@/lib/types'
+import { BookOpen, Shield, AlertTriangle, Zap, ChevronDown, ChevronRight, ExternalLink, FileText } from 'lucide-react'
+import type { Standard, HsReference, LessonLearned, OperatorRule, ReferenceTemplate } from '@/lib/types'
 import LessonsLearnedTable from '@/components/LessonsLearned'
 import StandardDocUpload from '@/components/StandardDocUpload'
+import TemplatesLibrary from '@/components/TemplatesLibrary'
 
-type Tab = 'standards' | 'hs' | 'lessons' | 'operators'
+type Tab = 'standards' | 'hs' | 'lessons' | 'operators' | 'templates'
 
 interface StandardWithClauses extends Standard {
   standard_clauses: Array<{
@@ -26,7 +27,11 @@ interface Props {
   hsRefs: HsReference[]
   lessons: LessonLearned[]
   opRules: OperatorRule[]
+  templates: ReferenceTemplate[]
+  companyId: string | null
   isAdmin: boolean
+  isSuperAdmin: boolean
+  canManageTemplates: boolean
 }
 
 const severityColour: Record<string, string> = {
@@ -253,7 +258,7 @@ function OpRuleRow({ rule }: { rule: OperatorRule }) {
   )
 }
 
-export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, isAdmin }: Props) {
+export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, templates, companyId, isAdmin, isSuperAdmin, canManageTemplates }: Props) {
   const [tab, setTab] = useState<Tab>('standards')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -283,6 +288,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
     { id: 'hs', label: 'H&S References', icon: <AlertTriangle size={14} />, count: hsRefs.length },
     { id: 'lessons', label: 'Lessons Learned', icon: <Shield size={14} />, count: lessons.length },
     { id: 'operators', label: 'Operator / DNO Rules', icon: <Zap size={14} />, count: opRules.length },
+    { id: 'templates', label: 'Templates', icon: <FileText size={14} />, count: templates.filter(t => !t.archived_at).length },
   ]
 
   const standardCategories = Array.from(new Set(standards.map(s => s.category))).sort()
@@ -293,7 +299,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
       <div>
         <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Reference Library</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          Standards, H&S duties, lessons learned and DNO rules that drive the AI review engine
+          Standards, H&S duties, lessons learned, DNO rules and document templates
         </p>
       </div>
 
@@ -320,7 +326,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
       </div>
 
       {/* Search + filter */}
-      <div className="flex gap-3">
+      {tab !== 'templates' && <div className="flex gap-3">
         <input
           type="text"
           placeholder="Search…"
@@ -342,7 +348,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
             ))}
           </select>
         )}
-      </div>
+      </div>}
 
       {/* Content */}
       <div className="space-y-2">
@@ -363,6 +369,9 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
           filteredOps.length === 0
             ? <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No operator rules found</p>
             : filteredOps.map(r => <OpRuleRow key={r.id} rule={r} />)
+        )}
+        {tab === 'templates' && (
+          <TemplatesLibrary initial={templates} companyId={companyId} canManage={canManageTemplates} canDelete={isAdmin} isSuperAdmin={isSuperAdmin} />
         )}
       </div>
     </div>
