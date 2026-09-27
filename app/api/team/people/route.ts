@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { resolveActiveCompanyId } from '@/lib/activeCompany'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   const { data: person, error } = await admin
     .from('people')
-    .insert({ ...payload, company_id: profile?.company_id })
+    .insert({ ...payload, company_id: await resolveActiveCompanyId(admin, profile?.role, profile?.company_id) })
     .select()
     .single()
 

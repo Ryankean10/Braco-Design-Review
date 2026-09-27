@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { resolveActiveCompanyId } from '@/lib/activeCompany'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, ChevronRight, CheckCircle2, Clock } from 'lucide-react'
@@ -10,7 +11,7 @@ export default async function PlanningPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   const role = profile?.role ?? 'engineer'
-  const companyId: string = (profile as any)?.company_id ?? ''
+  const companyId: string = (await resolveActiveCompanyId(supabase, role, (profile as any)?.company_id)) ?? ''
   if (!['superadmin', 'admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
 
   let projectsQuery = supabase

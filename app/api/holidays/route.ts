@@ -8,10 +8,12 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
   const { personId, startDate, endDate, daysTaken, description } = await req.json()
+  // Holiday belongs to the person's company, not the booker's profile company
+  const { data: owner } = await supabase.from('people').select('company_id').eq('id', personId).single()
 
   const { data: booking, error } = await supabase.from('holiday_bookings').insert({
     person_id: personId,
-    company_id: (profile as any)?.company_id,
+    company_id: (owner as any)?.company_id ?? (profile as any)?.company_id,
     start_date: startDate,
     end_date: endDate,
     days_taken: daysTaken,

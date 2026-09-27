@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
+import { resolveActiveCompanyId } from '@/lib/activeCompany'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -14,13 +15,14 @@ export async function GET(req: NextRequest) {
   const weekEndStr = weekEnd.toISOString().slice(0, 10)
 
   const admin = createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
-  const { data: profile } = await admin.from('profiles').select('company_id').eq('id', user.id).single()
+  const { data: profile } = await admin.from('profiles').select('role, company_id').eq('id', user.id).single()
+  const companyId = await resolveActiveCompanyId(admin, profile?.role, profile?.company_id)
 
   const [{ data: timesheets }, { data: holBookings }] = await Promise.all([
     admin
       .from('weekly_timesheets')
       .select('*, people(name, role, standard_rate, ot_rate_1, ot_rate_2), timesheet_days(*)')
-      .eq('company_id', profile?.company_id)
+      .eq('company_id', companyId)
       .eq('week_starting', week)
       .eq('status', 'Approved')
       .order('created_at'),
