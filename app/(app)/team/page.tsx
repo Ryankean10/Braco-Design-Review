@@ -1,12 +1,17 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import TeamClient from '@/components/team/TeamClient'
 import { resolveActiveCompanyId } from '@/lib/activeCompany'
 
+// Platforms that don't use personnel types (disciplines) or groups
+const HIDE_TYPES_AND_GROUPS = ['boreaspower']
+
 export default async function TeamPage() {
+  const slug = (await headers()).get('x-company-slug') ?? 'braco'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -56,6 +61,7 @@ export default async function TeamPage() {
         currentUserId={user.id}
         canEdit={['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)}
         userRole={role}
+        showTypesAndGroups={!HIDE_TYPES_AND_GROUPS.includes(slug)}
       />
     </Suspense>
   )
