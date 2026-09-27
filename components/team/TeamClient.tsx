@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import TimesheetTab from '@/components/team/TimesheetTab'
@@ -47,6 +47,7 @@ interface Props {
   projects: JobRef[]; sites: JobRef[]
   enquiries?: any[]
   currentUserId: string; canEdit: boolean; userRole: string
+  showTypesAndGroups?: boolean
 }
 
 const DISCIPLINES = ['Plant Operator', 'HGV Driver', 'Fitter / Mechanic', 'Supervisor', 'Management', 'Admin', 'HSEQ']
@@ -60,7 +61,12 @@ const DISC_COLOR: Record<string, { bg: string; text: string }> = {
   HSEQ:               { bg: 'rgba(248,113,113,0.12)', text: '#f87171' },
 }
 
+// Personnel types (disciplines) and groups are hidden on platforms that don't use them
+const PersonnelTaxonomyContext = createContext(true)
+
 function DisciplineBadge({ d }: { d: string | null }) {
+  const showTypes = useContext(PersonnelTaxonomyContext)
+  if (!showTypes) return null
   const s = DISC_COLOR[d ?? ''] ?? { bg: 'rgba(148,163,184,0.12)', text: '#94a3b8' }
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
@@ -129,6 +135,7 @@ function GroupSection({ title, count, appointed, children }: {
 function PersonModal({ person, onClose, onSaved }: {
   person?: Person; onClose: () => void; onSaved: (p: Person) => void
 }) {
+  const showTypesAndGroups = useContext(PersonnelTaxonomyContext)
   const supabase = createClient()
   const [form, setForm] = useState({
     name: person?.name ?? '', role: person?.role ?? '', discipline: person?.discipline ?? '',
@@ -215,6 +222,7 @@ function PersonModal({ person, onClose, onSaved }: {
               </div>
             ))}
 
+            {showTypesAndGroups && <>
             <div className="col-span-2">
               <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Discipline</label>
               <div className="flex flex-wrap gap-2">
@@ -244,6 +252,7 @@ function PersonModal({ person, onClose, onSaved }: {
                 ))}
               </div>
             </div>
+            </>}
 
             <div className="col-span-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Notes</label>
@@ -1514,7 +1523,7 @@ function EditAppointmentModal({ appt, onClose, onSaved }: {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function TeamClient({ people: init, appointments: initAppts, projects, sites, enquiries: _enquiries, currentUserId, canEdit, userRole }: Props) {
+export default function TeamClient({ people: init, appointments: initAppts, projects, sites, enquiries: _enquiries, currentUserId, canEdit, userRole, showTypesAndGroups = true }: Props) {
   const supabase = createClient()
   const searchParams = useSearchParams()
   const [tab, setTab] = useState<'library' | 'teams' | 'timesheets' | 'holidays' | 'inbox'>('library')
@@ -1574,6 +1583,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
   }
 
   return (
+    <PersonnelTaxonomyContext.Provider value={showTypesAndGroups}>
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1633,7 +1643,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                 style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
             </div>
-            <div className="flex gap-1.5 flex-wrap">
+            {showTypesAndGroups && <div className="flex gap-1.5 flex-wrap">
               <button onClick={() => setDiscFilter('')}
                 className="px-2.5 py-1.5 rounded-lg text-xs border transition-colors"
                 style={{
@@ -1654,7 +1664,7 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
                     }}>{d}</button>
                 )
               })}
-            </div>
+            </div>}
           </div>
 
           {filtered.length === 0 && (
@@ -1677,11 +1687,15 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
           {(() => {
             // Group people: named groups first in order, then ungrouped under "Other"
             const grouped = new Map<string, Person[]>()
-            for (const g of PERSON_GROUPS) grouped.set(g, [])
-            grouped.set('Other', [])
-            for (const p of filtered) {
-              const key = p.person_group && PERSON_GROUPS.includes(p.person_group as any) ? p.person_group : 'Other'
-              grouped.get(key)!.push(p)
+            if (showTypesAndGroups) {
+              for (const g of PERSON_GROUPS) grouped.set(g, [])
+              grouped.set('Other', [])
+              for (const p of filtered) {
+                const key = p.person_group && PERSON_GROUPS.includes(p.person_group as any) ? p.person_group : 'Other'
+                grouped.get(key)!.push(p)
+              }
+            } else {
+              grouped.set('Personnel', filtered)
             }
             return Array.from(grouped.entries())
               .filter(([, members]) => members.length > 0)
@@ -1993,5 +2007,6 @@ export default function TeamClient({ people: init, appointments: initAppts, proj
         />
       )}
     </div>
+    </PersonnelTaxonomyContext.Provider>
   )
 }
