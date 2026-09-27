@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import TeamClient from '@/components/team/TeamClient'
+import { resolveActiveCompanyId } from '@/lib/activeCompany'
 
 export default async function TeamPage() {
   const supabase = await createClient()
@@ -12,7 +13,7 @@ export default async function TeamPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
-  const companyId: string = (profile as any)?.company_id ?? ''
+  const companyId: string = (await resolveActiveCompanyId(supabase, role, (profile as any)?.company_id)) ?? ''
   if (!['superadmin', 'admin', 'engineer', 'project_manager'].includes(role)) redirect('/dashboard')
 
   // Fetch projects first so we can scope sites by project IDs

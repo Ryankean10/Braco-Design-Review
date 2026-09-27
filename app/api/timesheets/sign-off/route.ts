@@ -56,8 +56,9 @@ export async function POST(req: NextRequest) {
     const { data } = await admin.from('weekly_timesheets').update(patch).eq('id', existing.id).select('*, timesheet_days(*)').single()
     timesheet = data
   } else {
+    const { data: owner } = await admin.from('people').select('company_id').eq('id', personId).single()
     const { data } = await admin.from('weekly_timesheets').insert({
-      person_id: personId, week_starting: weekStarting, company_id: profile?.company_id, ...patch,
+      person_id: personId, week_starting: weekStarting, company_id: owner?.company_id ?? profile?.company_id, ...patch,
     }).select('*, timesheet_days(*)').single()
     timesheet = data
   }

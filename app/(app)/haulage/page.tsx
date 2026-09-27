@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import HaulageClient from '@/components/haulage/HaulageClient'
+import { resolveActiveCompanyId } from '@/lib/activeCompany'
 
 export default async function HaulagePage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const { date } = await searchParams
@@ -15,7 +16,7 @@ export default async function HaulagePage({ searchParams }: { searchParams: Prom
   const { data: profile } = await admin.from('profiles').select('role, company_id').eq('id', user.id).single()
   if (!['superadmin','admin','engineer','project_manager'].includes(profile?.role ?? '')) redirect('/dashboard')
 
-  const companyId = profile?.company_id
+  const companyId = await resolveActiveCompanyId(admin, profile?.role, profile?.company_id)
   const today = date ?? new Date().toISOString().slice(0, 10)
 
   const [

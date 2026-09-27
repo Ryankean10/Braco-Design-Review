@@ -47,6 +47,13 @@ export async function POST(req: NextRequest) {
     userId = invited.user.id
   }
 
+  // Superadmins span every company: re-inviting one (e.g. the auto-appoint when a new
+  // company is created) must not move their home company or change their role.
+  const { data: existingProfile } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle()
+  if (existingProfile?.role === 'superadmin') {
+    return NextResponse.json({ ok: true, userId, unchanged: 'existing superadmin' })
+  }
+
   // Upsert profile with role, name, and company_id so the user appears in the list
   const { error: profileErr } = await admin.from('profiles').upsert({
     id: userId,

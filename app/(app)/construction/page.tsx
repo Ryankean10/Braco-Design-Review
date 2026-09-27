@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { HardHat, ArrowRight, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { resolveActiveCompanyId } from '@/lib/activeCompany'
 
 export default async function ConstructionIndexPage() {
   const supabase = await createClient()
@@ -10,7 +11,7 @@ export default async function ConstructionIndexPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single()
   const role = (profile as any)?.role ?? ''
-  const companyId: string = (profile as any)?.company_id ?? ''
+  const companyId: string = (await resolveActiveCompanyId(supabase, role, (profile as any)?.company_id)) ?? ''
   if (!['superadmin', 'admin', 'engineer', 'project_manager', 'operative'].includes(role)) redirect('/dashboard')
 
   // Get all project IDs belonging to this company (+ role-based restriction)
