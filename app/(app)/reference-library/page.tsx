@@ -15,9 +15,15 @@ export default async function ReferenceLibraryPage() {
     : templatesQuery.is('company_id', null)
 
   const [{ data: standards }, { data: hsRefs }, { data: lessons }, { data: opRules }, { data: templates }, { data: complianceDocs }] = await Promise.all([
-    supabase.from('standards').select('*, standard_clauses(*), ai_summary, ai_key_points, ai_bess_applicability, ai_analysed_at').order('category').order('ref'),
-    supabase.from('hs_references').select('*').order('category').order('ref'),
-    supabase.from('lessons_learned').select('*').order('created_at', { ascending: false }),
+    effectiveCompanyId
+      ? supabase.from('standards').select('*, standard_clauses(*), ai_summary, ai_key_points, ai_bess_applicability, ai_analysed_at').eq('company_id', effectiveCompanyId).order('category').order('ref')
+      : Promise.resolve({ data: [] }),
+    effectiveCompanyId
+      ? supabase.from('hs_references').select('*').eq('company_id', effectiveCompanyId).order('category').order('ref')
+      : Promise.resolve({ data: [] }),
+    effectiveCompanyId
+      ? supabase.from('lessons_learned').select('*').eq('company_id', effectiveCompanyId).order('created_at', { ascending: false })
+      : Promise.resolve({ data: [] }),
     supabase.from('operator_rules').select('*').order('operator').order('category'),
     templatesQuery,
     effectiveCompanyId
@@ -38,6 +44,7 @@ export default async function ReferenceLibraryPage() {
       canManageTemplates={isAdmin || role === 'project_manager'}
       complianceDocs={complianceDocs ?? []}
       canEditCompliance={canEditCompliance}
+      canEditRef={canEditCompliance}
     />
   )
 }

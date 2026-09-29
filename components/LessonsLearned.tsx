@@ -139,10 +139,10 @@ function LessonForm({
 
 interface Props {
   initial: LessonLearned[]
-  isAdmin: boolean
+  canEdit: boolean
 }
 
-export default function LessonsLearnedTable({ initial, isAdmin }: Props) {
+export default function LessonsLearnedTable({ initial, canEdit }: Props) {
   const [lessons, setLessons] = useState(initial)
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -228,7 +228,7 @@ export default function LessonsLearnedTable({ initial, isAdmin }: Props) {
           <option value="">All severities</option>
           {SEVERITIES.map(s => <option key={s}>{s}</option>)}
         </select>
-        {!adding && (
+        {canEdit && !adding && (
           <button onClick={() => setAdding(true)}
             className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium text-white"
             style={{ background: 'var(--accent)' }}>
@@ -256,7 +256,7 @@ export default function LessonsLearnedTable({ initial, isAdmin }: Props) {
               <th className="px-4 py-2.5 text-left font-medium" style={{ color: 'var(--text-muted)' }}>Title</th>
               <th className="px-4 py-2.5 text-left font-medium w-28 hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>Category</th>
               <th className="px-4 py-2.5 text-left font-medium w-28 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Source</th>
-              {isAdmin && <th className="px-4 py-2.5 w-16" />}
+              {canEdit && <th className="px-4 py-2.5 w-16" />}
             </tr>
           </thead>
           <tbody>
@@ -292,7 +292,7 @@ export default function LessonsLearnedTable({ initial, isAdmin }: Props) {
                   <td className="px-4 py-3 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>
                     {(l as any).project_ref ?? l.source ?? '—'}
                   </td>
-                  {isAdmin && (
+                  {canEdit && (
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                         <button onClick={() => setEditingId(l.id)} style={{ color: 'var(--text-muted)' }}>
@@ -307,7 +307,7 @@ export default function LessonsLearnedTable({ initial, isAdmin }: Props) {
                 </tr>
                 {expandedId === l.id && editingId !== l.id && (
                   <tr key={`${l.id}-exp`} style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border)' }}>
-                    <td colSpan={isAdmin ? 5 : 4} className="px-6 py-3">
+                    <td colSpan={canEdit ? 5 : 4} className="px-6 py-3">
                       <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{l.description}</p>
                       {l.review_lenses?.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
@@ -324,7 +324,7 @@ export default function LessonsLearnedTable({ initial, isAdmin }: Props) {
                 )}
                 {editingId === l.id && (
                   <tr key={`${l.id}-edit`} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td colSpan={isAdmin ? 5 : 4} className="px-4 py-3">
+                    <td colSpan={canEdit ? 5 : 4} className="px-4 py-3">
                       <LessonForm
                         initial={{
                           title: l.title,
