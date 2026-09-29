@@ -13,12 +13,15 @@ export default async function ReferenceLibraryPage() {
     ? templatesQuery.or(`company_id.is.null,company_id.eq.${effectiveCompanyId}`)
     : templatesQuery.is('company_id', null)
 
-  const [{ data: standards }, { data: hsRefs }, { data: lessons }, { data: opRules }, { data: templates }] = await Promise.all([
+  const [{ data: standards }, { data: hsRefs }, { data: lessons }, { data: opRules }, { data: templates }, { data: complianceDocs }] = await Promise.all([
     supabase.from('standards').select('*, standard_clauses(*), ai_summary, ai_key_points, ai_bess_applicability, ai_analysed_at').order('category').order('ref'),
     supabase.from('hs_references').select('*').order('category').order('ref'),
     supabase.from('lessons_learned').select('*').order('created_at', { ascending: false }),
     supabase.from('operator_rules').select('*').order('operator').order('category'),
     templatesQuery,
+    effectiveCompanyId
+      ? supabase.from('compliance_documents').select('*').eq('company_id', effectiveCompanyId).order('expiry_date', { ascending: true, nullsFirst: false })
+      : Promise.resolve({ data: [] }),
   ])
 
   return (
@@ -32,6 +35,7 @@ export default async function ReferenceLibraryPage() {
       isAdmin={isAdmin}
       isSuperAdmin={isSuperAdmin}
       canManageTemplates={isAdmin || role === 'project_manager'}
+      complianceDocs={complianceDocs ?? []}
     />
   )
 }

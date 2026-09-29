@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { BookOpen, Shield, AlertTriangle, Zap, ChevronDown, ChevronRight, ExternalLink, FileText } from 'lucide-react'
+import { BookOpen, Shield, AlertTriangle, Zap, FileText, FileCheck, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import type { Standard, HsReference, LessonLearned, OperatorRule, ReferenceTemplate } from '@/lib/types'
 import LessonsLearnedTable from '@/components/LessonsLearned'
 import StandardDocUpload from '@/components/StandardDocUpload'
 import TemplatesLibrary from '@/components/TemplatesLibrary'
+import ComplianceTab, { type ComplianceDocument } from '@/components/ComplianceTab'
 
-type Tab = 'standards' | 'hs' | 'lessons' | 'operators' | 'templates'
+type Tab = 'standards' | 'hs' | 'lessons' | 'operators' | 'templates' | 'compliance'
 
 interface StandardWithClauses extends Standard {
   standard_clauses: Array<{
@@ -32,6 +33,7 @@ interface Props {
   isAdmin: boolean
   isSuperAdmin: boolean
   canManageTemplates: boolean
+  complianceDocs: ComplianceDocument[]
 }
 
 const severityColour: Record<string, string> = {
@@ -258,7 +260,7 @@ function OpRuleRow({ rule }: { rule: OperatorRule }) {
   )
 }
 
-export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, templates, companyId, isAdmin, isSuperAdmin, canManageTemplates }: Props) {
+export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, templates, companyId, isAdmin, isSuperAdmin, canManageTemplates, complianceDocs }: Props) {
   const [tab, setTab] = useState<Tab>('standards')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -289,6 +291,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
     { id: 'lessons', label: 'Lessons Learned', icon: <Shield size={14} />, count: lessons.length },
     { id: 'operators', label: 'Operator / DNO Rules', icon: <Zap size={14} />, count: opRules.length },
     { id: 'templates', label: 'Templates', icon: <FileText size={14} />, count: templates.filter(t => !t.archived_at).length },
+    { id: 'compliance', label: 'Compliance', icon: <FileCheck size={14} />, count: complianceDocs.length },
   ]
 
   const standardCategories = Array.from(new Set(standards.map(s => s.category))).sort()
@@ -299,7 +302,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
       <div>
         <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Reference Library</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          Standards, H&S duties, lessons learned, DNO rules and document templates
+          Standards, H&S duties, lessons learned, DNO rules, templates and compliance documents
         </p>
       </div>
 
@@ -326,29 +329,31 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
       </div>
 
       {/* Search + filter */}
-      {tab !== 'templates' && <div className="flex gap-3">
-        <input
-          type="text"
-          placeholder="Search…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 rounded-lg px-3 py-2 text-sm outline-none"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-        />
-        {(tab === 'standards' || tab === 'operators') && (
-          <select
-            value={categoryFilter}
-            onChange={e => setCategoryFilter(e.target.value)}
-            className="rounded-lg px-3 py-2 text-sm outline-none"
+      {tab !== 'templates' && tab !== 'compliance' && (
+        <div className="flex gap-3">
+          <input
+            type="text"
+            placeholder="Search…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="flex-1 rounded-lg px-3 py-2 text-sm outline-none"
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-          >
-            <option value="">All categories</option>
-            {(tab === 'standards' ? standardCategories : opCategories).map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        )}
-      </div>}
+          />
+          {(tab === 'standards' || tab === 'operators') && (
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              className="rounded-lg px-3 py-2 text-sm outline-none"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+            >
+              <option value="">All categories</option>
+              {(tab === 'standards' ? standardCategories : opCategories).map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       {/* Content */}
       <div className="space-y-2">
@@ -372,6 +377,9 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
         )}
         {tab === 'templates' && (
           <TemplatesLibrary initial={templates} companyId={companyId} canManage={canManageTemplates} canDelete={isAdmin} isSuperAdmin={isSuperAdmin} />
+        )}
+        {tab === 'compliance' && (
+          <ComplianceTab initialDocs={complianceDocs} isAdmin={isAdmin} companyId={companyId ?? ''} />
         )}
       </div>
     </div>
