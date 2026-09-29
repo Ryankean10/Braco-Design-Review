@@ -6,6 +6,7 @@ export default async function ReferenceLibraryPage() {
   const { supabase, role, effectiveCompanyId, isSuperAdmin } = await getCompanyContext()
   if (role === 'client') redirect('/dashboard')
   const isAdmin = ['admin', 'superadmin'].includes(role)
+  const canEditCompliance = isAdmin || role === 'project_manager'
 
   // Templates: platform-wide (company_id null) plus the active company's own
   let templatesQuery = supabase.from('reference_templates').select('*').order('category').order('title')
@@ -36,6 +37,7 @@ export default async function ReferenceLibraryPage() {
       isSuperAdmin={isSuperAdmin}
       canManageTemplates={isAdmin || role === 'project_manager'}
       complianceDocs={complianceDocs ?? []}
+      canEditCompliance={canEditCompliance}
     />
   )
 }

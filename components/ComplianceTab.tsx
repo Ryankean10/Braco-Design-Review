@@ -24,7 +24,7 @@ export interface ComplianceDocument {
 
 interface Props {
   initialDocs: ComplianceDocument[]
-  isAdmin: boolean
+  canEdit: boolean
   companyId: string
 }
 
@@ -94,10 +94,10 @@ function docFromForm(f: FormState, companyId: string, userId: string): Omit<Comp
 }
 
 function ComplianceRow({
-  doc, isAdmin, onUpdate, onDelete,
+  doc, canEdit, onUpdate, onDelete,
 }: {
   doc: ComplianceDocument
-  isAdmin: boolean
+  canEdit: boolean
   onUpdate: (updated: ComplianceDocument) => void
   onDelete: (id: string) => void
 }) {
@@ -230,14 +230,14 @@ function ComplianceRow({
                 <FileText size={12} style={{ color: 'var(--accent)' }} />
                 <span className="text-xs truncate max-w-[200px]" style={{ color: 'var(--text-muted)' }}>{doc.doc_file_name}</span>
                 <button onClick={handleDownload} title="Download" style={{ color: 'var(--accent)' }}><Download size={12} /></button>
-                {isAdmin && (
+                {canEdit && (
                   <>
                     <button onClick={() => fileRef.current?.click()} title="Replace" style={{ color: 'var(--text-muted)' }}><Upload size={12} /></button>
                     <button onClick={handleRemoveDoc} title="Remove" style={{ color: 'var(--text-muted)' }}><X size={12} /></button>
                   </>
                 )}
               </>
-            ) : isAdmin ? (
+            ) : canEdit ? (
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
@@ -253,7 +253,7 @@ function ComplianceRow({
 
           {err && <p className="text-xs" style={{ color: 'var(--critical)' }}>{err}</p>}
 
-          {isAdmin && (
+          {canEdit && (
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setEditing(true)}
@@ -361,7 +361,7 @@ function ComplianceForm({ form, setForm }: { form: FormState; setForm: (f: FormS
   )
 }
 
-export default function ComplianceTab({ initialDocs, isAdmin, companyId }: Props) {
+export default function ComplianceTab({ initialDocs, canEdit, companyId }: Props) {
   const [docs, setDocs] = useState(initialDocs)
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm())
@@ -411,7 +411,7 @@ export default function ComplianceTab({ initialDocs, isAdmin, companyId }: Props
           <option value="">All categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        {isAdmin && (
+        {canEdit && (
           <button
             onClick={() => { setAdding(a => !a); setErr('') }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-white"
@@ -460,7 +460,7 @@ export default function ComplianceTab({ initialDocs, isAdmin, companyId }: Props
             <ComplianceRow
               key={doc.id}
               doc={doc}
-              isAdmin={isAdmin}
+              canEdit={canEdit}
               onUpdate={updated => setDocs(prev => prev.map(d => d.id === updated.id ? updated : d))}
               onDelete={id => setDocs(prev => prev.filter(d => d.id !== id))}
             />

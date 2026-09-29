@@ -34,6 +34,7 @@ interface Props {
   isSuperAdmin: boolean
   canManageTemplates: boolean
   complianceDocs: ComplianceDocument[]
+  canEditCompliance: boolean
 }
 
 const severityColour: Record<string, string> = {
@@ -260,7 +261,7 @@ function OpRuleRow({ rule }: { rule: OperatorRule }) {
   )
 }
 
-export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, templates, companyId, isAdmin, isSuperAdmin, canManageTemplates, complianceDocs }: Props) {
+export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opRules, templates, companyId, isAdmin, isSuperAdmin, canManageTemplates, complianceDocs, canEditCompliance }: Props) {
   const [tab, setTab] = useState<Tab>('standards')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -379,7 +380,7 @@ export default function ReferenceLibraryClient({ standards, hsRefs, lessons, opR
           <TemplatesLibrary initial={templates} companyId={companyId} canManage={canManageTemplates} canDelete={isAdmin} isSuperAdmin={isSuperAdmin} />
         )}
         {tab === 'compliance' && (
-          <ComplianceTab initialDocs={complianceDocs} isAdmin={isAdmin} companyId={companyId ?? ''} />
+          <ComplianceTab initialDocs={complianceDocs} canEdit={canEditCompliance} companyId={companyId ?? ''} />
         )}
       </div>
     </div>
