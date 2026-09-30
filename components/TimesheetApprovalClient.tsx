@@ -166,13 +166,13 @@ export default function TimesheetApprovalClient({ initialSubmissions, companyId 
               {/* Expanded day breakdown */}
               {isExpanded && activeDays.length > 0 && (
                 <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '90px 70px 70px 1fr 1fr', gap: 6, marginBottom: 6 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '90px 60px 60px 1fr 1fr', gap: 6, marginBottom: 6 }}>
                     {['Day', 'On site', 'Driving', 'Location', 'Notes'].map(h => (
                       <span key={h} style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{h}</span>
                     ))}
                   </div>
                   {activeDays.map(day => (
-                    <div key={day.date} style={{ display: 'grid', gridTemplateColumns: '90px 70px 70px 1fr 1fr', gap: 6, padding: '5px 0', borderTop: '1px solid var(--bg-elevated)' }}>
+                    <div key={day.date} style={{ display: 'grid', gridTemplateColumns: '90px 60px 60px 1fr 1fr', gap: 6, padding: '5px 0', borderTop: '1px solid var(--bg-elevated)' }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{fmtDate(day.date)}</span>
                       <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{day.hours_on_site}h</span>
                       <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{day.driving_hours > 0 ? `${day.driving_hours}h` : '—'}</span>

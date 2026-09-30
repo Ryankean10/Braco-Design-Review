@@ -519,9 +519,12 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                     const day = dayEntries[i]
                     const hrs = day.hours_regular + day.hours_ot1 + day.hours_ot2
                     return (
-                      <div key={date} className="text-center text-xs"
+                      <div key={date} className="text-center text-xs flex flex-col items-center gap-0.5"
                         style={{ color: isHol ? '#f59e0b' : hrs > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                         {isHol ? 'HOL' : (hrs || '—')}
+                        {!isHol && day.description && (
+                          <span title={day.description} className="block w-1 h-1 rounded-full" style={{ background: 'var(--accent)', flexShrink: 0 }} />
+                        )}
                       </div>
                     )
                   })}
@@ -595,13 +598,15 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                                     )}
                                   </div>
                                 ))}
-                                {isEditable && (
-                                  <input type="text" placeholder="Notes" value={day.description}
+                                {isEditable ? (
+                                  <input type="text" placeholder="Location / notes" value={day.description}
                                     onChange={e => upsertDay(person.id, date, 'description', e.target.value)}
                                     className="w-full rounded px-1 py-0.5 text-[10px] border focus:outline-none"
                                     style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                                   />
-                                )}
+                                ) : day.description ? (
+                                  <p className="text-[10px] leading-snug mt-0.5" style={{ color: 'var(--text-secondary)' }}>{day.description}</p>
+                                ) : null}
                               </>
                             )}
                           </div>
