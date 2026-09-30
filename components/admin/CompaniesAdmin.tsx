@@ -18,6 +18,7 @@ const MODULE_GROUPS: {
           { key: 'projects.documents',    label: 'Document Library' },
           { key: 'projects.assurance',    label: 'Assurance (ITP & QCS)' },
           { key: 'projects.reviews',      label: 'AI Reviews & Findings' },
+          { key: 'projects.clash',        label: 'Clash Detection' },
           { key: 'projects.procurement',  label: 'Procurement Register' },
           { key: 'projects.tests',        label: 'Test Register' },
           { key: 'projects.er',           label: "Employer's Requirements" },

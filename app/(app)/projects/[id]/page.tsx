@@ -389,7 +389,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Review and sign off AI-raised findings</p>
           </Link>
         )}
-        {pfeat('projects.reviews') && (
+        {pfeat('projects.clash') && (
           <Link href={`/projects/${id}/reviews#clash`}
             className="rounded-xl border p-5 flex flex-col gap-2 hover:opacity-80"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', minHeight: 100 }}>
