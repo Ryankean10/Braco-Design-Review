@@ -1,8 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import WorkPlannerPanel from '@/components/planning/WorkPlannerPanel'
+import { headers } from 'next/headers'
+import WorkPlannerComingSoon from '@/components/planning/WorkPlannerComingSoon'
 
 export default async function WorkPlannerPage({ params }: { params: Promise<{ id: string }> }) {
+  const slug = (await headers()).get('x-company-slug') ?? ''
+  if (slug === 'boreaspower') return <WorkPlannerComingSoon />
+
   const { id } = await params
   const supabase = await createClient()
 

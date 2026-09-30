@@ -3,8 +3,13 @@ import { resolveActiveCompanyId } from '@/lib/activeCompany'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, ChevronRight, CheckCircle2, Clock } from 'lucide-react'
+import { headers } from 'next/headers'
+import WorkPlannerComingSoon from '@/components/planning/WorkPlannerComingSoon'
 
 export default async function PlanningPage() {
+  const slug = (await headers()).get('x-company-slug') ?? ''
+  if (slug === 'boreaspower') return <WorkPlannerComingSoon />
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
