@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 
 interface Props {
   companyName: string
@@ -101,7 +100,8 @@ export default function TimesheetForm({ companyName, logoUrl, accentColor }: Pro
         {/* Header */}
         <div style={{ background: accentColor, padding: '24px 28px', display: 'flex', alignItems: 'center', gap: 14 }}>
           {logoUrl && (
-            <Image src={logoUrl} alt={companyName} width={48} height={48} style={{ borderRadius: 8, background: '#fff', padding: 4 }} />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={companyName} style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8, background: '#fff', padding: 4 }} />
           )}
           <div>
             <div style={{ color: '#fff', fontWeight: 700, fontSize: 18, lineHeight: 1.2 }}>{companyName}</div>
