@@ -56,16 +56,23 @@ export async function POST(req: NextRequest) {
 
   if (peopleList.length > 0) {
     const nameListText = peopleList.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
-    const prompt = `Match this submitted name to the list of known team members.
+    const prompt = `You are matching a submitted name to a list of known team members. People often omit middle names, use nicknames, or have slight misspellings. Be generous with matching — it is better to flag a low-confidence match for human review than to leave someone unmatched.
+
+Matching rules:
+1. First + last name match with a middle name present in the database = HIGH confidence (e.g. "Ryan Kean" matches "Ryan John Kean")
+2. All submitted name parts appear in the known name, ignoring order = HIGH/MEDIUM
+3. Minor misspelling of first or last name (1–2 character difference) = MEDIUM
+4. Nickname or shortened form of first name (e.g. "Rob" → "Robert", "Mike" → "Michael") = MEDIUM
+5. Only one name matches but it is distinctive = LOW
+6. No plausible link = UNMATCHED (use this sparingly)
 
 Submitted name: "${submitted_name.trim()}"
 
 Known team members:
 ${nameListText}
 
-Return only a JSON object:
-- "index": 1-based index of the best match, or 0 if no reasonable match
-- "confidence": "high" (exact/near-exact), "medium" (likely same person), "low" (possible), or "unmatched"`
+Return ONLY a raw JSON object (no markdown, no explanation):
+{"index": <1-based index of best match, or 0 if truly unmatched>, "confidence": "<high|medium|low|unmatched>"}`
 
     try {
       const response = await anthropic.messages.create({
