@@ -89,7 +89,9 @@ Return ONLY a raw JSON object (no markdown, no explanation):
         outputTokens: response.usage.output_tokens,
       })
 
-      const text = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+      const raw = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+      // Strip markdown code fences that some model responses include
+      const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
       const parsed = JSON.parse(text)
       const idx: number = parsed.index ?? 0
       const conf: string = parsed.confidence ?? 'unmatched'
