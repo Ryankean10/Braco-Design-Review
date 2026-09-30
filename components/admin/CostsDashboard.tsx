@@ -553,9 +553,11 @@ function HardwareTab({ hardware, setHardware, companies, bracoId }: any) {
 
 // ── Time entries ──────────────────────────────────────────────────────────────
 function TimeTab({ timeEntries, setTime, companies, bracoId }: any) {
-  const [adding, setAdding] = useState(false)
-  const [form, setForm]     = useState(() => ({ ...blankTime(), company_id: bracoId }))
-  const [saving, setSaving] = useState(false)
+  const [adding, setAdding]       = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm]           = useState(() => ({ ...blankTime(), company_id: bracoId }))
+  const [editForm, setEditForm]   = useState<(Omit<TimeEntry,'id'> & { company_id: string | null }) | null>(null)
+  const [saving, setSaving]       = useState(false)
 
   async function save() {
     setSaving(true)
@@ -563,6 +565,20 @@ function TimeTab({ timeEntries, setTime, companies, bracoId }: any) {
     const { data } = await res.json()
     if (data) { setTime((t: any) => [data, ...t]); setAdding(false); setForm({ ...blankTime(), company_id: bracoId }) }
     setSaving(false)
+  }
+
+  async function update(id: string) {
+    if (!editForm) return
+    setSaving(true)
+    const res = await fetch(`/api/admin/costs/time/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editForm) })
+    const { data } = await res.json()
+    if (data) { setTime((t: any) => t.map((x: any) => x.id === id ? data : x)); setEditingId(null); setEditForm(null) }
+    setSaving(false)
+  }
+
+  function startEdit(t: TimeEntry) {
+    setEditingId(t.id)
+    setEditForm({ company_id: t.company_id, developer: t.developer, hours: t.hours, rate_gbp: t.rate_gbp, entry_date: t.entry_date, description: t.description })
   }
 
   async function remove(id: string) {
@@ -579,6 +595,8 @@ function TimeTab({ timeEntries, setTime, companies, bracoId }: any) {
     }
     return map
   }, [timeEntries])
+
+  const inputStyle = { background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: '6px', padding: '3px 8px', fontSize: '12px' }
 
   return (
     <div className="space-y-4">
@@ -633,18 +651,58 @@ function TimeTab({ timeEntries, setTime, companies, bracoId }: any) {
           </thead>
           <tbody>
             {timeEntries.map((t: TimeEntry) => (
-              <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{t.entry_date}</td>
-                <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{companies.find((c: Company) => c.id === t.company_id)?.name ?? 'Braco'}</td>
-                <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>{t.developer}</td>
-                <td className="px-4 py-2.5 text-right" style={{ color: 'var(--text-primary)' }}>{t.hours}</td>
-                <td className="px-4 py-2.5 text-right" style={{ color: 'var(--text-muted)' }}>{GBP(t.rate_gbp)}</td>
-                <td className="px-4 py-2.5 text-right font-medium" style={{ color: 'var(--text-primary)' }}>{GBP(t.hours * t.rate_gbp)}</td>
-                <td className="px-4 py-2.5 text-xs max-w-xs truncate" style={{ color: 'var(--text-muted)' }}>{t.description ?? '—'}</td>
-                <td className="px-4 py-2.5">
-                  <button onClick={() => remove(t.id)} className="opacity-40 hover:opacity-100"><Trash2 size={13} style={{ color: 'var(--text-muted)' }} /></button>
-                </td>
-              </tr>
+              editingId === t.id && editForm ? (
+                <tr key={t.id} style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+                  <td className="px-2 py-2">
+                    <input type="date" value={editForm.entry_date} onChange={e => setEditForm(f => f ? { ...f, entry_date: e.target.value } : f)} style={{ ...inputStyle, width: 130 }} />
+                  </td>
+                  <td className="px-2 py-2">
+                    <select value={editForm.company_id ?? ''} onChange={e => setEditForm(f => f ? { ...f, company_id: e.target.value || null } : f)} style={{ ...inputStyle, width: 110 }}>
+                      {companies.map((c: Company) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-2 py-2">
+                    <select value={editForm.developer} onChange={e => setEditForm(f => f ? { ...f, developer: e.target.value } : f)} style={{ ...inputStyle, width: 90 }}>
+                      {DEVELOPERS.map(d => <option key={d}>{d}</option>)}
+                      <option value="Other">Other</option>
+                    </select>
+                  </td>
+                  <td className="px-2 py-2">
+                    <input type="number" step="0.5" value={editForm.hours} onChange={e => setEditForm(f => f ? { ...f, hours: parseFloat(e.target.value) || 0 } : f)} style={{ ...inputStyle, width: 64, textAlign: 'right' }} />
+                  </td>
+                  <td className="px-2 py-2">
+                    <input type="number" value={editForm.rate_gbp} onChange={e => setEditForm(f => f ? { ...f, rate_gbp: parseFloat(e.target.value) || 0 } : f)} style={{ ...inputStyle, width: 72, textAlign: 'right' }} />
+                  </td>
+                  <td className="px-2 py-2 text-right text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {GBP(editForm.hours * editForm.rate_gbp)}
+                  </td>
+                  <td className="px-2 py-2">
+                    <input value={editForm.description ?? ''} onChange={e => setEditForm(f => f ? { ...f, description: e.target.value || null } : f)} style={{ ...inputStyle, width: '100%' }} placeholder="Description" />
+                  </td>
+                  <td className="px-2 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => update(t.id)} disabled={saving} className="opacity-70 hover:opacity-100"><Check size={13} style={{ color: '#10b981' }} /></button>
+                      <button onClick={() => { setEditingId(null); setEditForm(null) }} className="opacity-70 hover:opacity-100"><X size={13} style={{ color: 'var(--text-muted)' }} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{t.entry_date}</td>
+                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-muted)' }}>{companies.find((c: Company) => c.id === t.company_id)?.name ?? 'Braco'}</td>
+                  <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>{t.developer}</td>
+                  <td className="px-4 py-2.5 text-right" style={{ color: 'var(--text-primary)' }}>{t.hours}</td>
+                  <td className="px-4 py-2.5 text-right" style={{ color: 'var(--text-muted)' }}>{GBP(t.rate_gbp)}</td>
+                  <td className="px-4 py-2.5 text-right font-medium" style={{ color: 'var(--text-primary)' }}>{GBP(t.hours * t.rate_gbp)}</td>
+                  <td className="px-4 py-2.5 text-xs max-w-xs truncate" style={{ color: 'var(--text-muted)' }}>{t.description ?? '—'}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => startEdit(t)} className="opacity-40 hover:opacity-100"><Edit2 size={13} style={{ color: 'var(--text-muted)' }} /></button>
+                      <button onClick={() => remove(t.id)} className="opacity-40 hover:opacity-100"><Trash2 size={13} style={{ color: 'var(--text-muted)' }} /></button>
+                    </div>
+                  </td>
+                </tr>
+              )
             ))}
             {timeEntries.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No time entries yet.</td></tr>}
           </tbody>
@@ -883,7 +941,7 @@ function StyledSelect({ value, onChange, children }: { value: string; onChange: 
         background: 'var(--bg-base)',
         color: 'var(--text-primary)',
         fontSize: '14px',
-        colorScheme: 'dark',
+        colorScheme: 'light',
       }}
     >
       {children}
