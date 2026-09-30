@@ -32,14 +32,13 @@ async function populateWeeklyTimesheet(
   }
 ) {
   // Ensure the weekly_timesheets row exists (preserve status if already created)
-  await admin.from('weekly_timesheets')
+  await (admin.from('weekly_timesheets') as any)
     .upsert(
       { person_id: submission.matched_person_id, company_id: submission.company_id, week_starting: submission.week_starting, status: 'Submitted' },
       { onConflict: 'person_id,week_starting', ignoreDuplicates: true }
     )
 
-  const { data: tsRow } = await admin
-    .from('weekly_timesheets')
+  const { data: tsRow } = await (admin.from('weekly_timesheets') as any)
     .select('id')
     .eq('person_id', submission.matched_person_id)
     .eq('week_starting', submission.week_starting)
@@ -52,8 +51,7 @@ async function populateWeeklyTimesheet(
     if (!day.hours_on_site && !day.driving_hours) continue
 
     // Fetch any existing entry so we can merge hours rather than overwrite
-    const { data: existing } = await admin
-      .from('timesheet_days')
+    const { data: existing } = await (admin.from('timesheet_days') as any)
       .select('hours_regular, description')
       .eq('timesheet_id', tsRow.id)
       .eq('work_date', day.date)
@@ -64,7 +62,7 @@ async function populateWeeklyTimesheet(
     if (day.driving_hours > 0) descParts.push(`Driving: ${day.driving_hours}h`)
     if (day.comments) descParts.push(day.comments)
 
-    await admin.from('timesheet_days')
+    await (admin.from('timesheet_days') as any)
       .upsert({
         timesheet_id: tsRow.id,
         work_date: day.date,
