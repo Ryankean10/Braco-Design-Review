@@ -29,18 +29,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const {
-    submitted_name,
-    work_date,
-    hours_on_site,
-    driving_hours,
-    working_location,
-    comments,
-  } = body
+  const { submitted_name, week_starting, days } = body
 
-  if (!submitted_name?.trim() || !working_location?.trim()) {
-    return NextResponse.json({ error: 'Name and working location are required' }, { status: 400 })
+  if (!submitted_name?.trim()) {
+    return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   }
+  if (!week_starting || !Array.isArray(days) || days.length === 0) {
+    return NextResponse.json({ error: 'Week and at least one worked day are required' }, { status: 400 })
+  }
+
+  // Compute total hours across all submitted days
+  const totalHours = days.reduce((s: number, d: any) => s + (parseFloat(d.hours_on_site) || 0), 0)
 
   // Fetch active people for this company to enable name matching
   const { data: people } = await admin
@@ -57,18 +56,16 @@ export async function POST(req: NextRequest) {
 
   if (peopleList.length > 0) {
     const nameListText = peopleList.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
-    const prompt = `You are matching a submitted name to a list of known team members.
+    const prompt = `Match this submitted name to the list of known team members.
 
 Submitted name: "${submitted_name.trim()}"
 
 Known team members:
 ${nameListText}
 
-Return a JSON object with:
+Return only a JSON object:
 - "index": 1-based index of the best match, or 0 if no reasonable match
-- "confidence": "high" (exact/near-exact match), "medium" (likely same person with abbreviation or slight variation), "low" (possible match but uncertain), or "unmatched" (no plausible match)
-
-Return only the JSON object, no other text.`
+- "confidence": "high" (exact/near-exact), "medium" (likely same person), "low" (possible), or "unmatched"`
 
     try {
       const response = await anthropic.messages.create({
@@ -77,9 +74,13 @@ Return only the JSON object, no other text.`
         messages: [{ role: 'user', content: prompt }],
       })
 
-      const inputTokens = response.usage.input_tokens
-      const outputTokens = response.usage.output_tokens
-      logApiUsage({ companyId, endpoint: 'timesheet-match', model: MODEL, inputTokens, outputTokens })
+      logApiUsage({
+        companyId,
+        endpoint: 'timesheet-match',
+        model: MODEL,
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+      })
 
       const text = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
       const parsed = JSON.parse(text)
@@ -104,11 +105,9 @@ Return only the JSON object, no other text.`
     matched_person_id: matchedPersonId,
     matched_name: matchedName,
     match_confidence: matchConfidence,
-    work_date: work_date || new Date().toISOString().split('T')[0],
-    hours_on_site: parseFloat(hours_on_site) || 0,
-    driving_hours: parseFloat(driving_hours) || 0,
-    working_location: working_location.trim(),
-    comments: comments?.trim() || null,
+    week_starting,
+    days,
+    total_hours: totalHours,
     status: 'pending',
   })
 

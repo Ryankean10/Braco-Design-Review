@@ -13,7 +13,7 @@ export default async function TimesheetsPage() {
 
   const { data: submissions } = await supabase
     .from('timesheet_submissions')
-    .select('*')
+    .select('id, submitted_name, matched_name, match_confidence, week_starting, days, total_hours, status, rejection_reason, submitted_at')
     .eq('company_id', effectiveCompanyId)
     .order('submitted_at', { ascending: false })
     .limit(200)

@@ -9,11 +9,9 @@ interface PendingSubmission {
   submitted_name: string
   matched_name: string | null
   match_confidence: 'high' | 'medium' | 'low' | 'unmatched' | null
-  work_date: string
-  hours_on_site: number
-  driving_hours: number
-  working_location: string
-  comments: string | null
+  week_starting: string
+  days: { date: string; hours_on_site: number; driving_hours: number; working_location: string; comments: string }[]
+  total_hours: number
 }
 
 interface Person {
@@ -319,7 +317,7 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
   useEffect(() => {
     supabaseForSubmissions
       .from('timesheet_submissions')
-      .select('id, submitted_name, matched_name, match_confidence, work_date, hours_on_site, driving_hours, working_location, comments')
+      .select('id, submitted_name, matched_name, match_confidence, week_starting, days, total_hours')
       .eq('status', 'pending')
       .order('submitted_at', { ascending: true })
       .then(({ data }) => setPendingSubmissions((data ?? []) as PendingSubmission[]))
@@ -335,8 +333,7 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
     if (res.ok) {
       setPendingSubmissions(prev => prev.filter(s => s.id !== sub.id))
       // If the approved submission's week is currently shown, refresh the grid
-      const submissionMonday = getMondayOf(new Date(sub.work_date + 'T12:00:00'))
-      if (localDateStr(submissionMonday) === weekKey) fetchWeek()
+      if (sub.week_starting === weekKey) fetchWeek()
     }
     setProcessingId(null)
   }
@@ -387,13 +384,11 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                       )}
                     </div>
                     <div className="text-xs mt-1 flex flex-wrap gap-2" style={{ color: 'var(--text-muted)' }}>
-                      <span>{new Date(sub.work_date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                      <span>Week of {new Date(sub.week_starting + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       <span>·</span>
-                      <span>{sub.hours_on_site}h on site</span>
-                      {sub.driving_hours > 0 && <><span>·</span><span>{sub.driving_hours}h driving</span></>}
+                      <span>{(sub.days ?? []).filter(d => d.hours_on_site > 0).length} days</span>
                       <span>·</span>
-                      <span>{sub.working_location}</span>
-                      {sub.comments && <><span>·</span><span className="italic">{sub.comments}</span></>}
+                      <span>{sub.total_hours}h total</span>
                     </div>
                   </div>
                   {rejectingId !== sub.id && (
@@ -401,7 +396,7 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
                       <button
                         disabled={!!processingId || !sub.matched_name}
                         onClick={() => approveSubmission(sub)}
-                        title={!sub.matched_name ? 'No person matched — cannot auto-populate timesheet' : ''}
+                        title={!sub.matched_name ? 'No person matched — hours will not auto-populate' : ''}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
                         style={{ background: '#22c55e' }}>
                         {processingId === sub.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
