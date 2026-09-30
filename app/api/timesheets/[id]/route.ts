@@ -23,7 +23,8 @@ async function getContext() {
 }
 
 async function populateWeeklyTimesheet(
-  admin: ReturnType<typeof createAdmin>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
   submission: {
     matched_person_id: string
     company_id: string
