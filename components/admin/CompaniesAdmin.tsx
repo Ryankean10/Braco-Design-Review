@@ -54,6 +54,7 @@ const MODULE_GROUPS: {
       { key: 'plant',      label: 'Plant' },
       { key: 'estimating', label: 'Estimating' },
       { key: 'equipment',  label: 'Equipment' },
+      { key: 'timesheets', label: 'Timesheets' },
     ],
   },
 ]

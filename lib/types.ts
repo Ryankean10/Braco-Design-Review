@@ -15,6 +15,7 @@ export type Module =
   | 'estimating'
   | 'haulage'
   | 'equipment'
+  | 'timesheets'
 
 export type PlantStatus = 'available' | 'on_hire' | 'breakdown' | 'returned' | 'sold'
 export type PlantCategory = 'excavator' | 'dumper' | 'telehandler' | 'crane' | 'roller' | 'generator' | 'lorry' | 'scaffold' | 'pump' | 'other'
