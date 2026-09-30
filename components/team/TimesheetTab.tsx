@@ -2,7 +2,19 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Download, Loader2, AlertCircle, RotateCcw, Gift } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Download, Loader2, AlertCircle, RotateCcw, Gift, Inbox } from 'lucide-react'
+
+interface PendingSubmission {
+  id: string
+  submitted_name: string
+  matched_name: string | null
+  match_confidence: 'high' | 'medium' | 'low' | 'unmatched' | null
+  work_date: string
+  hours_on_site: number
+  driving_hours: number
+  working_location: string
+  comments: string | null
+}
 
 interface Person {
   id: string; name: string; role: string | null; discipline: string | null
@@ -122,6 +134,10 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [holidayBookings, setHolidayBookings] = useState<HolidayBooking[]>([])  // full-year, for remaining calc
   const [weekHolidays, setWeekHolidays] = useState<HolidayBooking[]>([])        // this week's approved bookings
+  const [pendingSubmissions, setPendingSubmissions] = useState<PendingSubmission[]>([])
+  const [processingId, setProcessingId] = useState<string | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
 
   const dates = weekDates(monday)
   const weekKey = localDateStr(monday)
@@ -299,10 +315,136 @@ export default function TimesheetTab({ people, canSignOff, userRole }: Props) {
     setExporting(false)
   }
 
+  const supabaseForSubmissions = createClient()
+  useEffect(() => {
+    supabaseForSubmissions
+      .from('timesheet_submissions')
+      .select('id, submitted_name, matched_name, match_confidence, work_date, hours_on_site, driving_hours, working_location, comments')
+      .eq('status', 'pending')
+      .order('submitted_at', { ascending: true })
+      .then(({ data }) => setPendingSubmissions((data ?? []) as PendingSubmission[]))
+  }, [])
+
+  async function approveSubmission(sub: PendingSubmission) {
+    setProcessingId(sub.id)
+    const res = await fetch(`/api/timesheets/${sub.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'approved' }),
+    })
+    if (res.ok) {
+      setPendingSubmissions(prev => prev.filter(s => s.id !== sub.id))
+      // If the approved submission's week is currently shown, refresh the grid
+      const submissionMonday = getMondayOf(new Date(sub.work_date + 'T12:00:00'))
+      if (localDateStr(submissionMonday) === weekKey) fetchWeek()
+    }
+    setProcessingId(null)
+  }
+
+  async function rejectSubmission(id: string) {
+    setProcessingId(id)
+    const res = await fetch(`/api/timesheets/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'rejected', rejection_reason: rejectReason.trim() || null }),
+    })
+    if (res.ok) {
+      setPendingSubmissions(prev => prev.filter(s => s.id !== id))
+      setRejectingId(null)
+      setRejectReason('')
+    }
+    setProcessingId(null)
+  }
+
   const approvedCount = activePeople.filter(p => getSheet(p.id)?.status === 'Approved').length
 
   return (
     <div className="space-y-4">
+      {/* Pending public submissions */}
+      {pendingSubmissions.length > 0 && (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#f59e0b', background: 'rgba(245,158,11,0.04)' }}>
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' }}>
+            <Inbox size={14} style={{ color: '#f59e0b' }} />
+            <span className="text-sm font-semibold" style={{ color: '#92400e' }}>
+              {pendingSubmissions.length} pending timesheet submission{pendingSubmissions.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+            {pendingSubmissions.map(sub => (
+              <div key={sub.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{sub.submitted_name}</span>
+                      {sub.matched_name && (
+                        <span className="text-xs px-2 py-0.5 rounded font-medium"
+                          style={{ background: sub.match_confidence === 'high' ? '#dcfce7' : sub.match_confidence === 'medium' ? '#fef9c3' : '#fee2e2', color: sub.match_confidence === 'high' ? '#15803d' : sub.match_confidence === 'medium' ? '#854d0e' : '#b91c1c' }}>
+                          → {sub.matched_name}
+                        </span>
+                      )}
+                      {!sub.matched_name && (
+                        <span className="text-xs px-2 py-0.5 rounded font-medium" style={{ background: '#fee2e2', color: '#b91c1c' }}>Unmatched</span>
+                      )}
+                    </div>
+                    <div className="text-xs mt-1 flex flex-wrap gap-2" style={{ color: 'var(--text-muted)' }}>
+                      <span>{new Date(sub.work_date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                      <span>·</span>
+                      <span>{sub.hours_on_site}h on site</span>
+                      {sub.driving_hours > 0 && <><span>·</span><span>{sub.driving_hours}h driving</span></>}
+                      <span>·</span>
+                      <span>{sub.working_location}</span>
+                      {sub.comments && <><span>·</span><span className="italic">{sub.comments}</span></>}
+                    </div>
+                  </div>
+                  {rejectingId !== sub.id && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        disabled={!!processingId || !sub.matched_name}
+                        onClick={() => approveSubmission(sub)}
+                        title={!sub.matched_name ? 'No person matched — cannot auto-populate timesheet' : ''}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
+                        style={{ background: '#22c55e' }}>
+                        {processingId === sub.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                        Approve
+                      </button>
+                      <button
+                        disabled={!!processingId}
+                        onClick={() => { setRejectingId(sub.id); setRejectReason('') }}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
+                        style={{ background: '#ef4444' }}>
+                        <XCircle size={12} /> Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {rejectingId === sub.id && (
+                  <div className="mt-2 flex gap-2 items-center flex-wrap">
+                    <input
+                      autoFocus
+                      className="flex-1 min-w-0 text-xs px-2.5 py-1.5 rounded-lg border"
+                      style={{ borderColor: 'var(--border)', background: 'var(--bg-base)', color: 'var(--text-primary)' }}
+                      placeholder="Reason (optional)"
+                      value={rejectReason}
+                      onChange={e => setRejectReason(e.target.value)}
+                    />
+                    <button
+                      disabled={!!processingId}
+                      onClick={() => rejectSubmission(sub.id)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
+                      style={{ background: '#ef4444' }}>
+                      {processingId === sub.id ? <Loader2 size={12} className="animate-spin" /> : 'Confirm reject'}
+                    </button>
+                    <button onClick={() => { setRejectingId(null); setRejectReason('') }} className="text-xs px-2 py-1.5 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Week nav + export */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
