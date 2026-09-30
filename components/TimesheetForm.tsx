@@ -77,7 +77,11 @@ export default function TimesheetForm({ companyName, logoUrl, accentColor }: Pro
     const d = new Date(monday); d.setDate(d.getDate() + delta * 7); setMonday(d)
   }
 
-  const activeDays = weekDates.filter(date => parseFloat(getDay(date).hours_on_site) > 0)
+  // Include any day where the user has entered a value in either field (even 0)
+  const activeDays = weekDates.filter(date => {
+    const d = getDay(date)
+    return d.hours_on_site !== '' || d.driving_hours !== ''
+  })
   const totalSiteHours = activeDays.reduce((s, d) => s + (parseFloat(getDay(d).hours_on_site) || 0), 0)
   const totalDriveHours = activeDays.reduce((s, d) => s + (parseFloat(getDay(d).driving_hours) || 0), 0)
   const canSubmit = name.trim() && activeDays.length > 0
@@ -235,7 +239,7 @@ export default function TimesheetForm({ companyName, logoUrl, accentColor }: Pro
                     const d = getDay(date)
                     const siteHrs = parseFloat(d.hours_on_site) || 0
                     const driveHrs = parseFloat(d.driving_hours) || 0
-                    const hasHours = siteHrs > 0
+                    const hasHours = d.hours_on_site !== '' || d.driving_hours !== ''
                     const isWeekend = i >= 5
 
                     return (
