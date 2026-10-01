@@ -443,13 +443,24 @@ function ArchivedRow({
   )
 }
 
+function nextRef(items: EquipmentItem[], prefix: string): string {
+  const re = new RegExp(`^${prefix}-(\\d+)$`, 'i')
+  let max = 0
+  for (const item of items) {
+    const m = (item.asset_ref ?? '').match(re)
+    if (m) max = Math.max(max, parseInt(m[1], 10))
+  }
+  return `${prefix}-${String(max + 1).padStart(3, '0')}`
+}
+
 interface Props {
   initialItems: EquipmentItem[]
   companyId: string
   canEdit: boolean
+  autoRefPrefix?: string
 }
 
-export default function EquipmentClient({ initialItems, companyId, canEdit }: Props) {
+export default function EquipmentClient({ initialItems, companyId, canEdit, autoRefPrefix }: Props) {
   const supabase = createClient()
   const [items, setItems] = useState(initialItems)
   const [adding, setAdding] = useState(false)
@@ -581,7 +592,12 @@ export default function EquipmentClient({ initialItems, companyId, canEdit }: Pr
 
       {/* Add form */}
       {adding && (
-        <EquipmentForm initial={emptyForm} onSave={handleAdd} onCancel={() => setAdding(false)} saving={saving} />
+        <EquipmentForm
+          initial={autoRefPrefix ? { ...emptyForm, asset_ref: nextRef(items, autoRefPrefix) } : emptyForm}
+          onSave={handleAdd}
+          onCancel={() => setAdding(false)}
+          saving={saving}
+        />
       )}
 
       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
