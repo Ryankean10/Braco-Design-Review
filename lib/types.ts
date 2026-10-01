@@ -15,7 +15,6 @@ export type Module =
   | 'estimating'
   | 'haulage'
   | 'equipment'
-  | 'timesheets'
 
 export type PlantStatus = 'available' | 'on_hire' | 'breakdown' | 'returned' | 'sold'
 export type PlantCategory = 'excavator' | 'dumper' | 'telehandler' | 'crane' | 'roller' | 'generator' | 'lorry' | 'scaffold' | 'pump' | 'other'
@@ -40,6 +39,8 @@ export interface PlantItem {
   expected_off_hire: string | null
   actual_off_hire: string | null
   notes: string | null
+  calibration_date: string | null
+  calibration_due: string | null
   created_at: string
   updated_at: string
 }
@@ -214,39 +215,6 @@ export interface LessonLearned {
   review_lenses: string[]
   created_at: string
   updated_at: string
-}
-
-export interface ReferenceTemplate {
-  id: string
-  company_id: string | null
-  title: string
-  description: string | null
-  category: string
-  doc_ref: string | null
-  version: string | null
-  file_name: string
-  file_size: number | null
-  storage_path: string
-  created_by: string | null
-  created_at: string
-  updated_at: string
-  archived_at: string | null
-  archived_by: string | null
-  revision_notes: string | null
-  updated_by: string | null
-}
-
-export interface ReferenceTemplateRevision {
-  id: string
-  template_id: string
-  version: string | null
-  file_name: string
-  file_size: number | null
-  storage_path: string
-  revision_notes: string | null
-  uploaded_by: string | null
-  uploaded_at: string
-  superseded_at: string
 }
 
 export interface OperatorRule {

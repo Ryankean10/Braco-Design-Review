@@ -18,7 +18,6 @@ const MODULE_GROUPS: {
           { key: 'projects.documents',    label: 'Document Library' },
           { key: 'projects.assurance',    label: 'Assurance (ITP & QCS)' },
           { key: 'projects.reviews',      label: 'AI Reviews & Findings' },
-          { key: 'projects.clash',        label: 'Clash Detection' },
           { key: 'projects.procurement',  label: 'Procurement Register' },
           { key: 'projects.tests',        label: 'Test Register' },
           { key: 'projects.er',           label: "Employer's Requirements" },
@@ -52,9 +51,16 @@ const MODULE_GROUPS: {
     modules: [
       { key: 'team',       label: 'Team' },
       { key: 'plant',      label: 'Plant' },
-      { key: 'estimating', label: 'Estimating' },
       { key: 'equipment',  label: 'Equipment' },
-      { key: 'timesheets', label: 'Timesheets' },
+      { key: 'estimating', label: 'Estimating' },
+      { key: 'haulage',    label: 'Haulage' },
+    ],
+  },
+  {
+    label: 'Field & Compliance',
+    modules: [
+      { key: 'tests',             label: 'Field Capture' },
+      { key: 'reference_library', label: 'Reference Library' },
     ],
   },
 ]

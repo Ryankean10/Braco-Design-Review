@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, X, Loader2, Trash2, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Users } from 'lucide-react'
 
 interface Person {
   id: string
@@ -28,7 +28,6 @@ interface Props {
   people: Person[]
   initialAssignments: Assignment[]
   companyId: string
-  canEdit: boolean
 }
 
 const TYPES = ['Work', 'Meeting', 'Travel', 'Holiday', 'Public Holiday', 'Training', 'Personal Appointment', 'Other'] as const
@@ -62,9 +61,6 @@ function isWeekend(dateStr: string) {
   return dow >= 5
 }
 
-function fmt(dateStr: string) {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-}
 
 function monthRange(year: number, month: number) {
   const days: string[] = []
@@ -73,18 +69,12 @@ function monthRange(year: number, month: number) {
   return days
 }
 
-const DEFAULT_FORM = { type: 'Work' as ActivityType, client: '', scope: '', location: '', notes: '' }
-
-export default function PersonnelPlanner({ people, initialAssignments, companyId, canEdit }: Props) {
+export default function PersonnelPlanner({ people, initialAssignments, companyId }: Props) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [loading, setLoading] = useState(false)
-  const [panel, setPanel] = useState<{ personId: string; date: string } | null>(null)
-  const [form, setForm] = useState(DEFAULT_FORM)
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
   const dates = useMemo(() => monthRange(year, month), [year, month])
 
@@ -126,72 +116,8 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
     fetchMonth(d.getFullYear(), d.getMonth())
   }
 
-  function openCell(personId: string, date: string) {
-    if (!canEdit) return
-    const existing = aMap.get(`${personId}:${date}`)
-    setPanel({ personId, date })
-    setForm(existing
-      ? { type: existing.type as ActivityType, client: existing.client ?? '', scope: existing.scope ?? '', location: existing.location ?? '', notes: existing.notes ?? '' }
-      : DEFAULT_FORM
-    )
-  }
-
-  async function save() {
-    if (!panel) return
-    setSaving(true)
-    const person = people.find(p => p.id === panel.personId)
-    const existing = aMap.get(`${panel.personId}:${panel.date}`)
-    const payload = {
-      id: existing?.id,
-      person_id: panel.personId,
-      person_label: person?.name ?? 'Unknown',
-      date: panel.date,
-      ...form,
-    }
-    const res = await fetch('/api/planner', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (res.ok) {
-      const saved: Assignment = await res.json()
-      setAssignments(prev => {
-        const filtered = prev.filter(a => a.id !== saved.id)
-        return [...filtered, saved]
-      })
-      setPanel(null)
-    }
-    setSaving(false)
-  }
-
-  async function del() {
-    if (!panel) return
-    const existing = aMap.get(`${panel.personId}:${panel.date}`)
-    if (!existing) { setPanel(null); return }
-    setDeleting(true)
-    const res = await fetch(`/api/planner/${existing.id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setAssignments(prev => prev.filter(a => a.id !== existing.id))
-      setPanel(null)
-    }
-    setDeleting(false)
-  }
-
   const monthName = new Date(year, month, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
-  // Group dates into weeks for the header
-  const weeks: { label: string; dates: string[] }[] = []
-  let currentWeek: string[] = []
-  dates.forEach(d => {
-    currentWeek.push(d)
-    if (getDow(d) === 6 || d === dates[dates.length - 1]) {
-      const first = currentWeek[0]
-      const last = currentWeek[currentWeek.length - 1]
-      const weekNum = Math.ceil(new Date(d + 'T12:00:00').getDate() / 7)
-      weeks.push({ label: `w/c ${new Date(first + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`, dates: [...currentWeek] })
-      currentWeek = []
-    }
-  })
 
   // Summary: billable days per person (Work days this month)
   const billableSummary = useMemo(() => {
@@ -201,8 +127,6 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
     })
     return m
   }, [assignments])
-
-  const panelAssignment = panel ? aMap.get(`${panel.personId}:${panel.date}`) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -303,35 +227,27 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
                     const a = aMap.get(key)
                     const cfg = a ? TYPE_CFG[a.type as ActivityType] : null
                     const weekend = isWeekend(date)
-                    const isSelected = panel?.personId === person.id && panel?.date === date
                     const isToday = date === localDate(today.getFullYear(), today.getMonth(), today.getDate())
 
                     return (
                       <div
                         key={date}
-                        onClick={() => openCell(person.id, date)}
-                        title={a ? `${a.type}${a.client ? ` · ${a.client}` : ''}${a.location ? ` · ${a.location}` : ''}` : canEdit ? 'Click to assign' : ''}
+                        title={a ? `${a.type}${a.client ? ` · ${a.client}` : ''}${a.location ? ` · ${a.location}` : ''}` : ''}
                         style={{
                           width: 38,
                           flexShrink: 0,
                           borderRight: '1px solid var(--border)',
-                          background: isSelected
-                            ? 'rgba(var(--accent-rgb),0.15)'
-                            : cfg
-                              ? cfg.bg
-                              : weekend
-                                ? 'rgba(0,0,0,0.015)'
-                                : 'var(--bg-surface)',
-                          cursor: canEdit ? 'pointer' : 'default',
+                          background: cfg
+                            ? cfg.bg
+                            : weekend
+                              ? 'rgba(0,0,0,0.015)'
+                              : 'var(--bg-surface)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          transition: 'opacity 0.1s',
-                          outline: isToday && !isSelected ? '2px solid var(--accent)' : undefined,
+                          outline: isToday ? '2px solid var(--accent)' : undefined,
                           outlineOffset: '-2px',
                         }}
-                        onMouseEnter={e => { if (canEdit && !a) (e.currentTarget as HTMLElement).style.background = 'rgba(var(--accent-rgb),0.06)' }}
-                        onMouseLeave={e => { if (!a && !isSelected) (e.currentTarget as HTMLElement).style.background = weekend ? 'rgba(0,0,0,0.015)' : 'var(--bg-surface)' }}
                       >
                         {cfg && (
                           <span style={{ fontSize: 9, fontWeight: 800, color: cfg.color, letterSpacing: '0.02em' }}>
@@ -369,96 +285,6 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
         </div>
       )}
 
-      {/* Assignment panel */}
-      {panel && canEdit && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
-          pointerEvents: 'none',
-        }}>
-          {/* Backdrop */}
-          <div
-            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', pointerEvents: 'all' }}
-            onClick={() => setPanel(null)}
-          />
-          {/* Panel */}
-          <div style={{
-            position: 'relative', pointerEvents: 'all',
-            width: 320, background: 'var(--bg-surface)', borderTop: '1px solid var(--border)',
-            borderLeft: '1px solid var(--border)', borderTopLeftRadius: 16,
-            padding: 20, display: 'flex', flexDirection: 'column', gap: 14,
-            maxHeight: '80vh', overflowY: 'auto',
-            boxShadow: '0 -4px 24px rgba(0,0,0,0.12)',
-          }}>
-            {/* Panel header */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {people.find(p => p.id === panel.personId)?.name}
-                </p>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmt(panel.date)}</p>
-              </div>
-              <button onClick={() => setPanel(null)} style={{ padding: 4, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Activity type picker */}
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type</p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {TYPES.map(t => {
-                  const cfg = TYPE_CFG[t]
-                  const sel = form.type === t
-                  return (
-                    <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))} style={{
-                      padding: '4px 10px', borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      background: sel ? cfg.bg : 'var(--bg-elevated)',
-                      color: sel ? cfg.color : 'var(--text-secondary)',
-                      border: sel ? `1.5px solid ${cfg.border}` : '1.5px solid var(--border)',
-                    }}>
-                      {t}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Fields */}
-            {(['client', 'scope', 'location', 'notes'] as const).map(field => (
-              <div key={field}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {field.charAt(0).toUpperCase() + field.slice(1)}
-                </p>
-                <input
-                  value={form[field]}
-                  onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
-                  placeholder={field === 'client' ? 'e.g. Ventus Energy' : field === 'location' ? 'e.g. Beatrice Offshore' : ''}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
-                />
-              </div>
-            ))}
-
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
-              <button
-                onClick={save}
-                disabled={saving}
-                style={{ flex: 1, padding: '9px 0', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-                Save
-              </button>
-              {panelAssignment && (
-                <button
-                  onClick={del}
-                  disabled={deleting}
-                  style={{ padding: '9px 14px', background: 'none', color: '#ef4444', border: '1px solid #ef4444', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
