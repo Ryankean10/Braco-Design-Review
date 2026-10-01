@@ -384,17 +384,24 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
       <dialog
         ref={dialogRef}
         onClose={() => setPanel(null)}
-        style={{ border: 'none', padding: 0, background: 'transparent', overflow: 'visible', maxWidth: '90vw' }}
+        style={{
+          width: 360,
+          maxWidth: '90vw',
+          maxHeight: '85vh',
+          overflowY: 'auto',
+          border: '1px solid var(--border)',
+          borderRadius: 16,
+          padding: 20,
+          background: 'var(--bg-surface)',
+          color: 'var(--text-primary)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+        }}
       >
         {panel && canEdit && (
-          <div style={{
-            width: 360,
-            background: 'var(--bg-surface)', border: '1px solid var(--border)',
-            borderRadius: 16,
-            padding: 20, display: 'flex', flexDirection: 'column', gap: 14,
-            maxHeight: '85vh', overflowY: 'auto',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-          }}>
+          <div style={{ display: 'contents' }}>
             {/* Panel header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
               <div>
