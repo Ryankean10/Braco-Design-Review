@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getResendClient } from '@/lib/resend'
 
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-)
-
 const ALERT_EMAIL = process.env.ALERT_EMAIL ?? 'admin@safetconsultancy.co.uk'
 
 export async function POST(req: NextRequest) {
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+
   const slug = req.headers.get('x-company-slug') ?? 'unknown'
 
   const { data: company } = await admin
@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
       .join('')
 
     try {
-      // Client-upload alerts always send from scotplantai@yacht-gitana.com, whichever company uploaded
       const { resend, fromEmail } = getResendClient('scotplant')
       const result = await resend.emails.send({
         from: fromEmail,
