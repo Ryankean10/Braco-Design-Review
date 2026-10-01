@@ -56,12 +56,13 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/api/construction/inbound-email') ||
     pathname.startsWith('/api/cron/') ||
-    pathname.startsWith('/api/onboard')
+    pathname.startsWith('/api/onboard') ||
+    pathname.startsWith('/api/client-upload')
   ) {
     return supabaseResponse
   }
 
-  if (!user && pathname !== '/login' && !pathname.startsWith('/onboard')) {
+  if (!user && pathname !== '/login' && !pathname.startsWith('/onboard') && !pathname.startsWith('/client-upload')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
