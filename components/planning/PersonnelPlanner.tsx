@@ -372,26 +372,27 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
         </div>
       )}
 
-      {/* Assignment panel — portal to body so no layout CSS can trap it */}
+      {/* Assignment panel — two independently fixed elements so nothing can push the panel off-centre */}
       {mounted && panel && canEdit && createPortal(
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          zIndex: 9999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
+        <>
           {/* Backdrop */}
           <div
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', cursor: 'default' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.45)', cursor: 'default' }}
             onClick={() => setPanel(null)}
           />
-          {/* Panel */}
+          {/* Panel — centred via transform, not flex */}
           <div style={{
-            position: 'relative', zIndex: 1,
-            width: 360, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 9999,
+            width: 360,
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
             borderRadius: 16,
             padding: 20, display: 'flex', flexDirection: 'column', gap: 14,
             maxHeight: '85vh', overflowY: 'auto',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
           }}>
             {/* Panel header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
@@ -461,7 +462,7 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
               )}
             </div>
           </div>
-        </div>
+        </>
       , document.body)}
     </div>
   )
