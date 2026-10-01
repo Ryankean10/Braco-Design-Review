@@ -1,19 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --bg-base: #0f1117;
-  --bg-surface: #1a1d27;
-  --bg-elevated: #222536;
-  --border: #2d3148;
-  --text-primary: #e8eaf6;
-  --text-muted: #7b82a8;
+  --bg-base: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f1f5f9;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
   --accent: #6c72f5;
-  --accent-hover: #7c83ff;
-  --critical: #ef4444;
-  --major: #f97316;
-  --minor: #eab308;
-  --observation: #6b7280;
-  --success: #22c55e;
+  --accent-hover: #5a60e0;
+  --critical: #dc2626;
+  --major: #ea580c;
+  --minor: #ca8a04;
+  --observation: #64748b;
+  --success: #16a34a;
 
   /* Sidebar — light theme */
   --bg-sidebar: #ffffff;
@@ -32,15 +33,16 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
 }
 
-.chip-critical  { background: #3f1212; color: #f87171; border: 1px solid #7f1d1d; }
-.chip-major     { background: #3f1f0a; color: #fb923c; border: 1px solid #7c2d12; }
-.chip-minor     { background: #3f3000; color: #fbbf24; border: 1px solid #78350f; }
-.chip-obs       { background: #1f2937; color: #9ca3af; border: 1px solid #374151; }
-.chip-stage     { background: #1e2240; color: #818cf8; border: 1px solid #2d3480; font-size: 0.7rem; }
+.chip-critical  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.chip-major     { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+.chip-minor     { background: #fefce8; color: #ca8a04; border: 1px solid #fde68a; }
+.chip-obs       { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+.chip-stage     { background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-size: 0.7rem; }
 
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-base); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-track { background: var(--bg-elevated); }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ── Print styles ─────────────────────────────────────────────────────────── */
 @media print {
