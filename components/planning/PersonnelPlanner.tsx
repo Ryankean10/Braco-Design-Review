@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X, Loader2, Trash2, Users } from 'lucide-react'
 
@@ -372,23 +372,26 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
         </div>
       )}
 
-      {/* Assignment panel — mounted via portal so layout overflow/transform can't trap it */}
+      {/* Assignment panel — portal to body so no layout CSS can trap it */}
       {mounted && panel && canEdit && createPortal(
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9000, pointerEvents: 'none' }}>
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
           {/* Backdrop */}
           <div
-            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', pointerEvents: 'all' }}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', cursor: 'default' }}
             onClick={() => setPanel(null)}
           />
-          {/* Panel — centred via transform */}
+          {/* Panel */}
           <div style={{
-            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-            pointerEvents: 'all',
-            width: 340, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            position: 'relative', zIndex: 1,
+            width: 360, background: 'var(--bg-surface)', border: '1px solid var(--border)',
             borderRadius: 16,
             padding: 20, display: 'flex', flexDirection: 'column', gap: 14,
-            maxHeight: '80vh', overflowY: 'auto',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.28)',
+            maxHeight: '85vh', overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}>
             {/* Panel header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
