@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, ChevronDown,
-  Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck, Receipt, Calculator, Inbox, Wrench, FileCheck,
+  Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck, Receipt, Calculator, Inbox, Wrench, FileCheck, ClipboardCheck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, Company, Module } from '@/lib/types'
@@ -26,6 +26,7 @@ const NAV: NavItem[] = [
   { href: '/inbox',             label: 'Email Inbox',       icon: Inbox,                                 roles: ['superadmin', 'admin'] },
   { href: '/projects',          label: 'Projects',          icon: FolderOpen,     module: 'projects' },
   { href: '/construction',      label: 'Construction',      icon: HardHat,        module: 'construction', roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
+  { href: '/capture',           label: 'Field Capture',     icon: ClipboardCheck, module: 'tests',           roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
   { href: '/reference-library', label: 'Reference Library', icon: BookOpen,       module: 'reference_library' },
   { href: '/planning',          label: 'Work Planner',      icon: ClipboardList,  module: 'planning',    roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
   { href: '/team',              label: 'Team',              icon: UsersRound,     module: 'team',        roles: ['superadmin', 'admin', 'engineer', 'project_manager'] },
