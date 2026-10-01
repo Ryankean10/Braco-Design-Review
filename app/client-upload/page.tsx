@@ -2,15 +2,17 @@ import { headers } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 import ClientTemplateUpload from '@/components/ClientTemplateUpload'
 
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-)
+export const dynamic = 'force-dynamic'
 
 export default async function ClientUploadPage() {
   const headersList = await headers()
   const slug = headersList.get('x-company-slug') ?? 'braco'
+
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
 
   const { data: company } = await admin
     .from('companies')
