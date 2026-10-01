@@ -6,7 +6,7 @@ import { createClient as createAdmin } from '@supabase/supabase-js'
 import CaptureForm from '@/components/capture/CaptureForm'
 
 export default async function CapturePage() {
-  const { user, profile, effectiveCompanyId } = await getCompanyContext()
+  const { user, profile, effectiveCompanyId, slug } = await getCompanyContext()
   if (!user) redirect('/login')
 
   const admin = createAdmin(
@@ -40,7 +40,7 @@ export default async function CapturePage() {
     <div className="min-h-screen p-4 max-w-lg mx-auto">
       <h1 className="text-xl font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Field Capture</h1>
       <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>Submit test results directly from site.</p>
-      <CaptureForm projects={projects} userId={user.id} />
+      <CaptureForm projects={projects} userId={user.id} underConstruction={slug === 'boreaspower'} />
     </div>
   )
 }

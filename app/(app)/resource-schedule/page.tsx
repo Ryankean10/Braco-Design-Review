@@ -6,7 +6,7 @@ import { createClient as createAdmin } from '@supabase/supabase-js'
 import ResourceScheduleClient from '@/components/ResourceScheduleClient'
 
 export default async function ResourceSchedulePage() {
-  const { user, profile, company, effectiveCompanyId, role } = await getCompanyContext()
+  const { user, profile, company, effectiveCompanyId, role, slug } = await getCompanyContext()
 
   if (!user) redirect('/login')
   if (!company?.modules?.includes('planning')) redirect('/dashboard')
@@ -55,6 +55,7 @@ export default async function ResourceSchedulePage() {
         startDate={startStr}
         companyId={effectiveCompanyId ?? ''}
         canEdit={['admin', 'engineer', 'project_manager', 'superadmin'].includes(role)}
+        underConstruction={slug === 'boreaspower'}
       />
     </div>
   )

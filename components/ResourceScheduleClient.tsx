@@ -22,6 +22,7 @@ interface Props {
   startDate: string
   companyId: string
   canEdit: boolean
+  underConstruction?: boolean
 }
 
 function addDays(base: string, n: number) {
@@ -40,11 +41,12 @@ const ACCENT_COLOURS = [
   '#facc15', '#38bdf8', '#4ade80', '#c084fc', '#fd8a3a',
 ]
 
-export default function ResourceScheduleClient({ people, projects, assignments: initial, startDate, companyId, canEdit }: Props) {
+export default function ResourceScheduleClient({ people, projects, assignments: initial, startDate, companyId, canEdit, underConstruction }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>(initial)
   const [popover, setPopover] = useState<{ personId: string; date: string } | null>(null)
   const [selectedProject, setSelectedProject] = useState('')
   const [saving, setSaving] = useState(false)
+  const [ucMsg, setUcMsg] = useState(false)
 
   const days = Array.from({ length: 14 }, (_, i) => addDays(startDate, i))
 
@@ -60,6 +62,7 @@ export default function ResourceScheduleClient({ people, projects, assignments: 
   }
 
   async function addAssignment() {
+    if (underConstruction) { setUcMsg(true); setTimeout(() => setUcMsg(false), 4000); return }
     if (!popover || !selectedProject) return
     setSaving(true)
     try {
@@ -85,6 +88,7 @@ export default function ResourceScheduleClient({ people, projects, assignments: 
   }
 
   async function removeAssignment(id: string) {
+    if (underConstruction) { setUcMsg(true); setTimeout(() => setUcMsg(false), 4000); return }
     await fetch(`/api/resource-assignments/${id}`, { method: 'DELETE' })
     setAssignments(prev => prev.filter(a => a.id !== id))
   }
@@ -96,6 +100,12 @@ export default function ResourceScheduleClient({ people, projects, assignments: 
   }, [canEdit])
 
   return (
+    <div>
+      {ucMsg && (
+        <div style={{ marginBottom: 12, padding: '10px 16px', borderRadius: 8, background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e', fontSize: 13, fontWeight: 600 }}>
+          🚧 Under construction — check back soon
+        </div>
+      )}
     <div className="overflow-x-auto">
       <table className="border-collapse text-xs" style={{ minWidth: 900 }}>
         <thead>
@@ -214,6 +224,7 @@ export default function ResourceScheduleClient({ people, projects, assignments: 
           </div>
         </div>
       )}
+    </div>
     </div>
   )
 }
