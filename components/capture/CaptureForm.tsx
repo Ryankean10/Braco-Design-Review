@@ -17,7 +17,7 @@ const TEST_TYPES = [
 const STATUSES = ['Pass', 'Conditional Pass', 'Fail', 'Awaiting Review']
 
 interface Project { id: string; name: string }
-interface Props { projects: Project[]; userId: string }
+interface Props { projects: Project[]; userId: string; underConstruction?: boolean }
 
 interface QueuedCapture {
   projectId: string
@@ -31,7 +31,7 @@ interface QueuedCapture {
   images: string[] // base64
 }
 
-export default function CaptureForm({ projects, userId }: Props) {
+export default function CaptureForm({ projects, userId, underConstruction }: Props) {
   const [step, setStep] = useState<'project' | 'type' | 'capture' | 'results' | 'done'>('project')
   const [projectId, setProjectId] = useState('')
   const [projectName, setProjectName] = useState('')
@@ -124,6 +124,7 @@ export default function CaptureForm({ projects, userId }: Props) {
   }
 
   async function handleSubmit() {
+    if (underConstruction) { setError('🚧 Under construction — check back soon'); return }
     if (!title.trim()) { setError('Title is required'); return }
     setSubmitting(true)
     setError('')

@@ -6,7 +6,7 @@ import { createClient as createAdmin } from '@supabase/supabase-js'
 import ComplianceSettingsClient from '@/components/admin/ComplianceSettingsClient'
 
 export default async function ComplianceSettingsPage() {
-  const { user, profile, role, effectiveCompanyId } = await getCompanyContext()
+  const { user, profile, role, effectiveCompanyId, slug } = await getCompanyContext()
   if (!user) redirect('/login')
   if (!['admin', 'superadmin'].includes(role)) redirect('/dashboard')
 
@@ -33,6 +33,7 @@ export default async function ComplianceSettingsPage() {
       <ComplianceSettingsClient
         companyId={companyId}
         initial={settings ?? { warn_days_1: 60, warn_days_2: 30, alert_email: '' }}
+        underConstruction={slug === 'boreaspower'}
       />
     </div>
   )

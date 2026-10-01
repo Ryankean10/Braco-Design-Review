@@ -6,9 +6,10 @@ import { createClient } from '@/lib/supabase/client'
 interface Props {
   companyId: string
   initial: { warn_days_1: number; warn_days_2: number; alert_email: string | null }
+  underConstruction?: boolean
 }
 
-export default function ComplianceSettingsClient({ companyId, initial }: Props) {
+export default function ComplianceSettingsClient({ companyId, initial, underConstruction }: Props) {
   const [warnDays1, setWarnDays1] = useState(initial.warn_days_1 ?? 60)
   const [warnDays2, setWarnDays2] = useState(initial.warn_days_2 ?? 30)
   const [alertEmail, setAlertEmail] = useState(initial.alert_email ?? '')
@@ -18,6 +19,7 @@ export default function ComplianceSettingsClient({ companyId, initial }: Props) 
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
+    if (underConstruction) { setError('🚧 Under construction — check back soon'); return }
     setSaving(true)
     setError('')
     setSaved(false)
