@@ -372,8 +372,8 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
       {/* Assignment panel */}
       {panel && canEdit && (
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 40, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
-          pointerEvents: 'none', paddingBottom: 80, paddingRight: 8,
+          position: 'fixed', inset: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
         }}>
           {/* Backdrop */}
           <div
