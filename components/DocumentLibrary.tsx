@@ -33,9 +33,10 @@ interface Props {
   projectStage: Stage
   initialDocuments: Document[]
   userRole: string
+  simplified?: boolean
 }
 
-export default function DocumentLibrary({ projectId, projectStage, initialDocuments, userRole }: Props) {
+export default function DocumentLibrary({ projectId, projectStage, initialDocuments, userRole, simplified = false }: Props) {
   const [documents, setDocuments] = useState<Document[]>(initialDocuments)
   const [showUpload, setShowUpload] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -228,7 +229,7 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
                 placeholder="e.g. Single Line Diagram" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${simplified ? 'grid-cols-2' : 'grid-cols-3'}`}>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Revision *</label>
               <input value={rev} onChange={e => setRev(e.target.value)} required
@@ -241,13 +242,15 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
                 {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Stage *</label>
-              <select value={stage} onChange={e => setStage(e.target.value as Stage)}
-                className="w-full rounded-lg px-3 py-2 text-sm outline-none" style={fieldStyle}>
-                {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+            {!simplified && (
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Stage *</label>
+                <select value={stage} onChange={e => setStage(e.target.value as Stage)}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none" style={fieldStyle}>
+                  {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
           </div>
           {documents.length > 0 && (
             <div>
@@ -277,8 +280,8 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
         </form>
       )}
 
-      {/* Status summary bar */}
-      {latestDocs.length > 0 && (
+      {/* Status summary bar — hidden in simplified mode */}
+      {!simplified && latestDocs.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {STATUSES.map(s => {
             const count = latestDocs.filter(d => (((d as any).doc_status) ?? 'WIP') === s).length
@@ -293,13 +296,28 @@ export default function DocumentLibrary({ projectId, projectStage, initialDocume
         </div>
       )}
 
-      {/* Status-grouped document sections */}
+      {/* Document list */}
       {latestDocs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 rounded-xl border"
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <FileText size={36} style={{ color: 'var(--text-muted)' }} />
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No documents uploaded yet</p>
         </div>
+      ) : simplified ? (
+        <FlatDocTable
+          docs={latestDocs}
+          byDocNo={byDocNo}
+          expandedDetail={expandedDetail}
+          setExpandedDetail={setExpandedDetail}
+          canEdit={canEdit}
+          attachingId={attachingId}
+          attachingDoc={attachingDoc}
+          attachInputRef={attachInputRef}
+          userRole={userRole}
+          onDownload={handleDownload}
+          onAttachDoc={(doc) => { setAttachingDoc(doc); setTimeout(() => attachInputRef.current?.click(), 50) }}
+          onAttachFile={(f) => { if (f && attachingDoc) handleQuickAttach(attachingDoc, f) }}
+        />
       ) : (
         <div className="space-y-3">
           {STATUSES.map(status => {
@@ -508,6 +526,111 @@ function StatusSection({ status, cfg, docs, byDocNo, expandedDetail, setExpanded
           })}
         </>
       )}
+    </div>
+  )
+}
+
+// Flat (simplified) table — no status grouping, no review status, no client share
+interface FlatProps {
+  docs: Document[]
+  byDocNo: Record<string, Document[]>
+  expandedDetail: Set<string>
+  setExpandedDetail: React.Dispatch<React.SetStateAction<Set<string>>>
+  canEdit: boolean
+  attachingId: string | null
+  attachingDoc: Document | null
+  attachInputRef: React.MutableRefObject<HTMLInputElement | null>
+  userRole: string
+  onDownload: (doc: Document) => void
+  onAttachDoc: (doc: Document) => void
+  onAttachFile: (f: File | undefined) => void
+}
+
+function FlatDocTable({ docs, byDocNo, expandedDetail, setExpandedDetail, canEdit, attachingId, attachingDoc, attachInputRef, userRole, onDownload, onAttachDoc, onAttachFile }: FlatProps) {
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+      {/* Column headers */}
+      <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-medium border-b"
+        style={{ color: 'var(--text-muted)', borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+        <span className="col-span-2">Doc No.</span>
+        <span className="col-span-5">Title</span>
+        <span className="col-span-1">Rev</span>
+        <span className="col-span-2">Type</span>
+        <span className="col-span-1">Size</span>
+        <span className="col-span-1 text-right">Actions</span>
+      </div>
+
+      {docs.map(doc => {
+        const revs = byDocNo[doc.doc_no] ?? []
+        const detailOpen = expandedDetail.has(doc.doc_no)
+
+        return (
+          <div key={doc.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--border)' }}>
+            <div className="grid grid-cols-12 px-5 py-3 items-center" style={{ background: 'var(--bg-surface)' }}>
+              <span className="col-span-2 text-sm font-mono font-medium" style={{ color: 'var(--accent)' }}>
+                {doc.doc_no}
+              </span>
+              <span className="col-span-5 text-sm truncate pr-2" style={{ color: 'var(--text-primary)' }}>{doc.title}</span>
+              <span className="col-span-1 text-xs font-mono px-1.5 py-0.5 rounded w-fit"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+                {doc.rev}
+              </span>
+              <span className="col-span-2 text-xs" style={{ color: 'var(--text-muted)' }}>{doc.type}</span>
+
+              <span className="col-span-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                {doc.storage_path ? formatBytes(doc.file_size) : (
+                  <span className="flex items-center gap-1" style={{ color: 'var(--major)' }}>
+                    <AlertCircle size={11} /> No file
+                  </span>
+                )}
+              </span>
+
+              <div className="col-span-1 flex justify-end items-center gap-1">
+                {doc.storage_path ? (
+                  <button onClick={() => onDownload(doc)} title="Download"
+                    className="p-1 rounded hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
+                    <Download size={14} />
+                  </button>
+                ) : canEdit ? (
+                  <>
+                    <input type="file" className="hidden"
+                      accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.xlsx,.docx"
+                      onChange={e => { onAttachFile(e.target.files?.[0]); e.target.value = '' }}
+                      ref={el => { if (attachingDoc?.id === doc.id) attachInputRef.current = el }} />
+                    <button onClick={() => onAttachDoc(doc)}
+                      title="Attach file" disabled={attachingId === doc.id}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border hover:opacity-80 disabled:opacity-50"
+                      style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}>
+                      {attachingId === doc.id ? '…' : <><Paperclip size={11} /> Attach</>}
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  onClick={() => setExpandedDetail(prev => {
+                    const next = new Set(prev)
+                    next.has(doc.doc_no) ? next.delete(doc.doc_no) : next.add(doc.doc_no)
+                    return next
+                  })}
+                  title={detailOpen ? 'Collapse' : 'View history & comments'}
+                  className="p-1 rounded hover:opacity-70"
+                  style={{ color: detailOpen ? 'var(--accent)' : 'var(--text-muted)' }}>
+                  {detailOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              </div>
+            </div>
+
+            {detailOpen && (
+              <DocumentDetailPanel
+                documentId={doc.id}
+                allRevisions={revs as any}
+                canEdit={canEdit}
+                userRole={userRole}
+                onDownload={onDownload as any}
+              />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

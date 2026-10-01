@@ -3,9 +3,11 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import DocumentLibrary from '@/components/DocumentLibrary'
+import { headers } from 'next/headers'
 
 export default async function DocumentsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const slug = (await headers()).get('x-company-slug') ?? ''
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -44,6 +46,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ id: 
         projectStage={project.stage}
         initialDocuments={documents ?? []}
         userRole={profile?.role ?? 'engineer'}
+        simplified={slug === 'boreaspower'}
       />
     </div>
   )
