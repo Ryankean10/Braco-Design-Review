@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X, Loader2, Trash2, Users } from 'lucide-react'
 
 interface Person {
@@ -85,16 +86,17 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
   const [form, setForm] = useState(DEFAULT_FORM)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const dialogRef = useRef<HTMLDialogElement>(null)
+  const [mounted, setMounted] = useState(false)
+  const [panelLeft, setPanelLeft] = useState(0)
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (panel && canEdit) {
-      if (!dialog.open) dialog.showModal()
-    } else {
-      if (dialog.open) dialog.close()
-    }
+    if (!panel || !canEdit) return
+    const update = () => setPanelLeft(Math.round(window.innerWidth / 2 - 180))
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
   }, [panel, canEdit])
 
   const dates = useMemo(() => monthRange(year, month), [year, month])
@@ -380,44 +382,51 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
         </div>
       )}
 
-      {/* Assignment panel — native <dialog> renders in browser top layer, immune to all CSS transforms / stacking */}
-      <dialog
-        ref={dialogRef}
-        onClose={() => setPanel(null)}
-        style={{
-          width: 360,
-          maxWidth: '90vw',
-          maxHeight: '85vh',
-          overflowY: 'auto',
-          border: '1px solid var(--border)',
-          borderRadius: 16,
-          padding: 20,
-          background: 'var(--bg-surface)',
-          color: 'var(--text-primary)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 14,
-        }}
-      >
-        {panel && canEdit && (
-          <div style={{ display: 'contents' }}>
+      {/* Assignment panel — portal to body, position set via window.innerWidth in JS so it is
+          always the exact pixel-centre of the visible viewport regardless of CSS layout */}
+      {mounted && panel && canEdit && createPortal(
+        <>
+          {/* Backdrop */}
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setPanel(null)}
+          />
+          {/* Panel: left is a JS pixel value, top uses 50vh so both axes avoid CSS % */}
+          <div style={{
+            position: 'fixed',
+            left: panelLeft,
+            top: '50vh',
+            transform: 'translateY(-50%)',
+            zIndex: 9999,
+            width: 360,
+            maxHeight: '85vh',
+            overflowY: 'auto',
+            background: '#1a1d27',
+            border: '1px solid #2d3148',
+            borderRadius: 16,
+            padding: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            color: '#e8eaf6',
+          }}>
             {/* Panel header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
               <div>
-                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#e8eaf6' }}>
                   {people.find(p => p.id === panel.personId)?.name}
                 </p>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmt(panel.date)}</p>
+                <p style={{ fontSize: 12, color: '#7b82a8' }}>{fmt(panel.date)}</p>
               </div>
-              <button onClick={() => setPanel(null)} style={{ padding: 4, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => setPanel(null)} style={{ padding: 4, color: '#7b82a8', background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X size={16} />
               </button>
             </div>
 
             {/* Activity type picker */}
             <div>
-              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type</p>
+              <p style={{ fontSize: 11, fontWeight: 600, color: '#7b82a8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {TYPES.map(t => {
                   const cfg = TYPE_CFG[t]
@@ -425,9 +434,9 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
                   return (
                     <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))} style={{
                       padding: '4px 10px', borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      background: sel ? cfg.bg : 'var(--bg-elevated)',
-                      color: sel ? cfg.color : 'var(--text-secondary)',
-                      border: sel ? `1.5px solid ${cfg.border}` : '1.5px solid var(--border)',
+                      background: sel ? cfg.bg : '#222536',
+                      color: sel ? cfg.color : '#9ca3af',
+                      border: sel ? `1.5px solid ${cfg.border}` : '1.5px solid #2d3148',
                     }}>
                       {t}
                     </button>
@@ -439,14 +448,14 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
             {/* Fields */}
             {(['client', 'scope', 'location', 'notes'] as const).map(field => (
               <div key={field}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: '#7b82a8', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   {field.charAt(0).toUpperCase() + field.slice(1)}
                 </p>
                 <input
                   value={form[field]}
                   onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
                   placeholder={field === 'client' ? 'e.g. Ventus Energy' : field === 'location' ? 'e.g. Beatrice Offshore' : ''}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: 6, border: '1px solid #2d3148', background: '#222536', color: '#e8eaf6', fontSize: 13, outline: 'none' }}
                 />
               </div>
             ))}
@@ -456,7 +465,7 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
               <button
                 onClick={save}
                 disabled={saving}
-                style={{ flex: 1, padding: '9px 0', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                style={{ flex: 1, padding: '9px 0', background: '#6c72f5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 {saving ? <Loader2 size={13} className="animate-spin" /> : null}
                 Save
               </button>
@@ -470,8 +479,9 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
               )}
             </div>
           </div>
-        )}
-      </dialog>
+        </>,
+        document.body
+      )}
     </div>
   )
 }
