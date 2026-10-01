@@ -1,23 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-function extractCompanySlug(request: NextRequest): string {
-  const host = request.headers.get('host') ?? ''
-  const hostname = host.split(':')[0]
-  const parts = hostname.split('.')
-
-  // braco.yacht-gitana.com → 'braco'
-  // Exclude localhost and Vercel preview URLs
-  if (
-    parts.length >= 3 &&
-    !hostname.startsWith('localhost') &&
-    !hostname.includes('vercel.app')
-  ) {
-    return parts[0]
-  }
-
-  // Dev / Vercel preview: fall back to env var or 'braco'
-  return process.env.DEFAULT_COMPANY_SLUG ?? 'braco'
+function extractCompanySlug(_request: NextRequest): string {
+  return process.env.NEXT_PUBLIC_COMPANY_SLUG ?? 'boreaspower'
 }
 
 export async function middleware(request: NextRequest) {
@@ -87,7 +72,6 @@ export async function middleware(request: NextRequest) {
 
     const role = profile?.role
     const userCompanyId = profile?.company_id
-    const isAuthorized = role === 'superadmin' || (() => false)()
 
     if (role !== 'superadmin') {
       const { data: subdomainCompany } = await admin
@@ -99,14 +83,12 @@ export async function middleware(request: NextRequest) {
       const authorised = subdomainCompany && userCompanyId === subdomainCompany.id
 
       if (!authorised) {
-        // Not allowed on this subdomain — send to login with error and stop
         if (pathname !== '/login') {
           const url = request.nextUrl.clone()
           url.pathname = '/login'
           url.searchParams.set('error', 'unauthorized')
           return NextResponse.redirect(url)
         }
-        // Already on login — serve it (show the error banner), don't redirect to dashboard
         return supabaseResponse
       }
     }

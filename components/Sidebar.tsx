@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, FolderOpen, BookOpen, LogOut, ChevronRight, ChevronDown,
-  Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck, Receipt, Calculator, Inbox, Wrench, FileCheck, ClipboardCheck,
+  Users, HardHat, ClipboardList, UsersRound, Bug, Building2, Truck, Receipt, Calculator, Wrench, FileCheck, ClipboardCheck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, Company, Module } from '@/lib/types'
@@ -23,7 +23,6 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard },
-  { href: '/inbox',             label: 'Email Inbox',       icon: Inbox,                                 roles: ['superadmin', 'admin'] },
   { href: '/projects',          label: 'Projects',          icon: FolderOpen,     module: 'projects' },
   { href: '/construction',      label: 'Construction',      icon: HardHat,        module: 'construction', roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
   { href: '/capture',           label: 'Field Capture',     icon: ClipboardCheck, module: 'tests',           roles: ['superadmin', 'admin', 'engineer', 'project_manager', 'operative'] },
@@ -50,7 +49,6 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   const isSuperadmin = role === 'superadmin'
   const enabledModules = company?.modules ?? []
   const [bugPanelOpen, setBugPanelOpen] = useState(false)
-  const [inboxCount, setInboxCount] = useState(0)
   const [projectsOpen, setProjectsOpen] = useState(() =>
     typeof window !== 'undefined' && window.location.pathname.startsWith('/projects')
   )
@@ -68,21 +66,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
     supabase.from('construction_sites').select('id, name, project_id, projects!inner(company_id)').eq('projects.company_id', companyId).order('name').then(({ data }) => setSites(data ?? []))
   }, [company?.id])
 
-  useEffect(() => {
-    if (!['admin', 'superadmin'].includes(role)) return
-    if (company?.slug !== 'scotplant') return
-    async function fetchInboxCount() {
-      const res = await fetch('/api/admin/email-inbox?limit=200')
-      if (!res.ok) return
-      const data: any[] = await res.json()
-      setInboxCount(data.filter(e => e.status === 'needs_attention' || e.status === 'failed' || e.status === 'processing').length)
-    }
-    fetchInboxCount()
-    const interval = setInterval(fetchInboxCount, 60_000)
-    return () => clearInterval(interval)
-  }, [role, company?.slug])
-
-  async function signOut() {
+async function signOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
@@ -90,7 +74,6 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
   }
 
   function isVisible(item: NavItem) {
-    if (item.href === '/inbox' && company?.slug !== 'scotplant') return false
     if (item.roles && !item.roles.includes(role)) return false
     if (item.module && !enabledModules.includes(item.module)) return false
     return true
@@ -225,7 +208,6 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
             )
           }
 
-          const isInbox = href === '/inbox'
           return (
             <Link
               key={href}
@@ -238,14 +220,7 @@ export default function Sidebar({ profile, company }: { profile: Profile | null;
             >
               <Icon size={15} />
               {label}
-              {isInbox && inboxCount > 0 && (
-                <span className="ml-auto flex items-center justify-center rounded-full text-[10px] font-bold text-white min-w-[16px] h-4 px-1"
-                  style={{ background: '#ef4444' }}>
-                  {inboxCount}
-                </span>
-              )}
-              {!isInbox && active && <ChevronRight size={12} className="ml-auto" />}
-              {isInbox && inboxCount === 0 && active && <ChevronRight size={12} className="ml-auto" />}
+              {active && <ChevronRight size={12} className="ml-auto" />}
             </Link>
           )
         })}
