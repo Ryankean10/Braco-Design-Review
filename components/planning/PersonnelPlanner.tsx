@@ -61,9 +61,6 @@ function isWeekend(dateStr: string) {
   return dow >= 5
 }
 
-function fmt(dateStr: string) {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-}
 
 function monthRange(year: number, month: number) {
   const days: string[] = []
