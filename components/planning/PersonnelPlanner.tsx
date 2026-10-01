@@ -371,23 +371,21 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
 
       {/* Assignment panel */}
       {panel && canEdit && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          pointerEvents: 'none',
-        }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9000, pointerEvents: 'none' }}>
           {/* Backdrop */}
           <div
-            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', pointerEvents: 'all' }}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', pointerEvents: 'all' }}
             onClick={() => setPanel(null)}
           />
-          {/* Panel */}
+          {/* Panel — centred via transform */}
           <div style={{
-            position: 'relative', pointerEvents: 'all',
-            width: 320, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            pointerEvents: 'all',
+            width: 340, background: 'var(--bg-surface)', border: '1px solid var(--border)',
             borderRadius: 16,
             padding: 20, display: 'flex', flexDirection: 'column', gap: 14,
-            maxHeight: '75vh', overflowY: 'auto',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+            maxHeight: '80vh', overflowY: 'auto',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.28)',
           }}>
             {/* Panel header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
