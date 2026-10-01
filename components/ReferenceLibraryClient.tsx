@@ -110,6 +110,8 @@ function StandardRow({ std, isAdmin }: { std: StandardWithClauses; isAdmin: bool
             docStoragePath={std.doc_storage_path ?? null}
             docFileName={std.doc_file_name ?? null}
             isAdmin={isAdmin}
+            aiAnalysedAt={(std as any).ai_analysed_at ?? null}
+            aiSummary={(std as any).ai_summary ?? null}
           />
           {std.standard_clauses?.length > 0 && (
             <div className="space-y-2 pt-1">

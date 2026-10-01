@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/poll-inbox",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/send-daily-briefs",
+      "schedule": "30 4 * * *"
+    }
+  ]
+}
