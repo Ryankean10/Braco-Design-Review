@@ -52,7 +52,6 @@ export default async function PlanningPage() {
             people={(people ?? []) as any[]}
             initialAssignments={(assignments ?? []) as any[]}
             companyId={companyId}
-            canEdit={canEdit}
           />
         )}
       </div>
