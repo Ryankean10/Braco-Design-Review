@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Plus, Pencil, Trash2, X, Check, ChevronDown, Upload, Download, FileX, Wrench } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Check, ChevronDown, Upload, Download, FileX, Wrench, Archive, RotateCcw, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const CATEGORIES = ['Test Equipment', 'Safety Equipment', 'Survey Equipment', 'Tool', 'Vehicle', 'Other'] as const
@@ -25,6 +25,8 @@ export interface EquipmentItem {
   cert_file_name: string | null
   cert_file_size: number | null
   notes: string | null
+  archived: boolean
+  archived_at: string | null
   created_at: string
 }
 
@@ -96,7 +98,6 @@ function EquipmentForm({
   const [form, setForm] = useState(initial)
   const set = (k: keyof FormState, v: any) => setForm(f => ({ ...f, [k]: v }))
 
-  // Auto-fill expiry when calibration_date changes and not overriding
   function onCalibrationDate(v: string) {
     set('calibration_date', v)
     if (!form.override_expiry && v) {
@@ -211,12 +212,14 @@ function EquipmentRow({
   canEdit,
   onEdit,
   onDelete,
+  onArchive,
   onUpdate,
 }: {
   item: EquipmentItem
   canEdit: boolean
   onEdit: () => void
   onDelete: () => void
+  onArchive: () => void
   onUpdate: (updated: EquipmentItem) => void
 }) {
   const supabase = createClient()
@@ -294,8 +297,9 @@ function EquipmentRow({
         {canEdit && (
           <td className="px-4 py-3">
             <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-              <button onClick={onEdit} style={{ color: 'var(--text-muted)' }}><Pencil size={12} /></button>
-              <button onClick={onDelete} style={{ color: 'var(--critical)' }}><Trash2 size={12} /></button>
+              <button onClick={onEdit} title="Edit" style={{ color: 'var(--text-muted)' }}><Pencil size={12} /></button>
+              <button onClick={onArchive} title="Archive" style={{ color: '#f59e0b' }}><Archive size={12} /></button>
+              <button onClick={onDelete} title="Delete" style={{ color: 'var(--critical)' }}><Trash2 size={12} /></button>
             </div>
           </td>
         )}
@@ -313,7 +317,6 @@ function EquipmentRow({
               {item.ownership === 'Hired' && item.hire_return_date && <div><span style={{ color: 'var(--text-muted)' }}>Return by: </span><span style={{ color: 'var(--text-primary)' }}>{item.hire_return_date}</span></div>}
             </div>
             {item.notes && <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{item.notes}</p>}
-            {/* Calibration certificate */}
             <div className="flex items-center gap-2 flex-wrap">
               {item.cert_file_name ? (
                 <>
@@ -350,6 +353,96 @@ function EquipmentRow({
   )
 }
 
+function ArchivedRow({
+  item,
+  canEdit,
+  onRestore,
+  onDelete,
+}: {
+  item: EquipmentItem
+  canEdit: boolean
+  onRestore: () => void
+  onDelete: () => void
+}) {
+  const supabase = createClient()
+  const [expanded, setExpanded] = useState(false)
+
+  async function handleDownload() {
+    if (!item.cert_storage_path) return
+    const { data } = await supabase.storage.from('documents').createSignedUrl(item.cert_storage_path, 60)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  }
+
+  return (
+    <>
+      <tr
+        className="border-t cursor-pointer hover:opacity-90 transition-opacity"
+        style={{ borderColor: 'var(--border)', background: expanded ? 'var(--bg-elevated)' : 'var(--bg-surface)', opacity: 0.8 }}
+        onClick={() => setExpanded(e => !e)}
+      >
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-1.5">
+            <ChevronDown size={11} className="flex-shrink-0 transition-transform"
+              style={{ color: 'var(--text-muted)', transform: expanded ? 'rotate(180deg)' : 'rotate(-90deg)' }} />
+            <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{item.name}</span>
+          </div>
+        </td>
+        <td className="px-4 py-3 hidden md:table-cell">
+          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+            {item.category}
+          </span>
+        </td>
+        <td className="px-4 py-3 hidden lg:table-cell text-xs" style={{ color: 'var(--text-muted)' }}>
+          {item.archived_at ? new Date(item.archived_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+        </td>
+        <td className="px-4 py-3">
+          {item.cert_file_name ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(108,114,245,0.1)', color: 'var(--accent)' }}>
+              Cert on file
+            </span>
+          ) : (
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No cert</span>
+          )}
+        </td>
+        {canEdit && (
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+              <button onClick={onRestore} title="Restore to active"
+                className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border"
+                style={{ color: '#10b981', borderColor: '#10b981', background: 'rgba(16,185,129,0.08)' }}>
+                <RotateCcw size={10} /> Restore
+              </button>
+              <button onClick={onDelete} title="Permanently delete" style={{ color: 'var(--critical)' }}><Trash2 size={12} /></button>
+            </div>
+          </td>
+        )}
+      </tr>
+      {expanded && (
+        <tr style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border)' }}>
+          <td colSpan={canEdit ? 5 : 4} className="px-6 py-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-xs mb-3">
+              {item.manufacturer && <div><span style={{ color: 'var(--text-muted)' }}>Manufacturer: </span><span style={{ color: 'var(--text-primary)' }}>{item.manufacturer}</span></div>}
+              {item.model && <div><span style={{ color: 'var(--text-muted)' }}>Model: </span><span style={{ color: 'var(--text-primary)' }}>{item.model}</span></div>}
+              {item.serial_number && <div><span style={{ color: 'var(--text-muted)' }}>Serial: </span><span style={{ color: 'var(--text-primary)' }}>{item.serial_number}</span></div>}
+              {item.asset_ref && <div><span style={{ color: 'var(--text-muted)' }}>Asset Ref: </span><span style={{ color: 'var(--text-primary)' }}>{item.asset_ref}</span></div>}
+              {item.calibration_expiry && <div><span style={{ color: 'var(--text-muted)' }}>Cert expiry: </span><span style={{ color: 'var(--text-primary)' }}>{item.calibration_expiry}</span></div>}
+              {item.ownership === 'Hired' && item.hire_company && <div><span style={{ color: 'var(--text-muted)' }}>Hire company: </span><span style={{ color: 'var(--text-primary)' }}>{item.hire_company}</span></div>}
+            </div>
+            {item.notes && <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{item.notes}</p>}
+            {item.cert_file_name && (
+              <button onClick={handleDownload}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border"
+                style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'rgba(108,114,245,0.08)' }}>
+                <Download size={12} /> {item.cert_file_name}
+              </button>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
 interface Props {
   initialItems: EquipmentItem[]
   companyId: string
@@ -365,6 +458,10 @@ export default function EquipmentClient({ initialItems, companyId, canEdit }: Pr
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [archiveOpen, setArchiveOpen] = useState(false)
+
+  const activeItems = items.filter(i => !i.archived)
+  const archivedItems = items.filter(i => i.archived)
 
   function toDb(form: FormState, base?: Partial<EquipmentItem>) {
     return {
@@ -402,13 +499,26 @@ export default function EquipmentClient({ initialItems, companyId, canEdit }: Pr
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this equipment item?')) return
+    if (!confirm('Permanently delete this equipment item? This cannot be undone.')) return
     await supabase.from('equipment_items').delete().eq('id', id)
     setItems(prev => prev.filter(i => i.id !== id))
   }
 
+  async function handleArchive(id: string) {
+    const now = new Date().toISOString()
+    await supabase.from('equipment_items').update({ archived: true, archived_at: now, updated_at: now }).eq('id', id)
+    setItems(prev => prev.map(i => i.id === id ? { ...i, archived: true, archived_at: now } : i))
+    setArchiveOpen(true)
+  }
+
+  async function handleRestore(id: string) {
+    const now = new Date().toISOString()
+    await supabase.from('equipment_items').update({ archived: false, archived_at: null, updated_at: now }).eq('id', id)
+    setItems(prev => prev.map(i => i.id === id ? { ...i, archived: false, archived_at: null } : i))
+  }
+
   const q = search.toLowerCase()
-  const filtered = items.filter(i => {
+  const filtered = activeItems.filter(i => {
     if (catFilter && i.category !== catFilter) return false
     if (statusFilter) {
       const { status } = expiryInfo(i.calibration_expiry)
@@ -475,14 +585,14 @@ export default function EquipmentClient({ initialItems, companyId, canEdit }: Pr
       )}
 
       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-        {filtered.length} item{filtered.length !== 1 ? 's' : ''}{items.length !== filtered.length ? ` of ${items.length}` : ''}
+        {filtered.length} item{filtered.length !== 1 ? 's' : ''}{activeItems.length !== filtered.length ? ` of ${activeItems.length} active` : ' active'}
       </p>
 
       {filtered.length === 0 ? (
         <div className="rounded-xl border py-16 text-center" style={{ borderColor: 'var(--border)' }}>
           <Wrench size={32} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            {items.length === 0 ? 'No equipment added yet' : 'No items match your filters'}
+            {activeItems.length === 0 ? 'No equipment added yet' : 'No items match your filters'}
           </p>
         </div>
       ) : (
@@ -495,7 +605,7 @@ export default function EquipmentClient({ initialItems, companyId, canEdit }: Pr
                 <th className="px-4 py-2.5 text-left font-medium w-32 hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>Category</th>
                 <th className="px-4 py-2.5 text-left font-medium w-32 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Ownership</th>
                 <th className="px-4 py-2.5 text-left font-medium w-28 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Ref / Serial</th>
-                {canEdit && <th className="px-4 py-2.5 w-16" />}
+                {canEdit && <th className="px-4 py-2.5 w-20" />}
               </tr>
             </thead>
             <tbody>
@@ -532,12 +642,60 @@ export default function EquipmentClient({ initialItems, companyId, canEdit }: Pr
                     canEdit={canEdit}
                     onEdit={() => setEditingId(item.id)}
                     onDelete={() => handleDelete(item.id)}
+                    onArchive={() => handleArchive(item.id)}
                     onUpdate={updated => setItems(prev => prev.map(i => i.id === updated.id ? updated : i))}
                   />
                 )
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Archived section */}
+      {(archivedItems.length > 0 || canEdit) && archivedItems.length > 0 && (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+          <button
+            onClick={() => setArchiveOpen(v => !v)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-left"
+            style={{ background: 'var(--bg-elevated)', borderBottom: archiveOpen ? '1px solid var(--border)' : 'none' }}
+          >
+            {archiveOpen
+              ? <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />
+              : <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />}
+            <Archive size={13} style={{ color: '#f59e0b' }} />
+            <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Archived — {archivedItems.length} item{archivedItems.length !== 1 ? 's' : ''}
+            </span>
+            <span className="text-[10px] ml-1" style={{ color: 'var(--text-muted)' }}>
+              (off-hired / retired — certs still accessible)
+            </span>
+          </button>
+
+          {archiveOpen && (
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+                  <th className="px-4 py-2.5 text-left font-medium" style={{ color: 'var(--text-muted)' }}>Name</th>
+                  <th className="px-4 py-2.5 text-left font-medium w-32 hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>Category</th>
+                  <th className="px-4 py-2.5 text-left font-medium w-36 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Archived</th>
+                  <th className="px-4 py-2.5 text-left font-medium w-24" style={{ color: 'var(--text-muted)' }}>Cert</th>
+                  {canEdit && <th className="px-4 py-2.5 w-28" />}
+                </tr>
+              </thead>
+              <tbody>
+                {archivedItems.map(item => (
+                  <ArchivedRow
+                    key={item.id}
+                    item={item}
+                    canEdit={canEdit}
+                    onRestore={() => handleRestore(item.id)}
+                    onDelete={() => handleDelete(item.id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>
