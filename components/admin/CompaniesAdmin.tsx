@@ -51,7 +51,16 @@ const MODULE_GROUPS: {
     modules: [
       { key: 'team',       label: 'Team' },
       { key: 'plant',      label: 'Plant' },
+      { key: 'equipment',  label: 'Equipment' },
       { key: 'estimating', label: 'Estimating' },
+      { key: 'haulage',    label: 'Haulage' },
+    ],
+  },
+  {
+    label: 'Field & Compliance',
+    modules: [
+      { key: 'tests',             label: 'Field Capture' },
+      { key: 'reference_library', label: 'Reference Library' },
     ],
   },
 ]
