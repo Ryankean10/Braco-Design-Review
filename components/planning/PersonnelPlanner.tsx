@@ -121,19 +121,6 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
 
   const monthName = new Date(year, month, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
-  // Group dates into weeks for the header
-  const weeks: { label: string; dates: string[] }[] = []
-  let currentWeek: string[] = []
-  dates.forEach(d => {
-    currentWeek.push(d)
-    if (getDow(d) === 6 || d === dates[dates.length - 1]) {
-      const first = currentWeek[0]
-      const last = currentWeek[currentWeek.length - 1]
-      const weekNum = Math.ceil(new Date(d + 'T12:00:00').getDate() / 7)
-      weeks.push({ label: `w/c ${new Date(first + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`, dates: [...currentWeek] })
-      currentWeek = []
-    }
-  })
 
   // Summary: billable days per person (Work days this month)
   const billableSummary = useMemo(() => {
