@@ -38,6 +38,11 @@ body {
 .chip-obs       { background: #1f2937; color: #9ca3af; border: 1px solid #374151; }
 .chip-stage     { background: #1e2240; color: #818cf8; border: 1px solid #2d3480; font-size: 0.7rem; }
 
+/* Modal dialog backdrop */
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-base); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }

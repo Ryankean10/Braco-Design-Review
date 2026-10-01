@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, X, Loader2, Trash2, Users } from 'lucide-react'
 
 interface Person {
@@ -86,8 +85,17 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
   const [form, setForm] = useState(DEFAULT_FORM)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  const dialogRef = useRef<HTMLDialogElement>(null)
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (panel && canEdit) {
+      if (!dialog.open) dialog.showModal()
+    } else {
+      if (dialog.open) dialog.close()
+    }
+  }, [panel, canEdit])
 
   const dates = useMemo(() => monthRange(year, month), [year, month])
 
@@ -372,21 +380,14 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
         </div>
       )}
 
-      {/* Assignment panel — two independently fixed elements so nothing can push the panel off-centre */}
-      {mounted && panel && canEdit && createPortal(
-        <>
-          {/* Backdrop */}
-          <div
-            style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.45)', cursor: 'default' }}
-            onClick={() => setPanel(null)}
-          />
-          {/* Panel — centred via transform, not flex */}
+      {/* Assignment panel — native <dialog> renders in browser top layer, immune to all CSS transforms / stacking */}
+      <dialog
+        ref={dialogRef}
+        onClose={() => setPanel(null)}
+        style={{ border: 'none', padding: 0, background: 'transparent', overflow: 'visible', maxWidth: '90vw' }}
+      >
+        {panel && canEdit && (
           <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 9999,
             width: 360,
             background: 'var(--bg-surface)', border: '1px solid var(--border)',
             borderRadius: 16,
@@ -462,8 +463,8 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
               )}
             </div>
           </div>
-        </>
-      , document.body)}
+        )}
+      </dialog>
     </div>
   )
 }
