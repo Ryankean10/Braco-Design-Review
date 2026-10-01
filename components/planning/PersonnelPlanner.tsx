@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X, Loader2, Trash2, Users } from 'lucide-react'
 
 interface Person {
@@ -85,6 +86,8 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
   const [form, setForm] = useState(DEFAULT_FORM)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const dates = useMemo(() => monthRange(year, month), [year, month])
 
@@ -369,8 +372,8 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
         </div>
       )}
 
-      {/* Assignment panel */}
-      {panel && canEdit && (
+      {/* Assignment panel — mounted via portal so layout overflow/transform can't trap it */}
+      {mounted && panel && canEdit && createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 9000, pointerEvents: 'none' }}>
           {/* Backdrop */}
           <div
@@ -456,7 +459,7 @@ export default function PersonnelPlanner({ people, initialAssignments, companyId
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   )
 }
