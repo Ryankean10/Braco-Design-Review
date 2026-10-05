@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { Plus, Pencil, Trash2, X, Check, ChevronDown, Upload, Download, FileX, Wrench, Archive, RotateCcw, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
-const CATEGORIES = ['Test Equipment', 'Safety Equipment', 'Survey Equipment', 'Tool', 'Vehicle', 'Other'] as const
+const CATEGORIES = ['Test Equipment', 'Safety Equipment', 'PPE', 'Survey Equipment', 'Tool', 'IT', 'Vehicle', 'Other'] as const
 const OWNERSHIPS = ['Owned', 'Hired'] as const
 
 export interface EquipmentItem {
@@ -467,9 +467,17 @@ export default function EquipmentClient({ initialItems, companyId, canEdit, auto
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
-  const [catFilter, setCatFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [archiveOpen, setArchiveOpen] = useState(false)
+  const [openCategories, setOpenCategories] = useState<Set<string>>(new Set())
+
+  function toggleCategory(cat: string) {
+    setOpenCategories(prev => {
+      const next = new Set(prev)
+      next.has(cat) ? next.delete(cat) : next.add(cat)
+      return next
+    })
+  }
 
   const activeItems = items.filter(i => !i.archived)
   const archivedItems = items.filter(i => i.archived)
@@ -530,7 +538,6 @@ export default function EquipmentClient({ initialItems, companyId, canEdit, auto
 
   const q = search.toLowerCase()
   const filtered = activeItems.filter(i => {
-    if (catFilter && i.category !== catFilter) return false
     if (statusFilter) {
       const { status } = expiryInfo(i.calibration_expiry)
       if (statusFilter === 'expired' && status !== 'expired') return false
@@ -573,12 +580,6 @@ export default function EquipmentClient({ initialItems, companyId, canEdit, auto
           className="flex-1 min-w-40 rounded-lg px-3 py-2 text-sm outline-none"
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
         />
-        <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
-          className="rounded-lg px-3 py-2 text-sm outline-none"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-          <option value="">All categories</option>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-        </select>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
           className="rounded-lg px-3 py-2 text-sm outline-none"
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
@@ -612,59 +613,89 @@ export default function EquipmentClient({ initialItems, companyId, canEdit, auto
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)' }}>
-                <th className="px-4 py-2.5 text-left font-medium w-28" style={{ color: 'var(--text-muted)' }}>Calibration</th>
-                <th className="px-4 py-2.5 text-left font-medium" style={{ color: 'var(--text-muted)' }}>Name</th>
-                <th className="px-4 py-2.5 text-left font-medium w-32 hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>Category</th>
-                <th className="px-4 py-2.5 text-left font-medium w-32 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Ownership</th>
-                <th className="px-4 py-2.5 text-left font-medium w-28 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Ref / Serial</th>
-                {canEdit && <th className="px-4 py-2.5 w-20" />}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(item => (
-                editingId === item.id ? (
-                  <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td colSpan={canEdit ? 6 : 5} className="px-4 py-3">
-                      <EquipmentForm
-                        initial={{
-                          name: item.name,
-                          asset_ref: item.asset_ref ?? '',
-                          serial_number: item.serial_number ?? '',
-                          manufacturer: item.manufacturer ?? '',
-                          model: item.model ?? '',
-                          category: item.category,
-                          ownership: item.ownership,
-                          hire_company: item.hire_company ?? '',
-                          hire_return_date: item.hire_return_date ?? '',
-                          calibration_date: item.calibration_date ?? '',
-                          calibration_expiry: item.calibration_expiry ?? '',
-                          override_expiry: false,
-                          notes: item.notes ?? '',
-                        }}
-                        onSave={form => handleEdit(item.id, form)}
-                        onCancel={() => setEditingId(null)}
-                        saving={saving}
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  <EquipmentRow
-                    key={item.id}
-                    item={item}
-                    canEdit={canEdit}
-                    onEdit={() => setEditingId(item.id)}
-                    onDelete={() => handleDelete(item.id)}
-                    onArchive={() => handleArchive(item.id)}
-                    onUpdate={updated => setItems(prev => prev.map(i => i.id === updated.id ? updated : i))}
-                  />
-                )
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          {CATEGORIES.map(cat => {
+            const catItems = filtered.filter(i => i.category === cat)
+            if (catItems.length === 0) return null
+            const expiredCount = catItems.filter(i => expiryInfo(i.calibration_expiry).status === 'expired').length
+            const soonCount = catItems.filter(i => expiryInfo(i.calibration_expiry).status === 'soon').length
+            const isOpen = openCategories.has(cat)
+            return (
+              <div key={cat} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                <button
+                  onClick={() => toggleCategory(cat)}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left"
+                  style={{ background: 'var(--bg-elevated)', borderBottom: isOpen ? '1px solid var(--border)' : 'none' }}
+                >
+                  {isOpen
+                    ? <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />
+                    : <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />}
+                  <span className="text-xs font-medium flex-1" style={{ color: 'var(--text-primary)' }}>{cat}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{catItems.length}</span>
+                  {expiredCount > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium text-white" style={{ background: 'var(--critical)' }}>{expiredCount} expired</span>
+                  )}
+                  {soonCount > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>{soonCount} expiring</span>
+                  )}
+                </button>
+                {isOpen && (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+                        <th className="px-4 py-2.5 text-left font-medium w-28" style={{ color: 'var(--text-muted)' }}>Calibration</th>
+                        <th className="px-4 py-2.5 text-left font-medium" style={{ color: 'var(--text-muted)' }}>Name</th>
+                        <th className="px-4 py-2.5 text-left font-medium w-32 hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>Category</th>
+                        <th className="px-4 py-2.5 text-left font-medium w-32 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Ownership</th>
+                        <th className="px-4 py-2.5 text-left font-medium w-28 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Ref / Serial</th>
+                        {canEdit && <th className="px-4 py-2.5 w-20" />}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {catItems.map(item => (
+                        editingId === item.id ? (
+                          <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
+                            <td colSpan={canEdit ? 6 : 5} className="px-4 py-3">
+                              <EquipmentForm
+                                initial={{
+                                  name: item.name,
+                                  asset_ref: item.asset_ref ?? '',
+                                  serial_number: item.serial_number ?? '',
+                                  manufacturer: item.manufacturer ?? '',
+                                  model: item.model ?? '',
+                                  category: item.category,
+                                  ownership: item.ownership,
+                                  hire_company: item.hire_company ?? '',
+                                  hire_return_date: item.hire_return_date ?? '',
+                                  calibration_date: item.calibration_date ?? '',
+                                  calibration_expiry: item.calibration_expiry ?? '',
+                                  override_expiry: false,
+                                  notes: item.notes ?? '',
+                                }}
+                                onSave={form => handleEdit(item.id, form)}
+                                onCancel={() => setEditingId(null)}
+                                saving={saving}
+                              />
+                            </td>
+                          </tr>
+                        ) : (
+                          <EquipmentRow
+                            key={item.id}
+                            item={item}
+                            canEdit={canEdit}
+                            onEdit={() => setEditingId(item.id)}
+                            onDelete={() => handleDelete(item.id)}
+                            onArchive={() => handleArchive(item.id)}
+                            onUpdate={updated => setItems(prev => prev.map(i => i.id === updated.id ? updated : i))}
+                          />
+                        )
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
