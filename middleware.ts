@@ -52,8 +52,8 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Maintenance mode for boreaspower — shown to all users
-  if (companySlug === 'boreaspower' && !pathname.startsWith('/api/') && pathname !== '/login') {
+  // Maintenance mode for boreaspower — shown to all users (holiday booking exempt)
+  if (companySlug === 'boreaspower' && !pathname.startsWith('/api/') && pathname !== '/login' && pathname !== '/holiday') {
     return new NextResponse(
       `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Under Maintenance — Boreas Power</title><style>*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;font-family:system-ui,sans-serif;color:#f1f5f9}.card{text-align:center;padding:3rem 2rem;max-width:480px}.icon{font-size:3rem;margin-bottom:1.5rem}h1{font-size:1.5rem;font-weight:600;margin-bottom:.75rem}p{color:#94a3b8;line-height:1.6;font-size:.95rem}</style></head><body><div class="card"><div class="icon">🔧</div><h1>Site Under Maintenance</h1><p>The Boreas Power portal is currently undergoing scheduled maintenance. Please check back shortly.</p></div></body></html>`,
       { status: 503, headers: { 'Content-Type': 'text/html', 'Retry-After': '3600' } }
@@ -66,8 +66,10 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/cron/') ||
     pathname.startsWith('/api/onboard') ||
     pathname.startsWith('/api/client-upload') ||
+    pathname.startsWith('/api/holiday-booking') ||
     pathname.startsWith('/api/timesheet') ||
-    pathname.startsWith('/timesheet')
+    pathname.startsWith('/timesheet') ||
+    pathname.startsWith('/holiday')
   ) {
     return supabaseResponse
   }
