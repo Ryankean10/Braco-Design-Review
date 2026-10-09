@@ -5,9 +5,9 @@ import { logApiUsage } from '@/lib/logApiUsage'
 
 const MODEL = 'claude-sonnet-4-6'
 
-const SYSTEM_PROMPT = `You are an onboarding assistant for Safe T Consultancy. You are helping assess whether the Braco platform is a good fit for a potential new client.
+const SYSTEM_PROMPT = `You are an onboarding assistant for Safe T Consultancy. You are helping assess whether the Flumen platform is a good fit for a potential new client.
 
-The Braco platform serves small engineering, electrical, civils and technical companies. It provides: project stage tracking, site document registers, team/resource management with certification expiry alerts, plant and equipment registers with calibration tracking, a reference library with AI document review, role-based client portals, and (in development) work planning and cost tracking.
+The Flumen platform serves small engineering, electrical, civils and technical companies. It provides: project stage tracking, site document registers, team/resource management with certification expiry alerts, plant and equipment registers with calibration tracking, a reference library with AI document review, role-based client portals, and (in development) work planning and cost tracking.
 
 Your job is to have a warm, natural conversation — one question at a time — that draws out the specific details needed to assess platform fit. Never list multiple questions at once.
 
@@ -27,7 +27,7 @@ Keep each response to one or two short sentences. Be warm, direct, and professio
 
 Once you have covered all ten areas, end with something like: "That's brilliant — I've got a clear picture of how you work. The Safe T Consultancy team will review this and come back to you with a platform fit assessment." Then include the exact token [COMPLETE] at the very end. Do not include [COMPLETE] in any earlier message.`
 
-const PLATFORM_KNOWLEDGE = `The Braco platform currently has these features and their readiness status:
+const PLATFORM_KNOWLEDGE = `The Flumen platform currently has these features and their readiness status:
 
 READY NOW:
 - Project Stage Tracking: Configurable multi-stage lifecycle (e.g. Preparation → Active → Complete, or a full 6-stage BESS commissioning lifecycle). Each stage has a checklist. Dashboard shows all projects by stage at a glance.
@@ -65,7 +65,7 @@ COMPANY SNAPSHOT:
 - Concurrent projects: [how many at once]
 
 PLATFORM FIT MATRIX:
-[List each relevant feature area as: Feature Area | Braco Status | FIT/PARTIAL FIT/NOT YET | Notes]
+[List each relevant feature area as: Feature Area | Flumen Status | FIT/PARTIAL FIT/NOT YET | Notes]
 Use these feature areas where relevant: Project Stage Tracking | Site Document Register | Team & Certification Management | Plant Register | Reference Library & AI Review | Work Planning | Estimating & Cost Tracking | Client Portal
 Rate as FIT (ready and directly useful), PARTIAL FIT (ready but needs config, or development version available), or NOT YET (requires significant build).
 
@@ -192,7 +192,7 @@ function renderMatrix(rows: string[]): string {
   let out = `<table style="width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 16px;">`
   out += `<thead><tr style="background:#f1f5f9;">`
   out += `<th style="text-align:left;padding:8px 10px;border:1px solid #e2e8f0;font-weight:600;color:#374151;">Feature Area</th>`
-  out += `<th style="text-align:left;padding:8px 10px;border:1px solid #e2e8f0;font-weight:600;color:#374151;">Braco Status</th>`
+  out += `<th style="text-align:left;padding:8px 10px;border:1px solid #e2e8f0;font-weight:600;color:#374151;">Flumen Status</th>`
   out += `<th style="text-align:center;padding:8px 10px;border:1px solid #e2e8f0;font-weight:600;color:#374151;">Fit</th>`
   out += `<th style="text-align:left;padding:8px 10px;border:1px solid #e2e8f0;font-weight:600;color:#374151;">Notes</th>`
   out += `</tr></thead><tbody>`
