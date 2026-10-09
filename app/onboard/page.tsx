@@ -23,7 +23,7 @@ export default async function OnboardPage() {
     <OnboardChat
       accentColor={company?.accent_color ?? '#6c72f5'}
       logoUrl={company?.logo_url ?? null}
-      companyName={company?.name ?? 'Safet Consultancy'}
+      companyName={company?.name ?? 'Safe T Consultancy'}
     />
   )
 }
