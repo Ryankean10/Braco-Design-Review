@@ -92,7 +92,7 @@ export default function OnboardChat({ accentColor, logoUrl, companyName }: Props
           <CheckCircle size={56} style={{ color: accentColor }} className="mx-auto mb-6" />
           <h1 className="text-2xl font-bold text-white mb-3">Thanks — we'll be in touch</h1>
           <p className="text-slate-400 leading-relaxed">
-            Your enquiry has been sent to the Safet Consultancy team. Someone will reach out to you shortly.
+            Your enquiry has been sent to the Safe T Consultancy team. Someone will reach out to you shortly.
           </p>
         </div>
       </div>
