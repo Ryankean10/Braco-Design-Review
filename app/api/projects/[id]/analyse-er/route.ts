@@ -4,13 +4,14 @@ export const maxDuration = 60
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractAndParse } from '@/lib/repairJson'
+import { requireRole, INTERNAL_ROLES } from '@/lib/auth'
+import { logApiUsage } from '@/lib/logApiUsage'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params
+  const auth = await requireRole(INTERNAL_ROLES)
+  if ('error' in auth) return auth.error
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   // Load project + ER document
   const { data: project } = await supabase
@@ -95,6 +96,7 @@ EMPLOYER'S REQUIREMENTS DOCUMENT:
 ${erTextTruncated}`
     }]
   })
+  logApiUsage({ companyId: project?.company_id ?? null, endpoint: 'analyse-er', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
 
@@ -111,7 +113,7 @@ ${erTextTruncated}`
   if (result.applicable_ids?.length) {
     const rows = result.applicable_ids
       .filter(sid => standards.some(s => s.id === sid))
-      .map(sid => ({ project_id: projectId, standard_id: sid, added_by: user.id }))
+      .map(sid => ({ project_id: projectId, standard_id: sid, added_by: auth.user.id }))
 
     if (rows.length) {
       await supabase.from('project_standards').upsert(rows, { onConflict: 'project_id,standard_id' })
