@@ -47,12 +47,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  const message = await anthropic.messages.create({
-    model: 'claude-opus-4-8',
-    max_tokens: 2048,
-    messages: [{
-      role: 'user',
-      content: `You are a commercial specialist for a UK BESS contractor working on a design & build contract. You are reviewing the Employer's Requirements (ER) document on behalf of the contractor with a COMMERCIAL BIAS.
+  let message: Awaited<ReturnType<typeof anthropic.messages.create>>
+  try {
+    message = await anthropic.messages.create({
+      model: 'claude-opus-4-8',
+      max_tokens: 2048,
+      messages: [{
+        role: 'user',
+        content: `You are a commercial specialist for a UK BESS contractor working on a design & build contract. You are reviewing the Employer's Requirements (ER) document on behalf of the contractor with a COMMERCIAL BIAS.
 
 Your role when answering questions:
 - Look for clauses that support the argument that something is NOT required under the ER (potential variation order)
@@ -86,8 +88,11 @@ If the ER is genuinely silent and contains no relevant clauses, set "clauses" to
 
 EMPLOYER'S REQUIREMENTS DOCUMENT — PROJECT: ${project.name ?? projectId}
 ${erTextTruncated}`
-    }]
-  })
+      }]
+    })
+  } catch (e: any) {
+    return NextResponse.json({ error: `AI error: ${e.message ?? 'Unknown error'}` }, { status: 500 })
+  }
   logApiUsage({ companyId: project?.company_id ?? null, endpoint: 'er-interrogate', model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }).catch(() => {})
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
