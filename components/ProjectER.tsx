@@ -764,7 +764,7 @@ export default function ProjectER({
                     {/* Overview */}
                     <div className="rounded-lg border p-3" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
                       <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Executive Overview</p>
-                      {deepAnalysis.overview.split('\n').filter(Boolean).map((p, i) => (
+                      {(deepAnalysis.overview ?? '').split('\n').filter(Boolean).map((p, i) => (
                         <p key={i} className="text-xs leading-relaxed mb-1.5" style={{ color: 'var(--text-primary)' }}>{p}</p>
                       ))}
                     </div>
@@ -787,7 +787,7 @@ export default function ProjectER({
                           </button>
                           {isOpen && (
                             <div className="p-4 space-y-3" style={{ background: 'var(--bg-elevated)' }}>
-                              {risk.detail.split('\n').filter(Boolean).map((p, j) => (
+                              {(risk.detail ?? '').split('\n').filter(Boolean).map((p, j) => (
                                 <p key={j} className="text-xs leading-relaxed" style={{ color: 'var(--text-primary)' }}>{p}</p>
                               ))}
                               {risk.clauses?.length > 0 && (
@@ -961,7 +961,7 @@ export default function ProjectER({
                     <div className="rounded-lg border p-4" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                       <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Commercial Argument</p>
                       <div className="text-xs leading-relaxed space-y-2" style={{ color: 'var(--text-primary)' }}>
-                        {interrogateResult.argument.split('\n').filter(Boolean).map((para, i) => <p key={i}>{para}</p>)}
+                        {(interrogateResult.argument ?? '').split('\n').filter(Boolean).map((para, i) => <p key={i}>{para}</p>)}
                       </div>
                     </div>
 
