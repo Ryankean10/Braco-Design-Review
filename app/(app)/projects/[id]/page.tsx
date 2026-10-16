@@ -482,7 +482,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             erDeepAnalysedAt={(project as any).er_deep_analysed_at ?? null}
             initialTasks={(erTaskRows ?? []) as any[]}
             constructionSiteId={(constructionSite as any)?.id ?? null}
-            canUpload={['admin', 'superadmin'].includes((profile as any)?.role) && industry === 'civils'}
+            canUpload={['admin', 'superadmin'].includes((profile as any)?.role)}
             linkedStandardRefs={linkedStandards.map((s: any) => ({ ref: s.ref, title: s.title }))}
           />
         </div>

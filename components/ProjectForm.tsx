@@ -40,9 +40,10 @@ function defaultTemplate(industry: string): string {
 interface Props {
   project?: Project
   industry?: string
+  companyId?: string | null
 }
 
-export default function ProjectForm({ project, industry = 'bess' }: Props) {
+export default function ProjectForm({ project, industry = 'bess', companyId }: Props) {
   const router = useRouter()
   const isEdit = !!project
   const isCivils = industry === 'civils'
@@ -72,6 +73,9 @@ export default function ProjectForm({ project, industry = 'bess' }: Props) {
       stage,
       stage_template: template,
       updated_at: new Date().toISOString(),
+    }
+    if (!isEdit && companyId) {
+      payload.company_id = companyId
     }
     if (!isCivils && industry !== 'electrical' && capacityMw) {
       payload.capacity_mw = parseFloat(capacityMw)

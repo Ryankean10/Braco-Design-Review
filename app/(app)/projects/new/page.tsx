@@ -20,7 +20,7 @@ export default async function NewProjectPage() {
           {isCivils ? 'Create a new civils project' : industry === 'electrical' ? 'Create a new HV project' : 'Create a new BESS project'}
         </p>
       </div>
-      <ProjectForm industry={industry} />
+      <ProjectForm industry={industry} companyId={company?.id ?? null} />
     </div>
   )
 }
