@@ -64,33 +64,38 @@ export default function ProjectForm({ project, industry = 'bess', companyId }: P
     setLoading(true)
     setError('')
 
-    const supabase = createClient()
+    try {
+      const supabase = createClient()
 
-    const payload: any = {
-      name: name.trim(),
-      client: client.trim(),
-      location: location.trim(),
-      stage,
-      stage_template: template,
-      updated_at: new Date().toISOString(),
-    }
-    if (!isEdit && companyId) {
-      payload.company_id = companyId
-    }
-    if (!isCivils && industry !== 'electrical' && capacityMw) {
-      payload.capacity_mw = parseFloat(capacityMw)
-    }
+      const payload: any = {
+        name: name.trim(),
+        client: client.trim(),
+        location: location.trim(),
+        stage,
+        stage_template: template,
+        updated_at: new Date().toISOString(),
+      }
+      if (!isEdit && companyId) {
+        payload.company_id = companyId
+      }
+      if (!isCivils && industry !== 'electrical' && capacityMw) {
+        payload.capacity_mw = parseFloat(capacityMw)
+      }
 
-    if (isEdit) {
-      const { error } = await supabase.from('projects').update(payload).eq('id', project.id)
-      if (error) { setError(error.message); setLoading(false); return }
-      router.push(`/projects/${project.id}`)
-    } else {
-      const { data, error } = await supabase.from('projects').insert(payload).select().single()
-      if (error) { setError(error.message); setLoading(false); return }
-      router.push(`/projects/${data.id}`)
+      if (isEdit) {
+        const { error } = await supabase.from('projects').update(payload).eq('id', project.id)
+        if (error) { setError(error.message); setLoading(false); return }
+        router.push(`/projects/${project.id}`)
+      } else {
+        const { data, error } = await supabase.from('projects').insert(payload).select().single()
+        if (error) { setError(error.message); setLoading(false); return }
+        router.push(`/projects/${data.id}`)
+      }
+      router.refresh()
+    } catch (err: any) {
+      setError(err?.message ?? 'Unexpected error — please try again')
+      setLoading(false)
     }
-    router.refresh()
   }
 
   async function handleDelete() {
